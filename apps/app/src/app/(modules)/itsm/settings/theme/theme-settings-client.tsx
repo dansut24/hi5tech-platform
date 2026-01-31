@@ -52,7 +52,6 @@ function Slider({
   );
 }
 
-// Patch type that preserves the same call sites (update({ mode: ... }), update({ accent: ... }), etc.)
 type ThemePatch = Partial<Hi5Theme>;
 
 export default function ThemeSettingsClient() {
@@ -83,22 +82,25 @@ export default function ThemeSettingsClient() {
   }
 
   function update(next: ThemePatch) {
-    // Explicitly build the merged object so required fields cannot become undefined.
-    const merged: Hi5Theme = {
-      ...theme,
-      ...next,
+    setTheme((prev) => {
+      if (!prev) return prev;
 
-      // guarantee required keys stay defined
-      mode: next.mode ?? theme.mode,
-      accent: next.accent ?? theme.accent,
-      accent2: next.accent2 ?? theme.accent2,
-      cardAlpha: typeof next.cardAlpha === "number" ? next.cardAlpha : theme.cardAlpha,
-      borderAlpha: typeof next.borderAlpha === "number" ? next.borderAlpha : theme.borderAlpha,
-    };
+      const merged: Hi5Theme = {
+        ...prev,
+        ...next,
 
-    setTheme(merged);
-    saveTheme(merged);
-    applyTheme(merged);
+        // guarantee required keys stay defined
+        mode: next.mode ?? prev.mode,
+        accent: next.accent ?? prev.accent,
+        accent2: next.accent2 ?? prev.accent2,
+        cardAlpha: typeof next.cardAlpha === "number" ? next.cardAlpha : prev.cardAlpha,
+        borderAlpha: typeof next.borderAlpha === "number" ? next.borderAlpha : prev.borderAlpha,
+      };
+
+      saveTheme(merged);
+      applyTheme(merged);
+      return merged;
+    });
   }
 
   return (
