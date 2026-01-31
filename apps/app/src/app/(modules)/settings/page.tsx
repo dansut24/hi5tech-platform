@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@hi5tech/auth";
+
+import { supabaseServer } from "@/lib/supabase/server";
 import ThemeForm from "./theme-form";
 
 export default async function SettingsPage() {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await supabaseServer();
 
   const { data: userRes } = await supabase.auth.getUser();
   const user = userRes.user;
