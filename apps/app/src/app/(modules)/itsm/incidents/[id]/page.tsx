@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { cookies } from "next/headers";
-import { createSupabaseServerClient } from "@hi5tech/auth";
+import { supabaseServer } from "@/lib/supabase/server";
 import { getMemberTenantIds } from "@/lib/tenant";
 
 function fmt(ts?: string | null) {
@@ -10,27 +9,6 @@ function fmt(ts?: string | null) {
   } catch {
     return ts ?? "—";
   }
-}
-
-async function supabaseServer() {
-  const cookieStore = await cookies();
-
-  return createSupabaseServerClient({
-    get(name: string) {
-      return cookieStore.get(name)?.value;
-    },
-    set(name: string, value: string, options: any) {
-      (cookieStore as any).set({ name, value, ...(options ?? {}) });
-    },
-    remove(name: string, options: any) {
-      const anyStore = cookieStore as any;
-      if (typeof anyStore.delete === "function") {
-        anyStore.delete(name);
-        return;
-      }
-      anyStore.set({ name, value: "", ...(options ?? {}), maxAge: 0 });
-    },
-  });
 }
 
 export default async function IncidentsList() {

@@ -1,8 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { cookies } from "next/headers";
-import { createSupabaseServerClient } from "@hi5tech/auth";
+import { supabaseServer } from "@/lib/supabase/server";
 import { getMemberTenantIds } from "@hi5tech/rbac/server";
 
 function s(formData: FormData, key: string): string {
@@ -10,14 +9,7 @@ function s(formData: FormData, key: string): string {
 }
 
 async function supabaseFromCookies() {
-  const cookieStore = await cookies();
-  return createSupabaseServerClient({
-    get(name: string) {
-      return cookieStore.get(name)?.value;
-    },
-    set() {},
-    remove() {},
-  });
+  return supabaseServer();
 }
 
 /**

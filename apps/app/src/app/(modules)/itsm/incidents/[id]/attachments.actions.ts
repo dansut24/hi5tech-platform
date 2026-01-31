@@ -1,7 +1,6 @@
 "use server";
 
-import { cookies } from "next/headers";
-import { createSupabaseServerClient } from "@hi5tech/auth";
+import { supabaseServer } from "@/lib/supabase/server";
 import { getMemberTenantIds } from "@/lib/tenant";
 
 function s(formData: FormData, key: string): string {
@@ -11,43 +10,6 @@ function s(formData: FormData, key: string): string {
 function fileFrom(formData: FormData, key: string): File | null {
   const v = formData.get(key);
   return v instanceof File ? v : null;
-}
-
-/**
- * ✅ CookieAdapter wrapper for @hi5tech/auth
- * Next 16 types cookies() as Promise<ReadonlyRequestCookies> in your project,
- * so we await it and provide get/set/remove.
- */
-async function supabaseServer() {
-  const cookieStore = await cookies();
-
-  return createSupabaseServerClient({
-    get(name: string) {
-      return cookieStore.get(name)?.value;
-    },
-    set(name: string, value: string, options: any) {
-      const anyStore = cookieStore as any;
-
-      // Some runtimes expose set(); some don't.
-      if (typeof anyStore.set === "function") {
-        anyStore.set({ name, value, ...(options ?? {}) });
-      }
-    },
-    remove(name: string, options: any) {
-      const anyStore = cookieStore as any;
-
-      // Prefer delete() if available
-      if (typeof anyStore.delete === "function") {
-        anyStore.delete(name);
-        return;
-      }
-
-      // Fallback: expire cookie if set() exists
-      if (typeof anyStore.set === "function") {
-        anyStore.set({ name, value: "", ...(options ?? {}), maxAge: 0 });
-      }
-    },
-  });
 }
 
 export async function uploadIncidentAttachment(formData: FormData) {
