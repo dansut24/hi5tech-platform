@@ -17,10 +17,9 @@ export async function upsertTenant(input: UpsertTenantInput) {
   const name = (input.name || "").trim();
   const subdomain = (input.subdomain || "").trim().toLowerCase();
 
-  if (!name) return { ok: false, error: "Tenant name is required." as const };
-  if (!subdomain) return { ok: false, error: "Subdomain is required." as const };
+  if (!name) return { ok: false, error: "Tenant name is required." };
+  if (!subdomain) return { ok: false, error: "Subdomain is required." };
 
-  // Upsert by subdomain (requires unique index on tenants.subdomain)
   const { error } = await supabase.from("tenants").upsert(
     {
       name,
@@ -32,39 +31,39 @@ export async function upsertTenant(input: UpsertTenantInput) {
     { onConflict: "subdomain" }
   );
 
-  if (error) return { ok: false, error: error.message as const };
+  if (error) return { ok: false, error: error.message };
 
   revalidatePath("/admin/tenants");
-  return { ok: true as const };
+  return { ok: true };
 }
 
 export async function setTenantActive(subdomain: string, is_active: boolean) {
   const supabase = await createSupabaseServerClient();
 
   const sd = (subdomain || "").trim().toLowerCase();
-  if (!sd) return { ok: false, error: "Subdomain is required." as const };
+  if (!sd) return { ok: false, error: "Subdomain is required." };
 
   const { error } = await supabase
     .from("tenants")
     .update({ is_active })
     .eq("subdomain", sd);
 
-  if (error) return { ok: false, error: error.message as const };
+  if (error) return { ok: false, error: error.message };
 
   revalidatePath("/admin/tenants");
-  return { ok: true as const };
+  return { ok: true };
 }
 
 export async function deleteTenant(subdomain: string) {
   const supabase = await createSupabaseServerClient();
 
   const sd = (subdomain || "").trim().toLowerCase();
-  if (!sd) return { ok: false, error: "Subdomain is required." as const };
+  if (!sd) return { ok: false, error: "Subdomain is required." };
 
   const { error } = await supabase.from("tenants").delete().eq("subdomain", sd);
 
-  if (error) return { ok: false, error: error.message as const };
+  if (error) return { ok: false, error: error.message };
 
   revalidatePath("/admin/tenants");
-  return { ok: true as const };
+  return { ok: true };
 }
