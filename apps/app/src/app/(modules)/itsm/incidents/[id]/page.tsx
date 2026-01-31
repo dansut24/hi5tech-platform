@@ -1,5 +1,3 @@
-// src/app/(modules)/itsm/incidents/page.tsx
-
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { createSupabaseServerClient } from "@hi5tech/auth";
@@ -10,7 +8,7 @@ function fmt(ts?: string | null) {
   try {
     return new Date(ts).toLocaleString();
   } catch {
-    return ts;
+    return ts ?? "—";
   }
 }
 
@@ -22,18 +20,14 @@ async function supabaseServer() {
       return cookieStore.get(name)?.value;
     },
     set(name: string, value: string, options: any) {
-      // next/headers cookies().set supports object form (runtime differs by Next version)
       (cookieStore as any).set({ name, value, ...(options ?? {}) });
     },
     remove(name: string, options: any) {
       const anyStore = cookieStore as any;
-
       if (typeof anyStore.delete === "function") {
         anyStore.delete(name);
         return;
       }
-
-      // Fallback: expire cookie
       anyStore.set({ name, value: "", ...(options ?? {}), maxAge: 0 });
     },
   });
@@ -42,7 +36,6 @@ async function supabaseServer() {
 export default async function IncidentsList() {
   const supabase = await supabaseServer();
 
-  // Tenant scope
   const tenantIds = await getMemberTenantIds();
 
   if (!tenantIds.length) {
@@ -96,9 +89,10 @@ export default async function IncidentsList() {
 
       <div className="hi5-card overflow-hidden">
         <div className="divide-y hi5-divider">
-          {(rows ?? []).map((r) => {
-            // Your detail route expects the number (your [id] page uses `eq("number", number)`)
-            const href = `/itsm/incidents/${encodeURIComponent(String(r.number ?? r.id))}`;
+          {(rows ?? []).map((r: any) => {
+            const href = `/itsm/incidents/${encodeURIComponent(
+              String(r.number ?? r.id)
+            )}`;
 
             return (
               <Link
