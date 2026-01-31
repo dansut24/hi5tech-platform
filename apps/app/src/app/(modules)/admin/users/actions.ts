@@ -1,64 +1,64 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@hi5tech/auth";
-import { requireSuperAdmin } from "../_admin";
 
-const ALL = ["itsm", "control", "selfservice", "admin"] as const;
+function s(formData: FormData, key: string): string {
+  return String(formData.get(key) ?? "").trim();
+}
 
-export async function createMembership(formData: FormData) {
-  const gate = await requireSuperAdmin();
-  if (!gate.ok) throw new Error("Not authorized");
+/**
+ * Adds a membership row: memberships(tenant_id, user_id, role)
+ * Form fields: tenant_id, user_id, role
+ */
+export async function addUserToTenant(formData: FormData): Promise<void> {
+  const tenant_id = s(formData, "tenant_id");
+  const user_id = s(formData, "user_id");
+  const role = s(formData, "role") || "user";
 
-  const tenant_id = String(formData.get("tenant_id") ?? "").trim();
-  const user_id = String(formData.get("user_id") ?? "").trim();
-  const role = String(formData.get("role") ?? "user").trim();
+  if (!tenant_id || !user_id) return;
 
-  if (!tenant_id || !user_id) throw new Error("Missing tenant_id or user_id");
+  const supabase = await createSupabaseServerClient();
 
-  const supabase = createSupabaseServerClient();
-
-  const { data: membership, error } = await supabase
+  await supabase
     .from("memberships")
     .insert({ tenant_id, user_id, role })
     .select("id")
     .single();
 
-  if (error) throw new Error(error.message);
-
-  // optional modules
-  for (const m of ALL) {
-    if (formData.get(`m_${m}`) === "on") {
-      const { error: e2 } = await supabase
-        .from("module_assignments")
-        .insert({ membership_id: membership.id, module: m });
-      if (e2) throw new Error(e2.message);
-    }
-  }
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/tenants");
 }
 
-export async function updateModules(formData: FormData) {
-  const gate = await requireSuperAdmin();
-  if (!gate.ok) throw new Error("Not authorized");
+/**
+ * Updates membership role.
+ * Form fields: membership_id, role
+ */
+export async function setMembershipRole(formData: FormData): Promise<void> {
+  const membership_id = s(formData, "membership_id");
+  const role = s(formData, "role") || "user";
+  if (!membership_id) return;
 
-  const membership_id = String(formData.get("membership_id") ?? "").trim();
-  if (!membership_id) throw new Error("Missing membership_id");
+  const supabase = await createSupabaseServerClient();
 
-  const supabase = createSupabaseServerClient();
+  await supabase.from("memberships").update({ role }).eq("id", membership_id);
 
-  // reset modules
-  const { error: delErr } = await supabase
-    .from("module_assignments")
-    .delete()
-    .eq("membership_id", membership_id);
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/tenants");
+}
 
-  if (delErr) throw new Error(delErr.message);
+/**
+ * Removes membership by id.
+ * Form fields: membership_id
+ */
+export async function removeMembership(formData: FormData): Promise<void> {
+  const membership_id = s(formData, "membership_id");
+  if (!membership_id) return;
 
-  for (const m of ALL) {
-    if (formData.get(`m_${m}`) === "on") {
-      const { error: insErr } = await supabase
-        .from("module_assignments")
-        .insert({ membership_id, module: m });
-      if (insErr) throw new Error(insErr.message);
-    }
-  }
+  const supabase = await createSupabaseServerClient();
+
+  await supabase.from("memberships").delete().eq("id", membership_id);
+
+  revalidatePath("/admin/users");
+  revalidatePath("/admin/tenants");
 }
