@@ -1,23 +1,58 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { createRouteHandlerClient } from "@supabase/ssr";
+import { createServerClient } from "@supabase/ssr";
 
-export async function POST(request: Request) {
-  const cookieStore = cookies();
-  const supabase = createRouteHandlerClient({
-    cookies: {
-      get(name: string) {
-        return cookieStore.get(name)?.value;
+export async function POST() {
+  // Next 16 treats dynamic APIs like cookies() as async in some runtimes
+  const cookieStore = await cookies();
+
+  const response = NextResponse.json({ ok: true });
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set({ name, value, ...options });
+          });
+        },
       },
-      set(name: string, value: string, options: any) {
-        cookieStore.set({ name, value, ...options });
-      },
-      remove(name: string, options: any) {
-        cookieStore.set({ name, value: "", ...options });
-      }
     }
-  });
+  );
 
   await supabase.auth.signOut();
-  return NextResponse.redirect(new URL("/login", request.url));
+
+  return response;
+}
+
+// Optional: allow GET /logout to work too (handy for links)
+export async function GET() {
+  const cookieStore = await cookies();
+
+  const response = NextResponse.redirect(new URL("/login", "http://localhost"));
+
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set({ name, value, ...options });
+          });
+        },
+      },
+    }
+  );
+
+  await supabase.auth.signOut();
+  return response;
 }
