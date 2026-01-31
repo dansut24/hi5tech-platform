@@ -1,21 +1,10 @@
 ﻿import { createSupabaseServerClient } from "@hi5tech/auth";
-import Link from "next/link";
 import { requireSuperAdmin } from "../_admin";
-import { createTenant } from "./actions";
+import { upsertTenant, setTenantActive, deleteTenant } from "./actions";
 
 export default async function TenantsPage() {
   const gate = await requireSuperAdmin();
-  if (!gate.ok) {
-    return (
-      <div className="space-y-3">
-        <h1 className="text-2xl font-semibold">Tenants</h1>
-        <p className="opacity-80">Not authorized.</p>
-        <Link className="underline" href="/admin">
-          Back
-        </Link>
-      </div>
-    );
-  }
+  if (!gate.ok) return gate.response;
 
   const supabase = await createSupabaseServerClient();
 
@@ -24,117 +13,141 @@ export default async function TenantsPage() {
     .select("id,name,company_name,domain,subdomain,is_active,created_at")
     .order("created_at", { ascending: false });
 
-  if (error) {
-    return (
-      <div className="space-y-3">
-        <h1 className="text-2xl font-semibold">Tenants</h1>
-        <p className="text-red-600 text-sm">{error.message}</p>
-        <Link className="underline" href="/admin">
-          Back
-        </Link>
-      </div>
-    );
-  }
-
   return (
-    <div className="space-y-6">
-      <div className="flex items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Tenants</h1>
-          <p className="opacity-80">Create and manage tenants (domain + subdomain).</p>
+    <div className="space-y-4">
+      <div className="hi5-panel p-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-lg font-semibold">Tenants</div>
+            <div className="text-sm opacity-70">
+              Create and manage tenants across the platform.
+            </div>
+          </div>
         </div>
-        <Link className="underline" href="/admin">
-          Back
-        </Link>
-      </div>
 
-      <form action={createTenant} className="rounded-2xl border p-4 space-y-3">
-        <div className="font-semibold">Create / Update tenant</div>
-
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="text-sm">
-            Tenant name
+        <form
+          className="mt-4 grid gap-3 md:grid-cols-4"
+          action={async (formData) => {
+            "use server";
+            const name = String(formData.get("name") ?? "");
+            const company_name = String(formData.get("company_name") ?? "");
+            const domain = String(formData.get("domain") ?? "");
+            const subdomain = String(formData.get("subdomain") ?? "");
+            await upsertTenant({
+              name,
+              company_name: company_name || null,
+              domain: domain || null,
+              subdomain,
+              is_active: true,
+            });
+          }}
+        >
+          <div className="md:col-span-1">
+            <label className="text-xs opacity-70">Name</label>
             <input
               name="name"
-              className="mt-1 w-full rounded-xl border px-3 py-2 bg-transparent"
-              placeholder="Hi5Tech (Internal)"
+              placeholder="Demo ITSM"
+              className="mt-1 w-full rounded-2xl border hi5-border bg-transparent px-3 py-2"
+              required
             />
-          </label>
+          </div>
 
-          <label className="text-sm">
-            Company name (optional)
+          <div className="md:col-span-1">
+            <label className="text-xs opacity-70">Company name</label>
             <input
               name="company_name"
-              className="mt-1 w-full rounded-xl border px-3 py-2 bg-transparent"
-              placeholder="Hi5Tech"
+              placeholder="Demo ITSM Ltd"
+              className="mt-1 w-full rounded-2xl border hi5-border bg-transparent px-3 py-2"
             />
-          </label>
+          </div>
 
-          <label className="text-sm">
-            Domain
+          <div className="md:col-span-1">
+            <label className="text-xs opacity-70">Domain (optional)</label>
             <input
               name="domain"
-              className="mt-1 w-full rounded-xl border px-3 py-2 bg-transparent"
-              placeholder="hi5tech.co.uk"
+              placeholder="demoitsm.co.uk"
+              className="mt-1 w-full rounded-2xl border hi5-border bg-transparent px-3 py-2"
             />
-          </label>
+          </div>
 
-          <label className="text-sm">
-            Subdomain
+          <div className="md:col-span-1">
+            <label className="text-xs opacity-70">Subdomain</label>
             <input
               name="subdomain"
-              className="mt-1 w-full rounded-xl border px-3 py-2 bg-transparent"
-              placeholder="hi5tech-internal"
+              placeholder="demoitsm"
+              className="mt-1 w-full rounded-2xl border hi5-border bg-transparent px-3 py-2"
+              required
             />
-          </label>
-        </div>
+          </div>
 
-        <label className="text-sm flex items-center gap-2">
-          <input type="checkbox" name="is_active" defaultChecked />
-          Active
-        </label>
+          <div className="md:col-span-4 flex justify-end">
+            <button className="rounded-2xl border hi5-border px-4 py-2 text-sm font-medium hover:bg-black/5 dark:hover:bg-white/5 transition">
+              Create / Update tenant
+            </button>
+          </div>
+        </form>
+      </div>
 
-        <button className="rounded-xl border px-3 py-2 text-sm font-medium">Save tenant</button>
+      <div className="hi5-panel p-4">
+        <div className="text-sm font-semibold mb-3">Existing tenants</div>
 
-        <p className="text-xs opacity-70">
-          This upserts by <span className="font-mono">subdomain</span>. Make sure{" "}
-          <span className="font-mono">tenants.subdomain</span> is unique.
-        </p>
-      </form>
+        {error ? (
+          <div className="text-sm text-red-500">Error: {error.message}</div>
+        ) : !tenants?.length ? (
+          <div className="text-sm opacity-70">No tenants yet.</div>
+        ) : (
+          <div className="overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="text-left opacity-70">
+                <tr>
+                  <th className="py-2 pr-3">Subdomain</th>
+                  <th className="py-2 pr-3">Name</th>
+                  <th className="py-2 pr-3">Company</th>
+                  <th className="py-2 pr-3">Domain</th>
+                  <th className="py-2 pr-3">Active</th>
+                  <th className="py-2 pr-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tenants.map((t) => (
+                  <tr key={t.id} className="border-t hi5-border">
+                    <td className="py-2 pr-3 font-medium">{t.subdomain}</td>
+                    <td className="py-2 pr-3">{t.name}</td>
+                    <td className="py-2 pr-3">{t.company_name ?? "—"}</td>
+                    <td className="py-2 pr-3">{t.domain ?? "—"}</td>
+                    <td className="py-2 pr-3">{t.is_active ? "Yes" : "No"}</td>
+                    <td className="py-2 pr-3">
+                      <div className="flex items-center gap-2">
+                        <form
+                          action={async () => {
+                            "use server";
+                            await setTenantActive(t.subdomain, !t.is_active);
+                          }}
+                        >
+                          <button className="rounded-xl border hi5-border px-3 py-1.5 text-xs hover:bg-black/5 dark:hover:bg-white/5 transition">
+                            {t.is_active ? "Disable" : "Enable"}
+                          </button>
+                        </form>
 
-      <div className="rounded-2xl border overflow-hidden">
-        <div className="px-4 py-3 border-b font-semibold">Existing tenants</div>
-
-        <div className="divide-y">
-          {(tenants ?? []).map((t) => {
-            const host = t.subdomain ? `${t.subdomain}.${t.domain}` : t.domain;
-            return (
-              <div
-                key={t.id}
-                className="px-4 py-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div>
-                  <div className="font-semibold flex items-center gap-2">
-                    {t.name}
-                    {!t.is_active && (
-                      <span className="text-xs rounded-full border px-2 py-0.5 opacity-70">inactive</span>
-                    )}
-                  </div>
-                  <div className="text-sm opacity-70">
-                    {t.company_name ? `${t.company_name} â€¢ ` : ""}
-                    <span className="font-mono">{host}</span>
-                  </div>
-                </div>
-
-                <div className="text-xs opacity-60">{new Date(t.created_at).toLocaleString()}</div>
-              </div>
-            );
-          })}
-
-          {!tenants?.length && <div className="px-4 py-3 opacity-70">No tenants yet.</div>}
-        </div>
+                        <form
+                          action={async () => {
+                            "use server";
+                            await deleteTenant(t.subdomain);
+                          }}
+                        >
+                          <button className="rounded-xl border hi5-border px-3 py-1.5 text-xs hover:bg-black/5 dark:hover:bg-white/5 transition">
+                            Delete
+                          </button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
 }
-
