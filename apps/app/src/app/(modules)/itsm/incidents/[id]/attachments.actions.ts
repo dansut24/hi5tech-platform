@@ -1,4 +1,4 @@
-"use"use server";
+"use server";
 
 import { cookies } from "next/headers";
 import { createSupabaseServerClient } from "@hi5tech/auth";
