@@ -82,13 +82,9 @@ export default async function ModulesLayout({
 `;
 
   return (
-    <div className={`min-h-dvh ${forceDarkClass}`}>
-      <style dangerouslySetInnerHTML={{ __html: cssVars }} />
-      <TopBar
-        allowedModules={allowedModules}
-        tenantLabel={tenantLabel}
-      />
-      <main className="w-full">{children}</main>
-    </div>
-  );
+  <div className={`min-h-dvh ${forceDarkClass}`}>
+    <style dangerouslySetInnerHTML={{ __html: cssVars }} />
+    <main className="w-full">{children}</main>
+  </div>
+);
 }
