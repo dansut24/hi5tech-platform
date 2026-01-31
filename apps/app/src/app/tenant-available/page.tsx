@@ -2,10 +2,11 @@ import Link from "next/link";
 import { headers } from "next/headers";
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "hi5tech.co.uk";
-const MARKETING_URL = process.env.NEXT_PUBLIC_MARKETING_URL || "https://hi5tech.co.uk";
+const MARKETING_URL =
+  process.env.NEXT_PUBLIC_MARKETING_URL || "https://hi5tech.co.uk";
 
-function getRequestedSubdomain() {
-  const h = headers();
+async function getRequestedSubdomain() {
+  const h = await headers();
   const host = (h.get("host") || "").split(":")[0].toLowerCase();
 
   if (!host.endsWith(ROOT_DOMAIN)) return null;
@@ -17,17 +18,16 @@ function getRequestedSubdomain() {
   return sub;
 }
 
-export default function TenantAvailablePage({
+export default async function TenantAvailablePage({
   searchParams,
 }: {
   searchParams: { requested?: string; path?: string };
 }) {
-  const fromHost = getRequestedSubdomain();
+  const fromHost = await getRequestedSubdomain();
   const requested = (searchParams?.requested || fromHost || "").toLowerCase();
 
   const signupUrl = new URL(MARKETING_URL);
-  // Change this path to whatever your marketing signup route is
-  signupUrl.pathname = "/signup";
+  signupUrl.pathname = "/signup"; // change if needed
   if (requested) signupUrl.searchParams.set("subdomain", requested);
 
   return (
@@ -38,7 +38,8 @@ export default function TenantAvailablePage({
         <h1 className="mt-2 text-2xl font-semibold">
           {requested ? (
             <>
-              <span className="hi5-accent">{requested}</span>.{ROOT_DOMAIN} is available
+              <span className="hi5-accent">{requested}</span>.{ROOT_DOMAIN} is
+              available
             </>
           ) : (
             <>This workspace is available</>
@@ -46,7 +47,8 @@ export default function TenantAvailablePage({
         </h1>
 
         <p className="mt-2 text-sm opacity-80">
-          This tenant doesn’t exist yet. Create it now and start a <b>14-day free trial</b>.
+          This tenant doesn’t exist yet. Create it now and start a{" "}
+          <b>14-day free trial</b>.
         </p>
 
         <div className="mt-6 flex flex-col sm:flex-row gap-3">
@@ -66,7 +68,8 @@ export default function TenantAvailablePage({
         </div>
 
         <div className="mt-6 text-xs opacity-60">
-          If you expected this tenant to exist, double-check the spelling or ask your admin to create it.
+          If you expected this tenant to exist, double-check the spelling or ask
+          your admin to create it.
         </div>
       </div>
     </div>
