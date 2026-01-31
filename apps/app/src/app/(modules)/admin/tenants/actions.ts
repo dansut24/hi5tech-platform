@@ -65,7 +65,7 @@ export async function deleteTenant(formData: FormData): Promise<void> {
   const subdomain = s(formData, "subdomain").toLowerCase();
   if (!subdomain) return;
 
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
 
   await supabase.from("tenants").delete().eq("subdomain", subdomain);
 
