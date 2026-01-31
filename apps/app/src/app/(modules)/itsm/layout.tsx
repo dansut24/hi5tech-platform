@@ -72,9 +72,9 @@ export default async function ItsmLayout({ children }: { children: ReactNode }) 
   return (
     <div className={`min-h-dvh ${forceDarkClass}`}>
       <style dangerouslySetInnerHTML={{ __html: cssVars }} />
-      <ItsmShell allowedModules={allowedModules} tenantLabel={tenantLabel}>
-        {children}
-      </ItsmShell>
+      <ItsmShell>
+  {children}
+</ItsmShell>
     </div>
   );
 }
