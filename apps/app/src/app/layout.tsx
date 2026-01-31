@@ -50,7 +50,7 @@ export default async function RootLayout({
   let tenantTheme: any = null;
   let userTheme: any = null;
 
-  // Try to load user + tenant + theme tokens (safe for public routes)
+  // Safe for public routes (don’t crash when logged out)
   try {
     const { data: userRes } = await supabase.auth.getUser();
     const user = userRes.user;
@@ -103,9 +103,8 @@ export default async function RootLayout({
     // leave defaults
   }
 
-  // Apply: tenant defaults → user overrides
-  const accent_hex =
-    userTheme?.accent_hex ?? tenantTheme?.accent_hex ?? "#00c1ff";
+  // Tenant defaults → user overrides
+  const accent_hex = userTheme?.accent_hex ?? tenantTheme?.accent_hex ?? "#00c1ff";
   const accent_2_hex = tenantTheme?.accent_2_hex ?? "#ff4fe1";
   const accent_3_hex = tenantTheme?.accent_3_hex ?? "#ffc42d";
 
@@ -113,20 +112,13 @@ export default async function RootLayout({
   const card_hex = userTheme?.card_hex ?? tenantTheme?.card_hex ?? "#ffffff";
   const topbar_hex = tenantTheme?.topbar_hex ?? card_hex;
 
-  const glow_1 = clamp01(
-    tenantTheme?.glow_1,
-    theme_mode === "dark" ? 0.22 : 0.18
-  );
-  const glow_2 = clamp01(
-    tenantTheme?.glow_2,
-    theme_mode === "dark" ? 0.18 : 0.14
-  );
-  const glow_3 = clamp01(
-    tenantTheme?.glow_3,
-    theme_mode === "dark" ? 0.14 : 0.10
-  );
+  // Intensities (only used by globals.css to build gradients)
+  const glow_1 = clamp01(tenantTheme?.glow_1, theme_mode === "dark" ? 0.22 : 0.18);
+  const glow_2 = clamp01(tenantTheme?.glow_2, theme_mode === "dark" ? 0.18 : 0.14);
+  const glow_3 = clamp01(tenantTheme?.glow_3, theme_mode === "dark" ? 0.14 : 0.10);
 
-  // Force class-based dark only when user explicitly picks dark
+  // Only force dark class when user explicitly chooses dark
+  // If "system", we rely on prefers-color-scheme in globals.css
   const htmlClass = theme_mode === "dark" ? "dark" : "";
 
   const cssVars = `
@@ -137,10 +129,7 @@ export default async function RootLayout({
 
   --hi5-bg: ${hexToRgbTriplet(bg_hex, "248 250 252")};
   --hi5-card: ${hexToRgbTriplet(card_hex, "255 255 255")};
-  --hi5-topbar: ${hexToRgbTriplet(
-    topbar_hex,
-    hexToRgbTriplet(card_hex, "255 255 255")
-  )};
+  --hi5-topbar: ${hexToRgbTriplet(topbar_hex, hexToRgbTriplet(card_hex, "255 255 255"))};
 
   --hi5-glow-1: ${glow_1};
   --hi5-glow-2: ${glow_2};
@@ -150,10 +139,10 @@ export default async function RootLayout({
 
   return (
     <html lang="en" suppressHydrationWarning className={htmlClass}>
-      <head>
+      <body>
         <style dangerouslySetInnerHTML={{ __html: cssVars }} />
-      </head>
-      <body>{children}</body>
+        {children}
+      </body>
     </html>
   );
 }
