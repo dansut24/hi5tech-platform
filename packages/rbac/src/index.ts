@@ -13,6 +13,5 @@ export function pickDefaultModule(modules: ModuleKey[]): ModuleKey {
   return modules[0] ?? "selfservice";
 }
 
-// ✅ IMPORTANT:
-// Do NOT export server-only helpers from here.
-// This file is imported by middleware (Edge).
+// ✅ IMPORTANT: export your function from the package entrypoint
+export { getMemberTenantIds } from "./get-member-tenant-ids";
