@@ -1,7 +1,8 @@
-// apps/app/src/app/(modules)/itsm/incidents/page.tsx
+// src/app/(modules)/itsm/incidents/page.tsx
 
 import Link from "next/link";
-import { supabaseServer } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
+import { createSupabaseServerClient } from "@hi5tech/auth";
 import { getMemberTenantIds } from "@/lib/tenant";
 
 function fmt(ts?: string | null) {
@@ -13,20 +14,44 @@ function fmt(ts?: string | null) {
   }
 }
 
+async function supabaseServer() {
+  const cookieStore = await cookies();
+
+  return createSupabaseServerClient({
+    get(name: string) {
+      return cookieStore.get(name)?.value;
+    },
+    set(name: string, value: string, options: any) {
+      // next/headers cookies().set supports object form (runtime differs by Next version)
+      (cookieStore as any).set({ name, value, ...(options ?? {}) });
+    },
+    remove(name: string, options: any) {
+      const anyStore = cookieStore as any;
+
+      if (typeof anyStore.delete === "function") {
+        anyStore.delete(name);
+        return;
+      }
+
+      // Fallback: expire cookie
+      anyStore.set({ name, value: "", ...(options ?? {}), maxAge: 0 });
+    },
+  });
+}
+
 export default async function IncidentsList() {
   const supabase = await supabaseServer();
 
-  // Tenant scope (member tenants)
+  // Tenant scope
   const tenantIds = await getMemberTenantIds();
 
-  // If user has no tenant memberships, show empty state (don’t query whole table)
   if (!tenantIds.length) {
     return (
       <div className="space-y-4">
         <div className="flex items-end justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold">Incidents</h1>
-            <p className="text-sm opacity-70">Your tenant-scoped incident list.</p>
+            <p className="text-sm opacity-70">No tenant memberships found.</p>
           </div>
           <Link
             href="/itsm/incidents/new"
@@ -45,7 +70,7 @@ export default async function IncidentsList() {
 
   const { data: rows, error } = await supabase
     .from("incidents")
-    .select("id, tenant_id, number, title, status, priority, created_at, updated_at")
+    .select("id,tenant_id,number,title,status,priority,created_at,updated_at")
     .in("tenant_id", tenantIds)
     .order("created_at", { ascending: false })
     .limit(100);
@@ -72,6 +97,7 @@ export default async function IncidentsList() {
       <div className="hi5-card overflow-hidden">
         <div className="divide-y hi5-divider">
           {(rows ?? []).map((r) => {
+            // Your detail route expects the number (your [id] page uses `eq("number", number)`)
             const href = `/itsm/incidents/${encodeURIComponent(String(r.number ?? r.id))}`;
 
             return (
@@ -86,8 +112,8 @@ export default async function IncidentsList() {
                       {r.number ?? "—"} • {r.title ?? "Untitled incident"}
                     </div>
                     <div className="text-xs opacity-70 mt-1">
-                      Created: {fmt(r.created_at)}{" "}
-                      {r.updated_at ? `• Updated: ${fmt(r.updated_at)}` : null}
+                      Created: {fmt(r.created_at)}
+                      {r.updated_at ? ` • Updated: ${fmt(r.updated_at)}` : null}
                     </div>
                   </div>
 
