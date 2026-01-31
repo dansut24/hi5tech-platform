@@ -129,9 +129,6 @@ export default async function RootLayout({
   // Force class-based dark only when user explicitly picks dark
   const htmlClass = theme_mode === "dark" ? "dark" : "";
 
-  // IMPORTANT:
-  // - We only set RGB triplets here (globals.css expects rgb(var(--token)) style)
-  // - Background gradient is painted globally by globals.css on the <html> element
   const cssVars = `
 :root{
   --hi5-accent: ${hexToRgbTriplet(accent_hex, "0 193 255")};
