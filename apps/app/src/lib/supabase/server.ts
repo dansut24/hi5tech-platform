@@ -1,25 +1,43 @@
+// src/lib/supabase/server.ts
 import { cookies } from "next/headers";
 import { createSupabaseServerClient } from "@hi5tech/auth";
 
 /**
  * Server-only Supabase client for the app workspace.
- * Wraps the cookie adapter required by @hi5tech/auth.
+ * This is the ONLY place createSupabaseServerClient is allowed.
  */
-export function supabaseServer() {
-  const cookieStore = cookies();
+export async function supabaseServer() {
+  const cookieStore = await cookies();
 
-  // Provide the cookie adapter expected by your auth package
   return createSupabaseServerClient({
-    cookies: {
-      get(name: string) {
-        return cookieStore.get(name)?.value;
-      },
-      set(name: string, value: string, options?: any) {
-        cookieStore.set({ name, value, ...options });
-      },
-      remove(name: string, options?: any) {
-        cookieStore.set({ name, value: "", ...options, maxAge: 0 });
-      },
+    get(name: string) {
+      return cookieStore.get(name)?.value;
+    },
+
+    set(name: string, value: string, options?: any) {
+      cookieStore.set({
+        name,
+        value,
+        ...(options ?? {}),
+      });
+    },
+
+    remove(name: string, options?: any) {
+      // Next runtimes differ; delete may or may not exist
+      const anyStore = cookieStore as any;
+
+      if (typeof anyStore.delete === "function") {
+        anyStore.delete(name);
+        return;
+      }
+
+      // Fallback: expire cookie
+      cookieStore.set({
+        name,
+        value: "",
+        ...(options ?? {}),
+        maxAge: 0,
+      });
     },
   });
 }
