@@ -50,7 +50,7 @@ export async function setTenantActive(formData: FormData): Promise<void> {
 
   if (!subdomain) return;
 
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
 
   await supabase.from("tenants").update({ is_active }).eq("subdomain", subdomain);
 
