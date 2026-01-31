@@ -2,7 +2,7 @@
 
 import { cookies } from "next/headers";
 import { createSupabaseServerClient } from "@hi5tech/auth";
-import { getMemberTenantIds } from "@hi5tech/rbac";
+import { getMemberTenantIds } from "@/lib/tenant";
 
 function s(formData: FormData, key: string): string {
   return String(formData.get(key) ?? "").trim();
@@ -13,31 +13,6 @@ function fileFrom(formData: FormData, key: string): File | null {
   return v instanceof File ? v : null;
 }
 
-async function supabaseServer() {
-  const cookieStore = await cookies();
-
-  return createSupabaseServerClient({
-    get(name: string) {
-      return cookieStore.get(name)?.value;
-    },
-    set(name: string, value: string, options: any) {
-      cookieStore.set({ name, value, ...(options ?? {}) });
-    },
-    remove(name: string, options: any) {
-      const anyStore = cookieStore as any;
-      if (typeof anyStore.delete === "function") {
-        anyStore.delete(name);
-        return;
-      }
-      cookieStore.set({ name, value: "", ...(options ?? {}), maxAge: 0 });
-    },
-  });
-}
-
-/**
- * Upload an attachment for an incident.
- * Expects: incident_id, tenant_id, file
- */
 export async function uploadIncidentAttachment(formData: FormData) {
   const incident_id = s(formData, "incident_id");
   const tenant_id = s(formData, "tenant_id");
@@ -45,72 +20,74 @@ export async function uploadIncidentAttachment(formData: FormData) {
 
   if (!incident_id || !tenant_id || !file) return;
 
-  const supabase = await supabaseServer();
+  // ✅ Fix: createSupabaseServerClient requires cookies()
+  const supabase = await createSupabaseServerClient(cookies());
 
-  // ✅ FIX: current rbac helper takes 0 args (it reads cookies internally)
+  // ✅ Fix: your getMemberTenantIds() is 0-arg
   const tenantIds = await getMemberTenantIds();
 
-  // Basic tenant guard
+  // tenant guard
   if (!tenantIds.includes(tenant_id)) return;
 
   const { data: userRes } = await supabase.auth.getUser();
   const user = userRes.user;
   if (!user) return;
 
-  // Build a storage path
   const safeName = file.name.replace(/[^\w.\-]+/g, "_");
-  const path = `${tenant_id}/incidents/${incident_id}/${Date.now()}_${safeName}`;
+  const storage_path = `${tenant_id}/incidents/${incident_id}/${Date.now()}_${safeName}`;
 
-  // Upload to storage bucket: "incident_attachments"
+  // ✅ Match your page: bucket "itsm-attachments"
   const upload = await supabase.storage
-    .from("incident_attachments")
-    .upload(path, file, { upsert: false });
+    .from("itsm-attachments")
+    .upload(storage_path, file, { upsert: false, contentType: file.type || undefined });
 
-  if (upload.error) {
-    return;
-  }
+  if (upload.error) return;
 
-  // Insert record (table name assumed: incident_attachments)
-  await supabase.from("incident_attachments").insert({
+  // ✅ Match your page: table "itsm_attachments" and fields
+  await supabase.from("itsm_attachments").insert({
     tenant_id,
-    incident_id,
-    path,
-    filename: file.name,
-    content_type: file.type || null,
-    size: (file as any).size ?? null,
+    entity_type: "incident",
+    entity_id: incident_id,
+    file_name: file.name,
+    mime_type: file.type || null,
+    byte_size: file.size ?? null,
+    storage_path,
     created_by: user.id,
   });
 }
 
 /**
- * Delete an attachment.
- * Expects: tenant_id, incident_id, path
+ * Optional: delete attachment by attachment id + tenant id.
+ * Expects: tenant_id, attachment_id
  */
 export async function deleteIncidentAttachment(formData: FormData) {
   const tenant_id = s(formData, "tenant_id");
-  const incident_id = s(formData, "incident_id");
-  const path = s(formData, "path");
+  const attachment_id = s(formData, "attachment_id");
 
-  if (!tenant_id || !incident_id || !path) return;
+  if (!tenant_id || !attachment_id) return;
 
-  const supabase = await supabaseServer();
-
-  // ✅ FIX: current rbac helper takes 0 args
+  const supabase = await createSupabaseServerClient(cookies());
   const tenantIds = await getMemberTenantIds();
-
   if (!tenantIds.includes(tenant_id)) return;
 
   const { data: userRes } = await supabase.auth.getUser();
   if (!userRes.user) return;
 
-  // Remove from storage
-  await supabase.storage.from("incident_attachments").remove([path]);
+  // Get storage path first
+  const { data: row } = await supabase
+    .from("itsm_attachments")
+    .select("id,storage_path")
+    .eq("tenant_id", tenant_id)
+    .eq("id", attachment_id)
+    .maybeSingle();
 
-  // Remove DB record
+  if (!row?.storage_path) return;
+
+  await supabase.storage.from("itsm-attachments").remove([row.storage_path]);
+
   await supabase
-    .from("incident_attachments")
+    .from("itsm_attachments")
     .delete()
     .eq("tenant_id", tenant_id)
-    .eq("incident_id", incident_id)
-    .eq("path", path);
+    .eq("id", attachment_id);
 }
