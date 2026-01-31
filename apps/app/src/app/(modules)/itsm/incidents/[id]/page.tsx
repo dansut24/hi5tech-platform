@@ -1,6 +1,7 @@
+// apps/app/src/app/(modules)/itsm/incidents/[id]/page.tsx
+
 import Link from "next/link";
-import { cookies } from "next/headers";
-import { createSupabaseServerClient } from "@hi5tech/auth";
+import { supabaseServer } from "@/lib/supabase/server";
 import { getMemberTenantIds } from "@/lib/tenant";
 import { addIncidentComment } from "./actions";
 import { uploadIncidentAttachment } from "./attachments.actions";
@@ -13,7 +14,8 @@ function Badge({ children }: { children: React.ReactNode }) {
   );
 }
 
-function fmt(ts: string) {
+function fmt(ts?: string | null) {
+  if (!ts) return "—";
   try {
     return new Date(ts).toLocaleString();
   } catch {
@@ -24,13 +26,11 @@ function fmt(ts: string) {
 export default async function IncidentDetail(props: {
   params: Promise<{ id: string }>;
 }) {
-  // route param is [id]; your code treats it like "number"
-  const { id: number } = await props.params;
+  // Route param [id] is being used as the incident "number" in your query
+  const { id } = await props.params;
+  const number = id;
 
-  // ✅ Fix: createSupabaseServerClient requires cookies()
-  const supabase = await createSupabaseServerClient(cookies());
-
-  // ✅ Your getMemberTenantIds is 0-arg (do not pass supabase)
+  const supabase = await supabaseServer();
   const tenantIds = await getMemberTenantIds();
 
   const { data: incident, error } = await supabase
@@ -89,7 +89,7 @@ export default async function IncidentDetail(props: {
 
   // Create signed URLs for attachments (private bucket)
   const signed: Record<string, string> = {};
-  if (attachments && attachments.length) {
+  if (attachments?.length) {
     for (const a of attachments) {
       const { data } = await supabase.storage
         .from("itsm-attachments")
@@ -122,7 +122,7 @@ export default async function IncidentDetail(props: {
           <div>
             <div className="font-semibold">Add comment</div>
             <form action={addIncidentComment} className="mt-2 space-y-2">
-              <input type="hidden" name="number" value={incident.number} />
+              <input type="hidden" name="number" value={incident.number ?? number} />
               <textarea
                 name="body"
                 placeholder="Write an update…"
@@ -141,7 +141,7 @@ export default async function IncidentDetail(props: {
             </form>
           </div>
 
-          <div id="comments">
+          <div>
             <div className="font-semibold">Comments</div>
             {cErr ? <div className="text-sm text-red-600 mt-2">{cErr.message}</div> : null}
 
@@ -155,14 +155,12 @@ export default async function IncidentDetail(props: {
                   <div className="text-sm whitespace-pre-wrap mt-2">{c.body}</div>
                 </div>
               ))}
-              {!comments || comments.length === 0 ? (
-                <div className="text-sm opacity-70">No comments yet.</div>
-              ) : null}
+              {!comments?.length ? <div className="text-sm opacity-70">No comments yet.</div> : null}
             </div>
           </div>
         </div>
 
-        <div className="hi5-card p-4 space-y-4" id="attachments">
+        <div className="hi5-card p-4 space-y-4">
           <div>
             <div className="font-semibold">Details</div>
             <div className="flex gap-2 flex-wrap mt-2">
@@ -176,11 +174,9 @@ export default async function IncidentDetail(props: {
           <div>
             <div className="font-semibold">Attachments</div>
 
-            {/* ✅ Fix: send incident_id + tenant_id (matches attachments.actions.ts) */}
             <form action={uploadIncidentAttachment} className="mt-2 space-y-2">
-              <input type="hidden" name="incident_id" value={incident.id} />
-              <input type="hidden" name="tenant_id" value={incident.tenant_id} />
-
+              {/* Keep what you already had; attachment action can decide how to resolve number->incident */}
+              <input type="hidden" name="number" value={incident.number ?? number} />
               <input
                 type="file"
                 name="file"
@@ -209,7 +205,7 @@ export default async function IncidentDetail(props: {
                   </div>
                 </a>
               ))}
-              {!attachments || attachments.length === 0 ? (
+              {!attachments?.length ? (
                 <div className="text-sm opacity-70">No attachments yet.</div>
               ) : null}
             </div>
