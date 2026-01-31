@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "@hi5tech/auth": "workspace:*"
+    "@hi5tech/auth": "workspace:*",
+    "@supabase/supabase-js": "^2.93.3"
   },
   "peerDependencies": {
     "next": ">=16.0.0"
