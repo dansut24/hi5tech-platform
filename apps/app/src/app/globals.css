@@ -1,48 +1,72 @@
-*, *::before, *::after { box-sizing: border-box; }
 @import "tailwindcss";
 
+*, *::before, *::after { box-sizing: border-box; }
+
 /* ----------------------------------------------------------
-   Hi5Tech Theme Tokens (supports light/dark + future custom)
-   We keep everything on CSS variables so user preferences
-   can be stored and applied later.
+   Hi5Tech Theme Tokens
+   - All color values are RGB triples so you can use:
+     rgb(var(--token)) and rgba(var(--token), alpha)
+   - Tenant branding can override these tokens later.
 ---------------------------------------------------------- */
 
 :root {
   color-scheme: light;
 
-  --hi5-bg: 248 250 252;           /* slate-50-ish */
-  --hi5-fg: 15 23 42;              /* slate-900-ish */
-  --hi5-muted: 100 116 139;        /* slate-500-ish */
+  /* Base surfaces / text */
+  --hi5-bg: 248 250 252;            /* slate-50 */
+  --hi5-fg: 15 23 42;               /* slate-900 */
+  --hi5-muted: 100 116 139;         /* slate-500 */
 
+  /* Surface glass */
   --hi5-card: 255 255 255;
-  --hi5-card-alpha: 0.60;
+  --hi5-card-alpha: 0.58;
 
+  /* Borders / dividers */
   --hi5-border: 15 23 42;
-  --hi5-border-alpha: 0.10;
+  --hi5-border-alpha: 0.12;
 
+  /* Shadows */
   --hi5-shadow: 2 6 23;
-  --hi5-shadow-alpha: 0.12;
+  --hi5-shadow-alpha: 0.10;
 
-  /* Accent (user-customisable later) */
-  --hi5-accent: 99 102 241;        /* indigo-500 default */
-  --hi5-accent-2: 56 189 248;      /* sky-400 for glow */
+  /* Accent (brandable) */
+  --hi5-accent: 0 193 255;          /* cyan */
+  --hi5-accent-2: 255 79 225;       /* pink */
+  --hi5-accent-3: 255 196 45;       /* warm yellow */
+
+  /* Topbar */
+  --hi5-topbar: 255 255 255;
+  --hi5-topbar-alpha: 0.55;
+
+  /* Gradient intensity knobs (brandable) */
+  --hi5-glow-1: 0.18;
+  --hi5-glow-2: 0.14;
+  --hi5-glow-3: 0.10;
 }
 
 .dark {
   color-scheme: dark;
 
-  --hi5-bg: 2 6 23;                /* very dark navy */
-  --hi5-fg: 226 232 240;           /* slate-200 */
-  --hi5-muted: 148 163 184;        /* slate-400 */
+  --hi5-bg: 2 6 23;                 /* deep navy */
+  --hi5-fg: 226 232 240;            /* slate-200 */
+  --hi5-muted: 148 163 184;         /* slate-400 */
 
-  --hi5-card: 15 23 42;
-  --hi5-card-alpha: 0.55;
+  --hi5-card: 14 18 28;             /* deep surface */
+  --hi5-card-alpha: 0.28;
 
-  --hi5-border: 226 232 240;
-  --hi5-border-alpha: 0.10;
+  --hi5-border: 220 230 255;
+  --hi5-border-alpha: 0.16;
 
   --hi5-shadow: 0 0 0;
   --hi5-shadow-alpha: 0.0;
+
+  --hi5-topbar: 12 14 20;
+  --hi5-topbar-alpha: 0.48;
+
+  /* Slightly stronger glow in dark mode */
+  --hi5-glow-1: 0.22;
+  --hi5-glow-2: 0.18;
+  --hi5-glow-3: 0.14;
 }
 
 /* ----------------------------------------------------------
@@ -55,30 +79,73 @@ html, body {
 
 body {
   margin: 0;
-  color: rgb(var(--hi5-fg));
-  background:
-    radial-gradient(1200px 600px at 10% 10%, rgba(var(--hi5-accent), 0.18), transparent 60%),
-    radial-gradient(900px 500px at 90% 30%, rgba(var(--hi5-accent-2), 0.14), transparent 55%),
-    radial-gradient(900px 500px at 50% 110%, rgba(34, 197, 94, 0.10), transparent 55%),
-    linear-gradient(180deg, rgba(var(--hi5-bg), 1), rgba(var(--hi5-bg), 1));
   min-height: 100%;
+  color: rgb(var(--hi5-fg));
+  background: transparent;
+}
+
+/* ----------------------------------------------------------
+   Global gradient background (apply to a wrapper)
+   Use <div className="hi5-bg"> ... </div>
+---------------------------------------------------------- */
+.hi5-bg {
+  min-height: 100dvh;
+  width: 100%;
+
+  /* LIGHT: soft pastel glow like your screenshot */
+  background:
+    radial-gradient(1100px 600px at 18% 8%, rgba(var(--hi5-accent), var(--hi5-glow-1)), transparent 62%),
+    radial-gradient(980px 560px at 88% 18%, rgba(var(--hi5-accent-3), var(--hi5-glow-2)), transparent 62%),
+    radial-gradient(900px 520px at 55% 105%, rgba(var(--hi5-accent-2), var(--hi5-glow-3)), transparent 60%),
+    linear-gradient(180deg, rgba(var(--hi5-bg), 1), rgba(var(--hi5-bg), 1));
+  background-attachment: fixed;
+}
+
+.dark .hi5-bg {
+  /* DARK: neon glow on deep navy */
+  background:
+    radial-gradient(980px 640px at 22% 6%, rgba(var(--hi5-accent), var(--hi5-glow-1)), transparent 60%),
+    radial-gradient(900px 620px at 82% 20%, rgba(var(--hi5-accent-2), var(--hi5-glow-2)), transparent 62%),
+    radial-gradient(860px 620px at 55% 95%, rgba(var(--hi5-accent-3), var(--hi5-glow-3)), transparent 62%),
+    linear-gradient(180deg, rgba(6,7,10,1) 0%, rgba(10,10,18,1) 55%, rgba(8,9,14,1) 100%);
+  background-attachment: fixed;
 }
 
 /* ----------------------------------------------------------
    Utility classes used across the app
 ---------------------------------------------------------- */
-
 .hi5-border {
   border-color: rgba(var(--hi5-border), var(--hi5-border-alpha));
+}
+
+.hi5-divider {
+  border-color: rgba(var(--hi5-border), calc(var(--hi5-border-alpha) * 0.90));
 }
 
 .hi5-card {
   background: rgba(var(--hi5-card), var(--hi5-card-alpha));
   border: 1px solid rgba(var(--hi5-border), var(--hi5-border-alpha));
-  border-radius: 18px;
+  border-radius: 16px;
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  box-shadow: 0 10px 30px rgba(var(--hi5-shadow), var(--hi5-shadow-alpha));
+  box-shadow: 0 16px 38px rgba(var(--hi5-shadow), calc(var(--hi5-shadow-alpha) * 0.90));
+}
+
+.hi5-panel {
+  background: rgba(var(--hi5-card), calc(var(--hi5-card-alpha) + 0.04));
+  border: 1px solid rgba(var(--hi5-border), calc(var(--hi5-border-alpha) * 0.90));
+  border-radius: 18px;
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow:
+    0 12px 34px rgba(0,0,0,0.07),
+    0 1px 0 rgba(255,255,255,0.35) inset;
+}
+
+.dark .hi5-panel {
+  box-shadow:
+    0 18px 50px rgba(0,0,0,0.42),
+    0 1px 0 rgba(255,255,255,0.06) inset;
 }
 
 .hi5-accent {
@@ -86,23 +153,20 @@ body {
 }
 
 .hi5-accent-btn {
+  color: #071019;
   background: linear-gradient(
     135deg,
-    rgba(var(--hi5-accent), 0.95),
-    rgba(var(--hi5-accent-2), 0.85)
+    rgba(var(--hi5-accent), 1),
+    rgba(var(--hi5-accent-2), 0.95)
   );
-  color: white;
-  border: 1px solid rgba(255,255,255,0.18);
-  box-shadow: 0 10px 25px rgba(var(--hi5-accent), 0.18);
+  border: 1px solid rgba(255,255,255,0.28);
+  box-shadow:
+    0 12px 26px rgba(var(--hi5-accent), 0.22),
+    0 8px 18px rgba(var(--hi5-accent-2), 0.16);
 }
 
-.hi5-accent-btn:hover {
-  filter: brightness(1.05);
-}
-
-.hi5-accent-btn:active {
-  transform: translateY(1px);
-}
+.hi5-accent-btn:hover { filter: brightness(1.03) saturate(1.05); }
+.hi5-accent-btn:active { transform: translateY(1px); }
 
 .hi5-glass-bar {
   background: rgba(var(--hi5-card), 0.42);
@@ -111,27 +175,55 @@ body {
   -webkit-backdrop-filter: blur(16px);
 }
 
-.hi5-input {
-  background: rgba(var(--hi5-card), 0.35);
-  border: 1px solid rgba(var(--hi5-border), var(--hi5-border-alpha));
-  border-radius: 14px;
-  padding: 10px 12px;
+.hi5-topbar {
+  background: rgba(var(--hi5-topbar), var(--hi5-topbar-alpha));
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-bottom: 1px solid rgba(var(--hi5-border), 0.14);
 }
 
-/* Nice selection */
+.hi5-input {
+  background: rgba(var(--hi5-card), 0.55);
+  border: 1px solid rgba(var(--hi5-border), 0.32) !important;
+  border-radius: 16px;
+  padding: 10px 12px;
+  color: rgb(var(--hi5-fg));
+  outline: none;
+  transition: box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.dark .hi5-input {
+  background: rgba(var(--hi5-card), 0.22);
+  border: 1px solid rgba(var(--hi5-border), 0.22) !important;
+}
+
+.hi5-input:focus {
+  border-color: rgba(var(--hi5-accent), 0.75) !important;
+  box-shadow:
+    0 0 0 4px rgba(var(--hi5-accent), 0.22),
+    0 8px 22px rgba(var(--hi5-accent), 0.14);
+}
+
+/* Sidebar / overlay */
+.hi5-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.28);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* Selection */
 ::selection {
   background: rgba(var(--hi5-accent), 0.25);
 }
 
-/* Reduce motion support */
+/* Reduce motion */
 @media (prefers-reduced-motion: reduce) {
-  .hi5-accent-btn:active {
-    transform: none;
-  }
+  .hi5-accent-btn:active { transform: none; }
 }
-/* ----------------------------------------------------------
-   Layout helpers
----------------------------------------------------------- */
+
+/* Layout helpers */
 .hi5-container {
   max-width: 1400px;
   margin-inline: auto;
@@ -141,318 +233,6 @@ body {
   .hi5-container { padding-inline: 24px; }
 }
 
-/* Softer, more professional surfaces */
-.hi5-card {
-  border-radius: 16px;
-  box-shadow: 0 16px 38px rgba(var(--hi5-shadow), calc(var(--hi5-shadow-alpha) * 0.90));
-}
-
-.hi5-panel {
-  background: rgba(var(--hi5-card), 0.38);
-  border: 1px solid rgba(var(--hi5-border), calc(var(--hi5-border-alpha) * 0.90));
-  border-radius: 18px;
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-}
-
-.hi5-divider {
-  border-color: rgba(var(--hi5-border), calc(var(--hi5-border-alpha) * 0.90));
-}
-
-/* Sidebar / overlay */
-.hi5-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.10);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
-}
-
-html {
-  min-height: 100%;
-  background:
-    radial-gradient(1200px 600px at 10% 10%, rgba(var(--hi5-accent), 0.18), transparent 60%),
-    radial-gradient(900px 500px at 90% 30%, rgba(var(--hi5-accent-2), 0.14), transparent 55%),
-    radial-gradient(900px 500px at 50% 110%, rgba(34, 197, 94, 0.10), transparent 55%),
-    linear-gradient(180deg, rgba(var(--hi5-bg), 1), rgba(var(--hi5-bg), 1));
-}
-
-/* ----------------------------
-   Hi5 "Playful Pro" theme layer
-   - stronger borders for inputs/cards
-   - richer accent + subtle gradients
-   - less "generic grey"
------------------------------*/
-
-:root {
-  /* accent is RGB to support rgba(var(--hi5-accent),x) usage */
-  --hi5-accent: 0 193 255;      /* electric cyan */
-  --hi5-accent-2: 255 79 225;   /* pink pop */
-  --hi5-accent-3: 255 196 45;   /* warm yellow */
-
-  --hi5-card: 255 255 255;
-  --hi5-text: 13 18 28;
-
-  /* stronger border in light mode */
-  --hi5-border: 20 30 50;
-}
-
-.dark {
-  --hi5-accent: 0 193 255;
-  --hi5-accent-2: 255 79 225;
-  --hi5-accent-3: 255 196 45;
-
-  --hi5-card: 14 18 28;
-  --hi5-text: 238 242 255;
-
-  /* stronger border in dark mode */
-  --hi5-border: 220 230 255;
-}
-
-/* Background "cartoon vibe" gradients */
-.hi5-bg {
-  background:
-    radial-gradient(800px 450px at 15% 10%, rgba(var(--hi5-accent), 0.16), transparent 60%),
-    radial-gradient(650px 420px at 85% 15%, rgba(var(--hi5-accent-2), 0.14), transparent 60%),
-    radial-gradient(700px 500px at 60% 95%, rgba(var(--hi5-accent-3), 0.12), transparent 60%),
-    linear-gradient(180deg, rgba(var(--hi5-card), 1) 0%, rgba(var(--hi5-card), 0.92) 100%);
-}
-
-.dark .hi5-bg {
-  background:
-    radial-gradient(800px 450px at 15% 10%, rgba(var(--hi5-accent), 0.20), transparent 60%),
-    radial-gradient(650px 420px at 85% 15%, rgba(var(--hi5-accent-2), 0.18), transparent 60%),
-    radial-gradient(700px 500px at 60% 95%, rgba(var(--hi5-accent-3), 0.14), transparent 60%),
-    linear-gradient(180deg, rgba(8, 10, 16, 1) 0%, rgba(10, 12, 18, 1) 100%);
-}
-
-/* Panels / glass */
-.hi5-panel {
-  border: 1px solid rgba(var(--hi5-border), 0.22);
-  background: rgba(var(--hi5-card), 0.55);
-  backdrop-filter: blur(18px);
-  border-radius: 22px;
-  box-shadow:
-    0 10px 30px rgba(0,0,0,0.06),
-    0 1px 0 rgba(255,255,255,0.35) inset;
-}
-.dark .hi5-panel {
-  border: 1px solid rgba(var(--hi5-border), 0.16);
-  background: rgba(var(--hi5-card), 0.28);
-  box-shadow:
-    0 18px 48px rgba(0,0,0,0.40),
-    0 1px 0 rgba(255,255,255,0.06) inset;
-}
-
-/* Divider */
-.hi5-divider {
-  border-color: rgba(var(--hi5-border), 0.16);
-}
-
-/* Inputs: FIX invisible borders */
-.hi5-input {
-  border: 1px solid rgba(var(--hi5-border), 0.30) !important;
-  background: rgba(var(--hi5-card), 0.55);
-  color: rgb(var(--hi5-text));
-  border-radius: 16px;
-  padding: 10px 12px;
-  outline: none;
-  transition: box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
-}
-.dark .hi5-input {
-  border: 1px solid rgba(var(--hi5-border), 0.22) !important;
-  background: rgba(var(--hi5-card), 0.22);
-}
-
-.hi5-input:focus {
-  border-color: rgba(var(--hi5-accent), 0.70) !important;
-  box-shadow:
-    0 0 0 4px rgba(var(--hi5-accent), 0.20),
-    0 8px 22px rgba(var(--hi5-accent), 0.12);
-}
-
-/* Accent button: more fun */
-.hi5-accent-btn {
-  color: #071019;
-  background:
-    linear-gradient(135deg,
-      rgba(var(--hi5-accent), 1),
-      rgba(var(--hi5-accent-2), 0.95)
-    );
-  border: 1px solid rgba(255,255,255,0.28);
-  box-shadow:
-    0 12px 26px rgba(var(--hi5-accent), 0.22),
-    0 8px 18px rgba(var(--hi5-accent-2), 0.16);
-}
-.hi5-accent-btn:hover {
-  filter: brightness(1.03) saturate(1.05);
-}
-
-/* Accent text helper */
-.hi5-accent {
-  color: rgb(var(--hi5-accent));
-}
-
-/* Overlay */
-.hi5-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.28);
-  backdrop-filter: blur(6px);
-}
-
-/* ----------------------------
-   Hi5 Gradient Backdrop (full-site)
-   - light: soft pastel
-   - dark: neon glow
------------------------------*/
-
-:root {
-  --hi5-accent: 0 193 255;
-  --hi5-accent-2: 255 79 225;
-  --hi5-accent-3: 255 196 45;
-
-  --hi5-card: 255 255 255;
-  --hi5-text: 13 18 28;
-  --hi5-border: 20 30 50;
-
-  --hi5-topbar: 255 255 255;
-  --hi5-topbar-alpha: 0.58;
-}
-
-.dark {
-  --hi5-accent: 0 193 255;
-  --hi5-accent-2: 255 79 225;
-  --hi5-accent-3: 255 196 45;
-
-  --hi5-card: 14 18 28;
-  --hi5-text: 238 242 255;
-  --hi5-border: 220 230 255;
-
-  --hi5-topbar: 12 14 20;
-  --hi5-topbar-alpha: 0.48;
-}
-
-/* Full background gradient */
-.hi5-bg {
-  min-height: 100dvh;
-  background:
-    radial-gradient(900px 550px at 75% 15%, rgba(var(--hi5-accent), 0.16), transparent 62%),
-    radial-gradient(760px 520px at 25% 30%, rgba(var(--hi5-accent-2), 0.12), transparent 60%),
-    radial-gradient(820px 560px at 60% 95%, rgba(var(--hi5-accent-3), 0.10), transparent 60%),
-    linear-gradient(180deg, rgba(255,255,255,1) 0%, rgba(248,250,252,1) 60%, rgba(246,247,255,1) 100%);
-}
-
-.dark .hi5-bg {
-  background:
-    radial-gradient(980px 640px at 70% 10%, rgba(var(--hi5-accent), 0.22), transparent 60%),
-    radial-gradient(820px 600px at 30% 35%, rgba(var(--hi5-accent-2), 0.18), transparent 62%),
-    radial-gradient(860px 620px at 55% 95%, rgba(var(--hi5-accent-3), 0.14), transparent 62%),
-    linear-gradient(180deg, rgba(6,7,10,1) 0%, rgba(10,10,18,1) 55%, rgba(8,9,14,1) 100%);
-}
-
-/* Glass panels */
-.hi5-panel {
-  border: 1px solid rgba(var(--hi5-border), 0.22);
-  background: rgba(var(--hi5-card), 0.56);
-  backdrop-filter: blur(18px);
-  border-radius: 22px;
-  box-shadow:
-    0 12px 34px rgba(0,0,0,0.07),
-    0 1px 0 rgba(255,255,255,0.35) inset;
-}
-.dark .hi5-panel {
-  border: 1px solid rgba(var(--hi5-border), 0.16);
-  background: rgba(var(--hi5-card), 0.28);
-  box-shadow:
-    0 18px 50px rgba(0,0,0,0.42),
-    0 1px 0 rgba(255,255,255,0.06) inset;
-}
-
-.hi5-divider { border-color: rgba(var(--hi5-border), 0.16); }
-.hi5-border { border-color: rgba(var(--hi5-border), 0.22); }
-
-/* Inputs visible always */
-.hi5-input {
-  border: 1px solid rgba(var(--hi5-border), 0.32) !important;
-  background: rgba(var(--hi5-card), 0.55);
-  color: rgb(var(--hi5-text));
-  border-radius: 16px;
-  padding: 10px 12px;
-  outline: none;
-  transition: box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
-}
-.dark .hi5-input {
-  border: 1px solid rgba(var(--hi5-border), 0.22) !important;
-  background: rgba(var(--hi5-card), 0.22);
-}
-.hi5-input:focus {
-  border-color: rgba(var(--hi5-accent), 0.75) !important;
-  box-shadow:
-    0 0 0 4px rgba(var(--hi5-accent), 0.22),
-    0 8px 22px rgba(var(--hi5-accent), 0.14);
-}
-
-/* Accent button */
-.hi5-accent-btn {
-  color: #071019;
-  background:
-    linear-gradient(135deg,
-      rgba(var(--hi5-accent), 1),
-      rgba(var(--hi5-accent-2), 0.95)
-    );
-  border: 1px solid rgba(255,255,255,0.28);
-  box-shadow:
-    0 12px 26px rgba(var(--hi5-accent), 0.22),
-    0 8px 18px rgba(var(--hi5-accent-2), 0.16);
-}
-.hi5-accent-btn:hover { filter: brightness(1.03) saturate(1.05); }
-
-.hi5-accent { color: rgb(var(--hi5-accent)); }
-
-/* Topbar glass */
-.hi5-topbar {
-  background: rgba(var(--hi5-topbar), var(--hi5-topbar-alpha));
-  backdrop-filter: blur(18px);
-  border-bottom: 1px solid rgba(var(--hi5-border), 0.14);
-}
-
-/* Small icon chip */
-.hi5-chip {
-  border: 1px solid rgba(var(--hi5-border), 0.18);
-  background: rgba(var(--hi5-card), 0.42);
-  backdrop-filter: blur(16px);
-  border-radius: 999px;
-}
-.dark .hi5-chip { background: rgba(var(--hi5-card), 0.22); }
-
-.hi5-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.28);
-  backdrop-filter: blur(6px);
-}
-/* ============================
-   HI5 BASE LAYOUT (GLOBAL)
-   - ensures gradients show
-   - prevents solid backgrounds hiding them
-============================ */
-html, body {
-  height: 100%;
-}
-body {
-  background: transparent !important;
-}
-
-.hi5-bg {
-  min-height: 100dvh;
-  width: 100%;
-}
-
-/* If any legacy wrapper uses bg-white, soften it */
-.hi5-reset-bg {
-  background: transparent !important;
-}
-
-.scrollbar-hide::-webkit-scrollbar { display: none; }
-.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+/* Scrollbar utilities */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
