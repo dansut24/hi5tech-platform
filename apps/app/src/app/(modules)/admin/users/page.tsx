@@ -1,21 +1,14 @@
-import { cookies } from "next/headers";
-import { createSupabaseServerClient } from "@hi5tech/auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { supabaseServer } from "@/lib/supabase/server";
 import { requireSuperAdmin } from "../_admin";
-import { createMembership, removeMembership, addUserToTenant, updateModules } from "./actions";
-
-async function supabaseFromCookies() {
-  const cookieStore = await cookies();
-  return createSupabaseServerClient({
-    get(name: string) {
-      return cookieStore.get(name)?.value;
-    },
-    set() {},
-    remove() {},
-  });
-}
+import {
+  createMembership,
+  removeMembership,
+  addUserToTenant,
+  updateModules,
+} from "./actions";
 
 export default async function UsersAdminPage() {
   const gate = await requireSuperAdmin();
@@ -25,7 +18,7 @@ export default async function UsersAdminPage() {
     redirect("/no-access");
   }
 
-  const supabase = await supabaseFromCookies();
+  const supabase = await supabaseServer();
 
   // Tenants for dropdown
   const { data: tenants } = await supabase
@@ -33,7 +26,7 @@ export default async function UsersAdminPage() {
     .select("id,name,subdomain")
     .order("created_at", { ascending: false });
 
-  // Memberships list (basic view)
+  // Memberships list
   const { data: memberships, error: membershipsError } = await supabase
     .from("memberships")
     .select("id,tenant_id,user_id,role,created_at")
@@ -62,7 +55,7 @@ export default async function UsersAdminPage() {
         <h2 className="font-semibold mb-3">Add user to tenant</h2>
 
         <form action={createMembership} className="grid gap-3 sm:grid-cols-3">
-          <div className="grid gap-1 sm:col-span-1">
+          <div className="grid gap-1">
             <label className="text-sm opacity-80">Tenant</label>
             <select
               name="tenant_id"
@@ -81,7 +74,7 @@ export default async function UsersAdminPage() {
             </select>
           </div>
 
-          <div className="grid gap-1 sm:col-span-1">
+          <div className="grid gap-1">
             <label className="text-sm opacity-80">User ID</label>
             <input
               name="user_id"
@@ -91,7 +84,7 @@ export default async function UsersAdminPage() {
             />
           </div>
 
-          <div className="grid gap-1 sm:col-span-1">
+          <div className="grid gap-1">
             <label className="text-sm opacity-80">Role</label>
             <select
               name="role"
@@ -112,12 +105,10 @@ export default async function UsersAdminPage() {
               Add membership
             </button>
 
-            {/* Optional alias action, in case your UI still uses it */}
             <button
               formAction={addUserToTenant}
               type="submit"
               className="rounded-xl border hi5-border px-4 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/5 transition"
-              title="Alias of createMembership"
             >
               Add (alias)
             </button>
@@ -130,7 +121,9 @@ export default async function UsersAdminPage() {
         <div className="px-4 py-3 border-b hi5-border flex items-center justify-between">
           <div className="font-semibold">Memberships</div>
           <div className="text-sm opacity-70">
-            {membershipsError ? "Failed to load" : `${memberships?.length ?? 0} total`}
+            {membershipsError
+              ? "Failed to load"
+              : `${memberships?.length ?? 0} total`}
           </div>
         </div>
 
@@ -147,60 +140,52 @@ export default async function UsersAdminPage() {
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <form action={removeMembership} className="inline-flex">
-                  <input type="hidden" name="id" value={m.id} />
-                  <button
-                    type="submit"
-                    className="rounded-xl border hi5-border px-3 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/5 transition"
-                  >
-                    Remove
-                  </button>
-                </form>
-              </div>
+              <form action={removeMembership}>
+                <input type="hidden" name="id" value={m.id} />
+                <button
+                  type="submit"
+                  className="rounded-xl border hi5-border px-3 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/5 transition"
+                >
+                  Remove
+                </button>
+              </form>
             </div>
           ))}
 
-          {!membershipsError && (memberships?.length ?? 0) === 0 ? (
+          {!membershipsError && (memberships?.length ?? 0) === 0 && (
             <div className="p-6 text-sm opacity-70">No memberships yet.</div>
-          ) : null}
+          )}
         </div>
       </div>
 
-      {/* Optional: tenant module update helper (only if you actually use it) */}
+      {/* Optional module updater */}
       <div className="hi5-panel p-4">
-        <h2 className="font-semibold mb-3">Update tenant modules (optional)</h2>
+        <h2 className="font-semibold mb-3">Update tenant modules</h2>
 
         <form action={updateModules} className="grid gap-3 sm:grid-cols-2">
-          <div className="grid gap-1">
-            <label className="text-sm opacity-80">Tenant</label>
-            <select
-              name="tenant_id"
-              className="w-full rounded-xl border hi5-border px-3 py-2 bg-transparent"
-              required
-              defaultValue=""
-            >
-              <option value="" disabled>
-                Select tenant…
+          <select
+            name="tenant_id"
+            className="rounded-xl border hi5-border px-3 py-2 bg-transparent"
+            required
+            defaultValue=""
+          >
+            <option value="" disabled>
+              Select tenant…
+            </option>
+            {(tenants ?? []).map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name} ({t.subdomain})
               </option>
-              {(tenants ?? []).map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} ({t.subdomain})
-                </option>
-              ))}
-            </select>
-          </div>
+            ))}
+          </select>
 
-          <div className="grid gap-1">
-            <label className="text-sm opacity-80">Modules (comma separated)</label>
-            <input
-              name="modules"
-              placeholder="itsm, control, selfservice, admin"
-              className="w-full rounded-xl border hi5-border px-3 py-2 bg-transparent"
-            />
-          </div>
+          <input
+            name="modules"
+            placeholder="itsm, control, selfservice, admin"
+            className="rounded-xl border hi5-border px-3 py-2 bg-transparent"
+          />
 
-          <div className="sm:col-span-2 flex items-center gap-2 pt-2">
+          <div className="sm:col-span-2">
             <button
               type="submit"
               className="rounded-xl border hi5-border px-4 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/5 transition"
