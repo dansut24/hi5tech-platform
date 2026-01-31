@@ -3,26 +3,24 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-export type SidebarMode = "fixed" | "resizable" | "collapsed" | "hidden";
+export type SidebarMode = "fixed" | "collapsed" | "hidden";
 
 export type ItsmTab = {
-  key: string;       // stable unique key
-  href: string;      // route
-  label: string;     // tab title
-  closable: boolean; // dashboard = false
+  id: string;
+  title: string;
+  href: string;
+  pinned?: boolean; // use for Dashboard
 };
-
-function clamp(n: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, n));
-}
 
 type State = {
   // Sidebar
   sidebarMode: SidebarMode;
-  sidebarWidth: number; // 80-280 (desktop)
-  sidebarDrawerOpen: boolean; // mobile / hidden mode
+  sidebarWidth: number; // only relevant for "fixed"
+  sidebarDrawerOpen: boolean; // mobile / hidden sidebar drawer state
+
   setSidebarMode: (mode: SidebarMode) => void;
   setSidebarWidth: (w: number) => void;
+
   openDrawer: () => void;
   closeDrawer: () => void;
   toggleDrawer: () => void;
@@ -31,58 +29,88 @@ type State = {
   tabs: ItsmTab[];
   setTabs: (tabs: ItsmTab[]) => void;
   upsertTab: (tab: ItsmTab) => void;
-  closeTab: (key: string) => void;
+  closeTab: (id: string) => void;
+  closeOthers: (keepId: string) => void;
 };
 
-const DASH_TAB: ItsmTab = {
-  key: "dashboard",
+const DASHBOARD_TAB: ItsmTab = {
+  id: "dashboard",
+  title: "Dashboard",
   href: "/itsm",
-  label: "Dashboard",
-  closable: false,
+  pinned: true,
 };
 
 export const useItsmUiStore = create<State>()(
   persist(
     (set, get) => ({
-      // BEFORE
-      // sidebarMode: "resizable",
-      // sidebarWidth: 280,
-
-      // ✅ AFTER
+      // Sidebar (you said fixed 280)
       sidebarMode: "fixed",
       sidebarWidth: 280,
+      sidebarDrawerOpen: false,
 
       setSidebarMode: (mode) => set({ sidebarMode: mode }),
-      setSidebarWidth: (w) => set({ sidebarWidth: clamp(w, 80, 280) }),
+      setSidebarWidth: (w) => {
+        // enforce your fixed constraints even if future settings change
+        const clamped = Math.max(80, Math.min(280, Math.round(w)));
+        set({ sidebarWidth: clamped });
+      },
+
       openDrawer: () => set({ sidebarDrawerOpen: true }),
       closeDrawer: () => set({ sidebarDrawerOpen: false }),
       toggleDrawer: () => set({ sidebarDrawerOpen: !get().sidebarDrawerOpen }),
 
-      tabs: [DASH_TAB],
-      setTabs: (tabs) => set({ tabs }),
-      upsertTab: (tab) => {
-        const current = get().tabs;
-        const exists = current.find((t) => t.key === tab.key);
-        if (exists) {
-          set({
-            tabs: current.map((t) => (t.key === tab.key ? { ...t, ...tab } : t)),
-          });
-          return;
-        }
-        set({ tabs: [...current, tab] });
+      // Tabs
+      tabs: [DASHBOARD_TAB],
+
+      setTabs: (tabs) => {
+        // Always keep Dashboard first and uncloseable
+        const dedup = new Map<string, ItsmTab>();
+        for (const t of tabs) dedup.set(t.id, t);
+
+        dedup.set(DASHBOARD_TAB.id, DASHBOARD_TAB);
+
+        const list = Array.from(dedup.values());
+        list.sort((a, b) => (a.id === "dashboard" ? -1 : b.id === "dashboard" ? 1 : 0));
+
+        set({ tabs: list });
       },
-      closeTab: (key) => {
-        const current = get().tabs;
-        const next = current.filter((t) => t.key !== key || t.closable === false);
+
+      upsertTab: (tab) => {
+        const current = get().tabs ?? [];
+        const map = new Map(current.map((t) => [t.id, t]));
+        map.set(tab.id, tab);
+        map.set(DASHBOARD_TAB.id, DASHBOARD_TAB);
+
+        const list = Array.from(map.values());
+        list.sort((a, b) => (a.id === "dashboard" ? -1 : b.id === "dashboard" ? 1 : 0));
+
+        set({ tabs: list });
+      },
+
+      closeTab: (id) => {
+        if (id === "dashboard") return; // cannot close dashboard
+        const next = (get().tabs ?? []).filter((t) => t.id !== id);
+        // ensure dashboard always exists
+        if (!next.some((t) => t.id === "dashboard")) next.unshift(DASHBOARD_TAB);
         set({ tabs: next });
+      },
+
+      closeOthers: (keepId) => {
+        const keep = (get().tabs ?? []).filter((t) => t.id === keepId || t.id === "dashboard");
+        if (!keep.some((t) => t.id === "dashboard")) keep.unshift(DASHBOARD_TAB);
+        // dashboard must stay first
+        keep.sort((a, b) => (a.id === "dashboard" ? -1 : b.id === "dashboard" ? 1 : 0));
+        set({ tabs: keep });
       },
     }),
     {
       name: "hi5-itsm-ui",
-      partialize: (s) => ({
-        sidebarMode: s.sidebarMode,
-        sidebarWidth: s.sidebarWidth,
-        tabs: s.tabs,
+      version: 1,
+      partialize: (state) => ({
+        sidebarMode: state.sidebarMode,
+        sidebarWidth: state.sidebarWidth,
+        sidebarDrawerOpen: state.sidebarDrawerOpen,
+        tabs: state.tabs,
       }),
     }
   )
