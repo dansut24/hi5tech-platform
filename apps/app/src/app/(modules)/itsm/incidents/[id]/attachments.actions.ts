@@ -21,17 +21,14 @@ async function supabaseServer() {
       return cookieStore.get(name)?.value;
     },
     set(name: string, value: string, options: any) {
-      // next/headers cookies().set supports object form
       cookieStore.set({ name, value, ...(options ?? {}) });
     },
     remove(name: string, options: any) {
-      // Prefer delete if available
       const anyStore = cookieStore as any;
       if (typeof anyStore.delete === "function") {
         anyStore.delete(name);
         return;
       }
-      // Fallback: expire cookie
       cookieStore.set({ name, value: "", ...(options ?? {}), maxAge: 0 });
     },
   });
@@ -49,7 +46,9 @@ export async function uploadIncidentAttachment(formData: FormData) {
   if (!incident_id || !tenant_id || !file) return;
 
   const supabase = await supabaseServer();
-  const tenantIds = await getMemberTenantIds(supabase);
+
+  // ✅ FIX: current rbac helper takes 0 args (it reads cookies internally)
+  const tenantIds = await getMemberTenantIds();
 
   // Basic tenant guard
   if (!tenantIds.includes(tenant_id)) return;
@@ -68,8 +67,6 @@ export async function uploadIncidentAttachment(formData: FormData) {
     .upload(path, file, { upsert: false });
 
   if (upload.error) {
-    // You can throw if you want the UI to show an error
-    // throw new Error(upload.error.message);
     return;
   }
 
@@ -80,7 +77,7 @@ export async function uploadIncidentAttachment(formData: FormData) {
     path,
     filename: file.name,
     content_type: file.type || null,
-    size: file.size ?? null,
+    size: (file as any).size ?? null,
     created_by: user.id,
   });
 }
@@ -97,7 +94,10 @@ export async function deleteIncidentAttachment(formData: FormData) {
   if (!tenant_id || !incident_id || !path) return;
 
   const supabase = await supabaseServer();
-  const tenantIds = await getMemberTenantIds(supabase);
+
+  // ✅ FIX: current rbac helper takes 0 args
+  const tenantIds = await getMemberTenantIds();
+
   if (!tenantIds.includes(tenant_id)) return;
 
   const { data: userRes } = await supabase.auth.getUser();
