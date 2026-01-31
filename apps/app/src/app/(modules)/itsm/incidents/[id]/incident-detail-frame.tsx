@@ -68,25 +68,29 @@ export default function IncidentDetailFrame({
 }) {
   const pathname = usePathname();
   const sp = useSearchParams();
-
   const tab = sp.get("tab") ?? "progress";
 
-  const tabs = useMemo(() => ([
-    { label: "Progress", href: `${pathname}?tab=progress` },
-    { label: "Related Assets", href: `${pathname}?tab=assets` },
-    { label: "AI Insights", href: `${pathname}?tab=ai` },
-    { label: "Additional Fields", href: `${pathname}?tab=fields` },
-    { label: "View Log", href: `${pathname}?tab=log` },
-  ]), [pathname]);
+  const tabs = useMemo(
+    () => [
+      { label: "Progress", href: `${pathname}?tab=progress` },
+      { label: "Related Assets", href: `${pathname}?tab=assets` },
+      { label: "AI Insights", href: `${pathname}?tab=ai` },
+      { label: "Additional Fields", href: `${pathname}?tab=fields` },
+      { label: "View Log", href: `${pathname}?tab=log` },
+    ],
+    [pathname]
+  );
 
-  const incNo = incident?.number ? String(incident.number).padStart(6, "0") : id?.slice(0, 6) ?? "—";
+  const incNo = incident?.number
+    ? String(incident.number).padStart(6, "0")
+    : id?.slice(0, 6) ?? "—";
+
   const headerTitle = incident?.title || incident?.subject || "Incident details";
   const statusKey = normalizeStatus(incident?.status);
   const activeIndex = statusKey === "triage" ? 0 : statusKey === "progress" ? 1 : 2;
 
   const header = (
     <div className="px-5 pt-4 pb-3 border-b hi5-divider">
-      {/* Top bar: breadcrumbs + right icon chips */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm min-w-0">
           <Link href="/itsm/incidents" className="opacity-70 hover:opacity-100 transition truncate">
@@ -97,14 +101,21 @@ export default function IncidentDetailFrame({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <IconChip icon={MessageSquareText} title="Comments" onClick={() => (window.location.href = `${pathname}?tab=progress#comments`)} />
-          <IconChip icon={Paperclip} title="Attachments" onClick={() => (window.location.href = `${pathname}?tab=progress#attachments`)} />
+          <IconChip
+            icon={MessageSquareText}
+            title="Comments"
+            onClick={() => (window.location.href = `${pathname}?tab=progress#comments`)}
+          />
+          <IconChip
+            icon={Paperclip}
+            title="Attachments"
+            onClick={() => (window.location.href = `${pathname}?tab=progress#attachments`)}
+          />
           <IconChip icon={Wand2} title="AI" onClick={() => (window.location.href = `${pathname}?tab=ai`)} />
           <IconChip icon={MoreHorizontal} title="More" onClick={() => alert("More actions (next patch)")} />
         </div>
       </div>
 
-      {/* Title row */}
       <div className="mt-3 flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="text-sm opacity-70">[INC-{incNo}]</div>
@@ -129,7 +140,6 @@ export default function IncidentDetailFrame({
         </div>
       </div>
 
-      {/* Status stepper */}
       <div className="mt-4">
         <StatusStepper
           stages={[
@@ -141,7 +151,6 @@ export default function IncidentDetailFrame({
         />
       </div>
 
-      {/* Mobile actions */}
       <div className="md:hidden mt-3 flex flex-wrap gap-2">
         <ActionPill icon={ArrowUpRight} label="Escalate" tone="danger" onClick={() => alert("Escalate (next)")} />
         <ActionPill icon={Mail} label="Email user" onClick={() => alert("Email user (next)")} />
@@ -210,12 +219,8 @@ export default function IncidentDetailFrame({
     ) : tab === "assets" ? (
       <div className="rounded-2xl border hi5-border bg-[rgba(var(--hi5-card),0.20)] backdrop-blur-xl p-4 sm:p-5">
         <div className="text-lg font-semibold">Related Assets</div>
-        <div className="text-sm opacity-70 mt-1">
-          Next: we’ll pull tenant-scoped assets and link them here.
-        </div>
-        <div className="mt-4 rounded-2xl border hi5-border p-4 opacity-80">
-          No assets linked yet.
-        </div>
+        <div className="text-sm opacity-70 mt-1">Next: we’ll pull tenant-scoped assets and link them here.</div>
+        <div className="mt-4 rounded-2xl border hi5-border p-4 opacity-80">No assets linked yet.</div>
       </div>
     ) : tab === "ai" ? (
       <div className="rounded-2xl border hi5-border bg-[rgba(var(--hi5-card),0.20)] backdrop-blur-xl p-4 sm:p-5">
@@ -223,19 +228,13 @@ export default function IncidentDetailFrame({
         <div className="text-sm opacity-70 mt-1">
           Next: summary, suggested next steps, similar incidents, and KB article recommendations.
         </div>
-        <div className="mt-4 rounded-2xl border hi5-border p-4 opacity-80">
-          AI insights coming next.
-        </div>
+        <div className="mt-4 rounded-2xl border hi5-border p-4 opacity-80">AI insights coming next.</div>
       </div>
     ) : tab === "fields" ? (
       <div className="rounded-2xl border hi5-border bg-[rgba(var(--hi5-card),0.20)] backdrop-blur-xl p-4 sm:p-5">
         <div className="text-lg font-semibold">Additional Fields</div>
-        <div className="text-sm opacity-70 mt-1">
-          Next: dynamic custom fields per tenant + per ticket type.
-        </div>
-        <div className="mt-4 rounded-2xl border hi5-border p-4 opacity-80">
-          No custom fields configured yet.
-        </div>
+        <div className="text-sm opacity-70 mt-1">Next: dynamic custom fields per tenant + per ticket type.</div>
+        <div className="mt-4 rounded-2xl border hi5-border p-4 opacity-80">No custom fields configured yet.</div>
       </div>
     ) : (
       <div className="rounded-2xl border hi5-border bg-[rgba(var(--hi5-card),0.20)] backdrop-blur-xl p-4 sm:p-5">
@@ -243,9 +242,7 @@ export default function IncidentDetailFrame({
         <div className="text-sm opacity-70 mt-1">
           Next: audit log entries (status changes, assignments, comments, attachments, SLA events).
         </div>
-        <div className="mt-4 rounded-2xl border hi5-border p-4 opacity-80">
-          Log feed coming next.
-        </div>
+        <div className="mt-4 rounded-2xl border hi5-border p-4 opacity-80">Log feed coming next.</div>
       </div>
     );
 
