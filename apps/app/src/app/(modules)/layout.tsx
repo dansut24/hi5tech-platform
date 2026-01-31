@@ -161,9 +161,11 @@ export default async function ModulesLayout({
 `;
 
   return (
-    <div className={`hi5-bg min-h-dvh ${forceDarkClass}`}>
-      <style dangerouslySetInnerHTML={{ __html: cssVars }} />
+  <div className={forceDarkClass}>
+    <style dangerouslySetInnerHTML={{ __html: cssVars }} />
+    <div className="hi5-bg min-h-dvh">
       <main className="w-full">{children}</main>
     </div>
-  );
+  </div>
+);
 }
