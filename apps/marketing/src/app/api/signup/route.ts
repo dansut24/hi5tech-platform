@@ -2,38 +2,71 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-function getEnv(name: string) {
+function reqEnv(name: string) {
   const v = process.env[name];
-  return v && v.length ? v : null;
+  if (!v) throw new Error(`${name} is required`);
+  return v;
 }
 
 export async function POST(req: Request) {
-  const supabaseUrl =
-    getEnv("NEXT_PUBLIC_SUPABASE_URL") || getEnv("SUPABASE_URL");
-  const serviceRole =
-    getEnv("SUPABASE_SERVICE_ROLE_KEY") || getEnv("SUPABASE_SERVICE_ROLE");
+  try {
+    const body = await req.json();
+    const companyName = String(body.companyName ?? "").trim();
+    const adminEmail = String(body.adminEmail ?? "").trim().toLowerCase();
+    const subdomain = String(body.subdomain ?? "").trim().toLowerCase();
 
-  if (!supabaseUrl) {
+    if (!companyName || !adminEmail || !subdomain) {
+      return NextResponse.json(
+        { ok: false, error: "Missing companyName/adminEmail/subdomain" },
+        { status: 400 }
+      );
+    }
+
+    // ✅ Server-only env vars (NOT NEXT_PUBLIC)
+    const supabaseUrl = reqEnv("SUPABASE_URL");
+    const serviceKey = reqEnv("SUPABASE_SERVICE_ROLE_KEY");
+
+    const supabase = createClient(supabaseUrl, serviceKey, {
+      auth: { persistSession: false },
+    });
+
+    // 14-day trial
+    const now = new Date();
+    const trialEnds = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
+
+    // Insert tenant (adjust column names to match YOUR schema)
+    const { data: tenant, error: tenantErr } = await supabase
+      .from("tenants")
+      .insert({
+        name: companyName,
+        subdomain,
+        trial_ends_at: trialEnds.toISOString(),
+        status: "trial",
+      })
+      .select("*")
+      .single();
+
+    if (tenantErr) {
+      console.error("TENANT INSERT ERROR:", tenantErr);
+      return NextResponse.json(
+        { ok: false, error: tenantErr.message, details: tenantErr },
+        { status: 500 }
+      );
+    }
+
+    // OPTIONAL (skip email for now): you can still create an invite later
+    // If you do invite, do it AFTER the insert, and don’t mask DB errors.
+
+    return NextResponse.json({
+      ok: true,
+      tenant,
+      message: "Tenant created",
+    });
+  } catch (e: any) {
+    console.error("SIGNUP ROUTE ERROR:", e);
     return NextResponse.json(
-      { error: "Missing env: NEXT_PUBLIC_SUPABASE_URL (or SUPABASE_URL)" },
+      { ok: false, error: e?.message ?? "Unknown error" },
       { status: 500 }
     );
   }
-
-  if (!serviceRole) {
-    return NextResponse.json(
-      { error: "Missing env: SUPABASE_SERVICE_ROLE_KEY" },
-      { status: 500 }
-    );
-  }
-
-  // IMPORTANT: create the client at request-time, not module-load time
-  const supabase = createClient(supabaseUrl, serviceRole, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-
-  // Your signup logic here...
-  const body = await req.json().catch(() => ({}));
-
-  return NextResponse.json({ ok: true, received: body });
 }
