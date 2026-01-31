@@ -1,7 +1,5 @@
-// apps/app/src/app/(modules)/itsm/incidents/[id]/layout.tsx
-
 import type { ReactNode } from "react";
-import IncidentDetailFrame from "./incident-detail-frame";
+import IncidentDetailFrame from "./IncidentDetailFrame";
 import { supabaseServer } from "@/lib/supabase/server";
 
 type Incident = {
@@ -11,16 +9,6 @@ type Incident = {
   subject?: string | null;
   status?: string | null;
   priority?: string | null;
-  created_at?: string | null;
-  updated_at?: string | null;
-
-  requester_name?: string | null;
-  requester_email?: string | null;
-
-  assignee_name?: string | null;
-
-  response_due_at?: string | null;
-  resolution_due_at?: string | null;
 };
 
 export default async function Layout({
@@ -40,23 +28,7 @@ export default async function Layout({
 
     const { data } = await supabase
       .from("incidents")
-      .select(
-        `
-          id,
-          number,
-          title,
-          subject,
-          status,
-          priority,
-          created_at,
-          updated_at,
-          requester_name,
-          requester_email,
-          assignee_name,
-          response_due_at,
-          resolution_due_at
-        `
-      )
+      .select("id, number, title, subject, status, priority")
       .eq("id", id)
       .maybeSingle();
 
@@ -66,7 +38,12 @@ export default async function Layout({
   }
 
   return (
-    <IncidentDetailFrame id={id} incident={incident}>
+    <IncidentDetailFrame
+      number={incident?.number ? String(incident.number) : id}
+      title={incident?.title ?? incident?.subject ?? "Untitled incident"}
+      status={incident?.status ?? null}
+      priority={incident?.priority ?? null}
+    >
       {children}
     </IncidentDetailFrame>
   );
