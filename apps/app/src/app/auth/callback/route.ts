@@ -3,7 +3,10 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 
 export async function GET(request: Request) {
-  const cookieStore = cookies();
+  const url = new URL(request.url);
+
+  // Next 16: cookies() is async
+  const cookieStore = await cookies();
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -17,18 +20,19 @@ export async function GET(request: Request) {
           cookieStore.set({ name, value, ...options });
         },
         remove(name: string, options: any) {
-          cookieStore.set({ name, value: "", ...options });
-        }
-      }
+          cookieStore.set({ name, value: "", ...options, maxAge: 0 });
+        },
+      },
     }
   );
 
-  const url = new URL(request.url);
+  // If you are using the PKCE code flow, Supabase will exchange the code and set session cookies
   const code = url.searchParams.get("code");
-
   if (code) {
     await supabase.auth.exchangeCodeForSession(code);
   }
 
-  return NextResponse.redirect(new URL("/", request.url));
+  // Send user where you want after auth
+  const next = url.searchParams.get("next") ?? "/apps";
+  return NextResponse.redirect(new URL(next, url.origin));
 }
