@@ -104,7 +104,8 @@ export default async function RootLayout({
   }
 
   // Apply: tenant defaults → user overrides
-  const accent_hex = userTheme?.accent_hex ?? tenantTheme?.accent_hex ?? "#00c1ff";
+  const accent_hex =
+    userTheme?.accent_hex ?? tenantTheme?.accent_hex ?? "#00c1ff";
   const accent_2_hex = tenantTheme?.accent_2_hex ?? "#ff4fe1";
   const accent_3_hex = tenantTheme?.accent_3_hex ?? "#ffc42d";
 
@@ -112,13 +113,25 @@ export default async function RootLayout({
   const card_hex = userTheme?.card_hex ?? tenantTheme?.card_hex ?? "#ffffff";
   const topbar_hex = tenantTheme?.topbar_hex ?? card_hex;
 
-  const glow_1 = clamp01(tenantTheme?.glow_1, theme_mode === "dark" ? 0.22 : 0.18);
-  const glow_2 = clamp01(tenantTheme?.glow_2, theme_mode === "dark" ? 0.18 : 0.14);
-  const glow_3 = clamp01(tenantTheme?.glow_3, theme_mode === "dark" ? 0.14 : 0.10);
+  const glow_1 = clamp01(
+    tenantTheme?.glow_1,
+    theme_mode === "dark" ? 0.22 : 0.18
+  );
+  const glow_2 = clamp01(
+    tenantTheme?.glow_2,
+    theme_mode === "dark" ? 0.18 : 0.14
+  );
+  const glow_3 = clamp01(
+    tenantTheme?.glow_3,
+    theme_mode === "dark" ? 0.14 : 0.10
+  );
 
   // Force class-based dark only when user explicitly picks dark
   const htmlClass = theme_mode === "dark" ? "dark" : "";
 
+  // IMPORTANT:
+  // - We only set RGB triplets here (globals.css expects rgb(var(--token)) style)
+  // - Background gradient is painted globally via html::before in globals.css
   const cssVars = `
 :root{
   --hi5-accent: ${hexToRgbTriplet(accent_hex, "0 193 255")};
