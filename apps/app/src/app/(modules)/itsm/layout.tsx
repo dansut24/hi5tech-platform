@@ -1,3 +1,4 @@
+// apps/app/src/app/(modules)/itsm/layout.tsx
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -10,12 +11,7 @@ export default async function ItsmLayout({ children }: { children: ReactNode }) 
   const user = userRes.user;
   if (!user) redirect("/login");
 
-  // Theme is GLOBAL in /app/layout.tsx now.
-  // Keep ITSM layout focused on ITSM chrome only.
-  return (
-  <div className={`min-h-dvh ${forceDarkClass}`}>
-    <style dangerouslySetInnerHTML={{ __html: cssVars }} />
-    <ItsmShell>{children}</ItsmShell>
-  </div>
-);
+  // Theme is now GLOBAL (handled in /app/layout.tsx + globals.css),
+  // so ITSM layout should only render ITSM chrome/content.
+  return <ItsmShell>{children}</ItsmShell>;
 }
