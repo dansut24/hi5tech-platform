@@ -34,7 +34,7 @@ export async function POST() {
 export async function GET() {
   const cookieStore = await cookies();
 
-  const response = NextResponse.redirect(new URL("/login", "http://localhost"));
+  const response = NextResponse.redirect(new URL("/login", process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"));
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
