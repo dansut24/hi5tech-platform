@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -14,10 +14,18 @@ import {
   Settings,
 } from "lucide-react";
 
-type SidebarMode = "pinned" | "collapsed" | "hidden";
+// ✅ Exported so other modules (itsm-shell.tsx) can import it
+export type SidebarMode = "pinned" | "collapsed" | "hidden";
+
 const STORAGE_KEY = "hi5_itsm_sidebar_mode_v3";
 
-type Item = { href: string; label: string; icon: LucideIcon; hint?: string; short?: string };
+type Item = {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  hint?: string;
+  short?: string;
+};
 
 function isActive(pathname: string, href: string) {
   if (href === "/itsm") return pathname === "/itsm";
@@ -57,9 +65,7 @@ export default function ITSMSidebar() {
       { href: "/itsm/knowledge", label: "Knowledge", icon: BookOpen, hint: "Articles" },
       { href: "/itsm/assets", label: "Assets", icon: Monitor, hint: "Inventory" },
     ];
-    const admin: Item[] = [
-      { href: "/itsm/settings", label: "Settings", icon: Settings, hint: "Prefs" },
-    ];
+    const admin: Item[] = [{ href: "/itsm/settings", label: "Settings", icon: Settings, hint: "Prefs" }];
     return { workspace, knowledge, admin };
   }, []);
 
@@ -81,13 +87,17 @@ export default function ITSMSidebar() {
                   className={[
                     "w-full rounded-2xl border hi5-border py-2",
                     "flex flex-col items-center justify-center gap-1",
-                    active ? "bg-[rgba(var(--hi5-accent),0.14)] border-[rgba(var(--hi5-accent),0.30)]" : "bg-[rgba(var(--hi5-card),0.18)]",
+                    active
+                      ? "bg-[rgba(var(--hi5-accent),0.14)] border-[rgba(var(--hi5-accent),0.30)]"
+                      : "bg-[rgba(var(--hi5-card),0.18)]",
                     "hover:bg-black/5 dark:hover:bg-white/5 transition",
                   ].join(" ")}
                   title={it.label}
                 >
                   <Icon className="h-5 w-5 opacity-90" />
-                  <div className="text-[10px] leading-tight opacity-90 text-center w-full px-1 break-words">{it.label}</div>
+                  <div className="text-[10px] leading-tight opacity-90 text-center w-full px-1 break-words">
+                    {it.label}
+                  </div>
                 </Link>
               );
             })}
@@ -110,7 +120,9 @@ export default function ITSMSidebar() {
           "rounded-2xl border hi5-border px-3 py-3",
           "hover:bg-black/5 dark:hover:bg-white/5 transition",
           "flex items-center gap-3",
-          active ? "bg-[rgba(var(--hi5-accent),0.12)] border-[rgba(var(--hi5-accent),0.30)]" : "bg-[rgba(var(--hi5-card),0.18)]",
+          active
+            ? "bg-[rgba(var(--hi5-accent),0.12)] border-[rgba(var(--hi5-accent),0.30)]"
+            : "bg-[rgba(var(--hi5-card),0.18)]",
         ].join(" ")}
       >
         <Icon className="h-5 w-5 opacity-85 shrink-0" />
@@ -139,4 +151,3 @@ export default function ITSMSidebar() {
     </div>
   );
 }
-
