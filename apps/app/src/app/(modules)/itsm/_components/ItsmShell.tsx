@@ -1,148 +1,234 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useRef } from "react";
-import { usePathname, useRouter } from "next/navigation";
-import ItsmHeader from "./ItsmHeader";
-import ItsmTabs from "./ItsmTabs";
-import ItsmSidebar from "./ItsmSidebar";
-import { useItsmUiStore } from "../_state/itsm-ui-store";
+import { useEffect, useMemo } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { Menu, Bell, User, Plus } from "lucide-react";
 
-type ModuleKey = "itsm" | "control" | "selfservice" | "admin";
+import { useItsmUiStore } from "../_state/itsm-ui-store";
 
 type Props = {
   children: ReactNode;
-  allowedModules: ModuleKey[];
-  tenantLabel: string | null;
 };
 
-function labelFromPath(pathname: string) {
+function tabTitleFromPath(pathname: string) {
   if (pathname === "/itsm") return "Dashboard";
-  if (pathname === "/itsm/new-tab") return "New Tab";
-
-  // crude defaults (you can improve later with route metadata)
+  if (pathname.startsWith("/itsm/incidents/new")) return "New Incident";
+  if (pathname.startsWith("/itsm/incidents/")) return "Incident";
   if (pathname.startsWith("/itsm/incidents")) return "Incidents";
-  if (pathname.startsWith("/itsm/problems")) return "Problems";
-  if (pathname.startsWith("/itsm/changes")) return "Changes";
-  if (pathname.startsWith("/itsm/assets")) return "Assets";
   if (pathname.startsWith("/itsm/settings")) return "Settings";
-
-  const last = pathname.split("/").filter(Boolean).slice(-1)[0] ?? "Tab";
-  return last.replace(/[-_]/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+  return "Page";
 }
 
-function keyFromPath(pathname: string) {
-  // stable key for tab list
+function tabIdFromPath(pathname: string) {
+  // stable id per route so revisiting updates the same tab
+  if (pathname === "/itsm") return "dashboard";
+  if (pathname.startsWith("/itsm/incidents/new")) return "incidents-new";
+  if (pathname.startsWith("/itsm/incidents/")) return `incident:${pathname}`;
   return pathname;
 }
 
-export default function ItsmShell({ children, allowedModules, tenantLabel }: Props) {
+export default function ItsmShell({ children }: Props) {
   const pathname = usePathname();
-  const router = useRouter();
 
-  const sidebarMode = useItsmUiStore((s) => s.sidebarMode);
-  const sidebarWidth = useItsmUiStore((s) => s.sidebarWidth);
-  const setSidebarWidth = useItsmUiStore((s) => s.setSidebarWidth);
+  const {
+    sidebarMode,
+    sidebarWidth,
+    sidebarDrawerOpen,
+    toggleDrawer,
+    closeDrawer,
+    tabs,
+    upsertTab,
+    closeTab,
+  } = useItsmUiStore();
 
-  const tabs = useItsmUiStore((s) => s.tabs);
-  const upsertTab = useItsmUiStore((s) => s.upsertTab);
-  const closeTab = useItsmUiStore((s) => s.closeTab);
-
-  // Ensure current route is represented as a tab (except dashboard which is always there)
+  // Header + Tabs exist only inside ITSM
   useEffect(() => {
     if (!pathname?.startsWith("/itsm")) return;
 
+    // Always ensure dashboard exists + is pinned
     if (pathname === "/itsm") {
-      upsertTab({ key: "dashboard", href: "/itsm", label: "Dashboard", closable: false });
+      upsertTab({ id: "dashboard", href: "/itsm", title: "Dashboard", pinned: true });
       return;
     }
 
-    upsertTab({
-      key: keyFromPath(pathname),
-      href: pathname,
-      label: labelFromPath(pathname),
-      closable: true,
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
+    // Create/update a tab for the current page
+    const id = tabIdFromPath(pathname);
+    const title = tabTitleFromPath(pathname);
 
-  // Desktop grid column width based on mode
-  const sidebarCol = useMemo(() => {
-    if (sidebarMode === "hidden") return "0px";
-    if (sidebarMode === "collapsed") return "80px";
-    if (sidebarMode === "fixed") return "280px";
-    return `${sidebarWidth}px`; // resizable
+    upsertTab({ id, href: pathname, title });
+  }, [pathname, upsertTab]);
+
+  const effectiveSidebarWidth = useMemo(() => {
+    if (sidebarMode !== "fixed") return 0;
+    return Math.max(80, Math.min(280, sidebarWidth || 280));
   }, [sidebarMode, sidebarWidth]);
-
-  // Drag to resize
-  const dragRef = useRef<{ dragging: boolean; startX: number; startW: number } | null>(null);
-
-  function onDragStart(e: React.PointerEvent) {
-    if (sidebarMode !== "resizable") return;
-    const startX = e.clientX;
-    const startW = sidebarWidth;
-    dragRef.current = { dragging: true, startX, startW };
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  }
-
-  function onDragMove(e: React.PointerEvent) {
-    if (sidebarMode !== "resizable") return;
-    const st = dragRef.current;
-    if (!st?.dragging) return;
-    const dx = e.clientX - st.startX;
-    setSidebarWidth(st.startW + dx);
-  }
-
-  function onDragEnd() {
-    if (!dragRef.current) return;
-    dragRef.current.dragging = false;
-  }
-
-  // Close tab behavior: if you close the current tab, bounce to dashboard
-  function handleCloseTab(tabKey: string) {
-    closeTab(tabKey);
-    if (pathname === tabKey) {
-      router.push("/itsm");
-    }
-  }
 
   return (
     <div className="min-h-dvh">
-      {/* Header + Tabs (fixed) */}
-      <ItsmHeader allowedModules={allowedModules} tenantLabel={tenantLabel} />
-      <ItsmTabs
-        tabs={tabs}
-        activeHref={pathname}
-        onCloseTab={handleCloseTab}
-      />
+      {/* ===== Header bar (full width) ===== */}
+      <div className="sticky top-0 z-40 hi5-panel border-b hi5-border">
+        <div className="h-14 px-3 sm:px-4 flex items-center gap-3">
+          {/* Left: menu (mobile) + logo */}
+          <button
+            type="button"
+            className="md:hidden inline-flex h-10 w-10 items-center justify-center rounded-xl border hi5-border hover:bg-black/5 dark:hover:bg-white/5"
+            onClick={toggleDrawer}
+            aria-label="Open navigation"
+          >
+            <Menu size={18} />
+          </button>
 
-      {/* Body */}
-      <div
-        className="w-full"
-        style={{
-          // Header (56px) + tabs (44px) = 100px; keep content below
-          paddingTop: 100,
-        }}
-      >
-        <div
-          className="grid w-full"
-          style={{
-            gridTemplateColumns: `${sidebarCol} 1fr`,
-            minHeight: "calc(100dvh - 100px)",
-          }}
-        >
-          {/* Sidebar */}
-          <div className="relative">
-            <ItsmSidebar />
+          <Link href="/itsm" className="font-semibold tracking-tight whitespace-nowrap">
+            Hi5Tech ITSM
+          </Link>
 
-            {/* Resize handle (desktop only) */}
+          {/* Center: search */}
+          <div className="flex-1 min-w-0">
+            <div className="hi5-input flex items-center gap-2 px-3 h-10 rounded-xl border hi5-border">
+              <input
+                className="bg-transparent outline-none w-full text-sm"
+                placeholder="Search incidents, users, assets..."
+                inputMode="search"
+              />
+            </div>
           </div>
 
-          {/* Main content */}
-          <main className="min-w-0 p-3 sm:p-4">
-            {children}
-          </main>
+          {/* Right: actions */}
+          <div className="flex items-center gap-2">
+            <Link
+              href="/itsm/new-tab"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border hi5-border hover:bg-black/5 dark:hover:bg-white/5"
+              aria-label="New tab"
+              title="New tab"
+            >
+              <Plus size={18} />
+            </Link>
+
+            <button
+              type="button"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border hi5-border hover:bg-black/5 dark:hover:bg-white/5"
+              aria-label="Notifications"
+            >
+              <Bell size={18} />
+            </button>
+
+            <button
+              type="button"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border hi5-border hover:bg-black/5 dark:hover:bg-white/5"
+              aria-label="Profile"
+            >
+              <User size={18} />
+            </button>
+          </div>
         </div>
+
+        {/* ===== Tabs bar (full width, single line) ===== */}
+        <div className="border-t hi5-border px-2">
+          <div className="h-12 flex items-center gap-1 overflow-hidden">
+            {(tabs ?? []).map((t) => {
+              const isActive = pathname === t.href || (t.id !== "dashboard" && pathname === t.id);
+              const canClose = !t.pinned && t.id !== "dashboard";
+
+              return (
+                <div
+                  key={t.id}
+                  className={[
+                    "flex items-center gap-2 min-w-0",
+                    "rounded-xl border hi5-border",
+                    "h-9 px-3",
+                    "max-w-[40vw] md:max-w-[18vw]",
+                    isActive
+                      ? "bg-[rgba(var(--hi5-accent),0.12)] border-[rgba(var(--hi5-accent),0.30)]"
+                      : "opacity-90 hover:bg-black/5 dark:hover:bg-white/5",
+                  ].join(" ")}
+                >
+                  <Link href={t.href} className="min-w-0 text-sm font-medium truncate">
+                    {t.title}
+                  </Link>
+
+                  {canClose ? (
+                    <button
+                      type="button"
+                      className="text-xs opacity-70 hover:opacity-100"
+                      onClick={() => closeTab(t.id)}
+                      aria-label="Close tab"
+                    >
+                      ✕
+                    </button>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* ===== Body: sidebar + content ===== */}
+      <div className="flex w-full">
+        {/* Desktop sidebar (fixed 280) */}
+        <aside
+          className="hidden md:block border-r hi5-border"
+          style={{ width: sidebarMode === "fixed" ? effectiveSidebarWidth : 0 }}
+        >
+          <div className="p-3 space-y-2">
+            <Link className="block px-3 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5" href="/itsm">
+              Dashboard
+            </Link>
+            <Link className="block px-3 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5" href="/itsm/incidents">
+              Incidents
+            </Link>
+            <Link className="block px-3 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5" href="/itsm/incidents/new">
+              New Incident
+            </Link>
+            <Link className="block px-3 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5" href="/itsm/settings">
+              Settings
+            </Link>
+          </div>
+        </aside>
+
+        {/* Mobile overlay drawer */}
+        {sidebarDrawerOpen ? (
+          <div className="md:hidden fixed inset-0 z-50">
+            <button
+              type="button"
+              className="absolute inset-0 bg-black/40"
+              aria-label="Close navigation"
+              onClick={closeDrawer}
+            />
+            <div className="absolute top-0 left-0 h-full w-[85vw] max-w-[320px] hi5-panel border-r hi5-border p-3">
+              <div className="flex items-center justify-between">
+                <div className="font-semibold">Navigation</div>
+                <button
+                  type="button"
+                  className="h-9 px-3 rounded-xl border hi5-border"
+                  onClick={closeDrawer}
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="mt-3 space-y-2">
+                <Link onClick={closeDrawer} className="block px-3 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5" href="/itsm">
+                  Dashboard
+                </Link>
+                <Link onClick={closeDrawer} className="block px-3 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5" href="/itsm/incidents">
+                  Incidents
+                </Link>
+                <Link onClick={closeDrawer} className="block px-3 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5" href="/itsm/incidents/new">
+                  New Incident
+                </Link>
+                <Link onClick={closeDrawer} className="block px-3 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5" href="/itsm/settings">
+                  Settings
+                </Link>
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Main content */}
+        <main className="flex-1 min-w-0 p-3 sm:p-4">{children}</main>
       </div>
     </div>
   );
