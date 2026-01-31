@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createSupabaseServerClient } from "@hi5tech/auth";
+import { supabaseServer } from "@/lib/supabase/server";
 import { createIncident } from "./actions";
 
 function Badge({ children }: { children: React.ReactNode }) {
@@ -16,7 +16,7 @@ function shortTenant(id: string) {
 }
 
 export default async function IncidentsList() {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await supabaseServer();
 
   // Get all tenant memberships for this user
   const { data: userRes } = await supabase.auth.getUser();
@@ -27,7 +27,11 @@ export default async function IncidentsList() {
       <div className="space-y-3">
         <h1 className="text-2xl font-semibold">Incidents</h1>
         <div className="hi5-card p-4 text-sm opacity-80">
-          Not logged in. Go to <Link className="underline" href="/login">/login</Link>.
+          Not logged in. Go to{" "}
+          <Link className="underline" href="/login">
+            /login
+          </Link>
+          .
         </div>
       </div>
     );
@@ -43,18 +47,31 @@ export default async function IncidentsList() {
     return (
       <div className="space-y-3">
         <h1 className="text-2xl font-semibold">Incidents</h1>
-        <div className="hi5-card p-4 text-sm text-red-600">{memErr.message}</div>
+        <div className="hi5-card p-4 text-sm text-red-600">
+          {memErr.message}
+        </div>
       </div>
     );
   }
 
-  const tenantIds = Array.from(new Set((memberships ?? []).map(m => m.tenant_id).filter(Boolean)));
+  const tenantIds = Array.from(
+    new Set(
+      (memberships ?? [])
+        .map((m) => m.tenant_id)
+        .filter(Boolean)
+    )
+  );
 
-  // Load incidents across all tenant memberships (until we add an active-tenant switcher)
+  // Load incidents across all tenant memberships
   const { data: rows, error } = await supabase
     .from("incidents")
     .select("tenant_id,number,title,status,priority,created_at")
-    .in("tenant_id", tenantIds.length ? tenantIds : ["00000000-0000-0000-0000-000000000000"])
+    .in(
+      "tenant_id",
+      tenantIds.length
+        ? tenantIds
+        : ["00000000-0000-0000-0000-000000000000"]
+    )
     .order("created_at", { ascending: false })
     .limit(100);
 
@@ -65,7 +82,7 @@ export default async function IncidentsList() {
         <div className="hi5-card p-4">
           <div className="text-sm text-red-600">{error.message}</div>
           <div className="text-sm opacity-70 mt-2">
-            If this mentions RLS, weâ€™ll add tenant-member policies next.
+            If this mentions RLS, we’ll add tenant-member policies next.
           </div>
         </div>
       </div>
@@ -80,7 +97,7 @@ export default async function IncidentsList() {
         <div>
           <h1 className="text-2xl font-semibold">Incidents</h1>
           <p className="opacity-80">
-            {incidents.length} items â€¢ {tenantIds.length} tenant(s)
+            {incidents.length} items • {tenantIds.length} tenant(s)
           </p>
         </div>
         <Link className="underline" href="/itsm">
@@ -121,7 +138,7 @@ export default async function IncidentsList() {
             <div>Description</div>
             <textarea
               name="description"
-              placeholder="Add notesâ€¦"
+              placeholder="Add notes…"
               className="w-full hi5-input min-h-[96px]"
             />
           </label>
@@ -134,8 +151,12 @@ export default async function IncidentsList() {
 
       {/* Mobile cards */}
       <div className="grid gap-3 lg:hidden">
-        {incidents.map((i) => (
-          <Link key={`${i.tenant_id}:${i.number}`} href={`/itsm/incidents/${i.number}`} className="hi5-card p-4 block">
+        {incidents.map((i: any) => (
+          <Link
+            key={`${i.tenant_id}:${i.number}`}
+            href={`/itsm/incidents/${i.number}`}
+            className="hi5-card p-4 block"
+          >
             <div className="flex items-center justify-between gap-2">
               <div className="font-semibold truncate">{i.number}</div>
               <Badge>{String(i.status).replace("_", " ")}</Badge>
@@ -144,12 +165,17 @@ export default async function IncidentsList() {
             <div className="mt-2 flex gap-2 flex-wrap text-xs opacity-80">
               <Badge>{String(i.priority)}</Badge>
               <Badge>t:{shortTenant(String(i.tenant_id))}</Badge>
-              <span className="opacity-70">{new Date(i.created_at).toLocaleString()}</span>
+              <span className="opacity-70">
+                {new Date(i.created_at).toLocaleString()}
+              </span>
             </div>
           </Link>
         ))}
+
         {!incidents.length ? (
-          <div className="hi5-card p-4 text-sm opacity-80">No incidents found for your tenant memberships.</div>
+          <div className="hi5-card p-4 text-sm opacity-80">
+            No incidents found for your tenant memberships.
+          </div>
         ) : null}
       </div>
 
@@ -168,23 +194,36 @@ export default async function IncidentsList() {
               </tr>
             </thead>
             <tbody>
-              {incidents.map((i) => (
-                <tr key={`${i.tenant_id}:${i.number}`} className="border-b hi5-border last:border-b-0 hover:bg-black/5 dark:hover:bg-white/5">
+              {incidents.map((i: any) => (
+                <tr
+                  key={`${i.tenant_id}:${i.number}`}
+                  className="border-b hi5-border last:border-b-0 hover:bg-black/5 dark:hover:bg-white/5"
+                >
                   <td className="p-3 font-medium">
-                    <Link className="underline" href={`/itsm/incidents/${i.number}`}>
+                    <Link
+                      className="underline"
+                      href={`/itsm/incidents/${i.number}`}
+                    >
                       {i.number}
                     </Link>
                   </td>
                   <td className="p-3">{i.title}</td>
-                  <td className="p-3">{String(i.status).replace("_", " ")}</td>
+                  <td className="p-3">
+                    {String(i.status).replace("_", " ")}
+                  </td>
                   <td className="p-3">{i.priority}</td>
-                  <td className="p-3">{shortTenant(String(i.tenant_id))}</td>
-                  <td className="p-3">{new Date(i.created_at).toLocaleString()}</td>
+                  <td className="p-3">
+                    {shortTenant(String(i.tenant_id))}
+                  </td>
+                  <td className="p-3">
+                    {new Date(i.created_at).toLocaleString()}
+                  </td>
                 </tr>
               ))}
+
               {!incidents.length ? (
                 <tr>
-                  <td className="p-3 opacity-70" colSpan={6}>
+                  <td colSpan={6} className="p-3 opacity-70">
                     No incidents found for your tenant memberships.
                   </td>
                 </tr>
