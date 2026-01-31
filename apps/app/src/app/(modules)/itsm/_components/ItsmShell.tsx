@@ -18,6 +18,7 @@ function tabTitleFromPath(pathname: string) {
   if (pathname.startsWith("/itsm/incidents/")) return "Incident";
   if (pathname.startsWith("/itsm/incidents")) return "Incidents";
   if (pathname.startsWith("/itsm/settings")) return "Settings";
+  if (pathname.startsWith("/itsm/new-tab")) return "New Tab";
   return "Page";
 }
 
@@ -25,7 +26,8 @@ function tabIdFromPath(pathname: string) {
   // stable id per route so revisiting updates the same tab
   if (pathname === "/itsm") return "dashboard";
   if (pathname.startsWith("/itsm/incidents/new")) return "incidents-new";
-  if (pathname.startsWith("/itsm/incidents/")) return `incident:${pathname}`;
+  if (pathname.startsWith("/itsm/incidents/")) return `incident:${pathname}`; // unique per incident id
+  if (pathname.startsWith("/itsm/new-tab")) return "new-tab";
   return pathname;
 }
 
@@ -48,15 +50,14 @@ export default function ItsmShell({ children }: Props) {
     if (!pathname?.startsWith("/itsm")) return;
 
     // Always ensure dashboard exists + is pinned
-    if (pathname === "/itsm") {
-      upsertTab({ id: "dashboard", href: "/itsm", title: "Dashboard", pinned: true });
-      return;
-    }
+    upsertTab({ id: "dashboard", href: "/itsm", title: "Dashboard", pinned: true });
+
+    // If we're on dashboard, don't create another
+    if (pathname === "/itsm") return;
 
     // Create/update a tab for the current page
     const id = tabIdFromPath(pathname);
     const title = tabTitleFromPath(pathname);
-
     upsertTab({ id, href: pathname, title });
   }, [pathname, upsertTab]);
 
@@ -124,62 +125,74 @@ export default function ItsmShell({ children }: Props) {
           </div>
         </div>
 
-{/* ===== Tabs bar (full width, single line) ===== */}
-<div className="border-t hi5-border px-2">
-  <div className="h-12 flex items-center gap-2">
-    {/* Scroll strip */}
-    <div
-      className="flex-1 flex items-center gap-2 flex-nowrap overflow-x-auto overflow-y-hidden no-scrollbar"
-      style={{ WebkitOverflowScrolling: "touch" }}
-    >
-      {(tabs ?? []).map((t) => {
-        const isActive = pathname === t.href || (t.id !== "dashboard" && pathname === t.id);
-        const canClose = !t.pinned && t.id !== "dashboard";
+        {/* ===== Tabs bar (full width, single line) ===== */}
+        <div className="border-t hi5-border px-2">
+          <div className="h-12 flex items-center gap-2">
+            {/* Scroll strip (MOBILE scrolls, desktop behaves as before) */}
+            <div
+              className={[
+                "flex-1 flex items-center gap-2 flex-nowrap",
+                "overflow-x-auto overflow-y-hidden no-scrollbar",
+                // Desktop: don't turn into a scroller; keep the "fit" behaviour you had
+                "md:overflow-x-hidden",
+              ].join(" ")}
+              style={{ WebkitOverflowScrolling: "touch" }}
+            >
+              {(tabs ?? []).map((t) => {
+                const isActive = pathname === t.href || (t.id !== "dashboard" && pathname === t.id);
+                const canClose = !t.pinned && t.id !== "dashboard";
 
-        return (
-          <div
-            key={t.id}
-            className={[
-              "shrink-0",                       // IMPORTANT: prevents shrinking
-              "inline-flex items-center gap-2",
-              "h-9 px-3 rounded-xl border hi5-border",
-              "min-w-[160px] max-w-[70vw]",      // MOBILE: forces overflow -> scroll
-              "md:min-w-0 md:max-w-[18vw]",      // DESKTOP: keep your sizing behaviour
-              isActive
-                ? "bg-[rgba(var(--hi5-accent),0.12)] border-[rgba(var(--hi5-accent),0.30)]"
-                : "opacity-90 hover:bg-black/5 dark:hover:bg-white/5",
-            ].join(" ")}
-          >
-            <Link href={t.href} className="min-w-0 text-sm font-medium truncate">
-              {t.title}
+                return (
+                  <div
+                    key={t.id}
+                    className={[
+                      // MOBILE: never shrink -> forces overflow -> finger scroll
+                      "shrink-0",
+                      // DESKTOP: allow shrink so it behaves like your previous "compress to fit" approach
+                      "md:shrink",
+                      "inline-flex items-center gap-2",
+                      "h-9 px-3 rounded-xl border hi5-border",
+                      // MOBILE sizing: guarantees overflow once multiple tabs exist
+                      "min-w-[160px] max-w-[70vw]",
+                      // DESKTOP sizing: your existing behaviour
+                      "md:min-w-0 md:max-w-[18vw]",
+                      isActive
+                        ? "bg-[rgba(var(--hi5-accent),0.12)] border-[rgba(var(--hi5-accent),0.30)]"
+                        : "opacity-90 hover:bg-black/5 dark:hover:bg-white/5",
+                    ].join(" ")}
+                  >
+                    <Link href={t.href} className="min-w-0 text-sm font-medium truncate">
+                      {t.title}
+                    </Link>
+
+                    {canClose ? (
+                      <button
+                        type="button"
+                        className="text-xs opacity-70 hover:opacity-100"
+                        onClick={() => closeTab(t.id)}
+                        aria-label="Close tab"
+                      >
+                        ✕
+                      </button>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* New tab button (always visible at end) */}
+            <Link
+              href="/itsm/new-tab"
+              className="inline-flex h-9 w-9 items-center justify-center rounded-xl border hi5-border hover:bg-black/5 dark:hover:bg-white/5"
+              aria-label="New tab"
+              title="New tab"
+            >
+              <Plus size={16} />
             </Link>
-
-            {canClose ? (
-              <button
-                type="button"
-                className="text-xs opacity-70 hover:opacity-100"
-                onClick={() => closeTab(t.id)}
-                aria-label="Close tab"
-              >
-                ✕
-              </button>
-            ) : null}
           </div>
-        );
-      })}
-    </div>
+        </div>
+      </div>
 
-    {/* Pinned + button */}
-    <Link
-      href="/itsm/new-tab"
-      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border hi5-border hover:bg-black/5 dark:hover:bg-white/5"
-      aria-label="New tab"
-      title="New tab"
-    >
-      <Plus size={16} />
-    </Link>
-  </div>
-</div>
       {/* ===== Body: sidebar + content ===== */}
       <div className="flex w-full">
         {/* Desktop sidebar (fixed 280) */}
@@ -225,16 +238,32 @@ export default function ItsmShell({ children }: Props) {
               </div>
 
               <div className="mt-3 space-y-2">
-                <Link onClick={closeDrawer} className="block px-3 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5" href="/itsm">
+                <Link
+                  onClick={closeDrawer}
+                  className="block px-3 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5"
+                  href="/itsm"
+                >
                   Dashboard
                 </Link>
-                <Link onClick={closeDrawer} className="block px-3 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5" href="/itsm/incidents">
+                <Link
+                  onClick={closeDrawer}
+                  className="block px-3 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5"
+                  href="/itsm/incidents"
+                >
                   Incidents
                 </Link>
-                <Link onClick={closeDrawer} className="block px-3 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5" href="/itsm/incidents/new">
+                <Link
+                  onClick={closeDrawer}
+                  className="block px-3 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5"
+                  href="/itsm/incidents/new"
+                >
                   New Incident
                 </Link>
-                <Link onClick={closeDrawer} className="block px-3 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5" href="/itsm/settings">
+                <Link
+                  onClick={closeDrawer}
+                  className="block px-3 py-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5"
+                  href="/itsm/settings"
+                >
                   Settings
                 </Link>
               </div>
