@@ -14,17 +14,15 @@ import {
   Settings,
 } from "lucide-react";
 
-// ✅ Exported so other modules (itsm-shell.tsx) can import it
 export type SidebarMode = "pinned" | "collapsed" | "hidden";
-
 const STORAGE_KEY = "hi5_itsm_sidebar_mode_v3";
 
-type Item = {
-  href: string;
-  label: string;
-  icon: LucideIcon;
-  hint?: string;
-  short?: string;
+type Item = { href: string; label: string; icon: LucideIcon; hint?: string; short?: string };
+
+type Props = {
+  mode?: SidebarMode;
+  onCycleMode?: () => void;
+  onRequestHide?: () => void;
 };
 
 function isActive(pathname: string, href: string) {
@@ -40,19 +38,24 @@ function readMode(): SidebarMode {
   return "pinned";
 }
 
-export default function ITSMSidebar() {
+export default function ITSMSidebar({ mode: modeProp, onCycleMode, onRequestHide }: Props) {
   const pathname = usePathname();
-  const [mode, setMode] = useState<SidebarMode>("pinned");
+
+  // If parent drives mode, use it. Otherwise use internal mode via localStorage.
+  const [internalMode, setInternalMode] = useState<SidebarMode>("pinned");
+  const mode: SidebarMode = modeProp ?? internalMode;
 
   useEffect(() => {
-    setMode(readMode());
+    if (modeProp) return; // controlled by parent
+
+    setInternalMode(readMode());
     function onSet(e: any) {
       const next = e?.detail as SidebarMode;
-      if (next === "pinned" || next === "collapsed" || next === "hidden") setMode(next);
+      if (next === "pinned" || next === "collapsed" || next === "hidden") setInternalMode(next);
     }
     window.addEventListener(`${STORAGE_KEY}:set`, onSet as any);
     return () => window.removeEventListener(`${STORAGE_KEY}:set`, onSet as any);
-  }, []);
+  }, [modeProp]);
 
   const groups = useMemo(() => {
     const workspace: Item[] = [
@@ -87,9 +90,7 @@ export default function ITSMSidebar() {
                   className={[
                     "w-full rounded-2xl border hi5-border py-2",
                     "flex flex-col items-center justify-center gap-1",
-                    active
-                      ? "bg-[rgba(var(--hi5-accent),0.14)] border-[rgba(var(--hi5-accent),0.30)]"
-                      : "bg-[rgba(var(--hi5-card),0.18)]",
+                    active ? "bg-[rgba(var(--hi5-accent),0.14)] border-[rgba(var(--hi5-accent),0.30)]" : "bg-[rgba(var(--hi5-card),0.18)]",
                     "hover:bg-black/5 dark:hover:bg-white/5 transition",
                   ].join(" ")}
                   title={it.label}
@@ -102,6 +103,29 @@ export default function ITSMSidebar() {
               );
             })}
           </div>
+
+          {(onCycleMode || onRequestHide) ? (
+            <div className="mt-2 grid gap-2">
+              {onCycleMode ? (
+                <button
+                  type="button"
+                  onClick={onCycleMode}
+                  className="w-full rounded-2xl border hi5-border py-2 text-xs opacity-90 hover:bg-black/5 dark:hover:bg-white/5 transition"
+                >
+                  Toggle
+                </button>
+              ) : null}
+              {onRequestHide ? (
+                <button
+                  type="button"
+                  onClick={onRequestHide}
+                  className="w-full rounded-2xl border hi5-border py-2 text-xs opacity-90 hover:bg-black/5 dark:hover:bg-white/5 transition"
+                >
+                  Hide
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
     );
@@ -120,9 +144,7 @@ export default function ITSMSidebar() {
           "rounded-2xl border hi5-border px-3 py-3",
           "hover:bg-black/5 dark:hover:bg-white/5 transition",
           "flex items-center gap-3",
-          active
-            ? "bg-[rgba(var(--hi5-accent),0.12)] border-[rgba(var(--hi5-accent),0.30)]"
-            : "bg-[rgba(var(--hi5-card),0.18)]",
+          active ? "bg-[rgba(var(--hi5-accent),0.12)] border-[rgba(var(--hi5-accent),0.30)]" : "bg-[rgba(var(--hi5-card),0.18)]",
         ].join(" ")}
       >
         <Icon className="h-5 w-5 opacity-85 shrink-0" />
