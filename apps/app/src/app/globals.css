@@ -106,19 +106,9 @@ html, body {
 }
 
 body {
+  margin: 0;
   min-height: 100%;
   color: rgb(var(--hi5-fg));
-  background: transparent !important;
-}
-
-/* Paint the gradient behind everything (GLOBAL) */
-html::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  background: var(--hi5-bg-gradient);
-  z-index: -1;
-  pointer-events: none;
 }
 
 /* Optional layout helper (no background here, just sizing) */
