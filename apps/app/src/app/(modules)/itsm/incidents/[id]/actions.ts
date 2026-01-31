@@ -1,48 +1,58 @@
 "use server";
 
-import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 import { createSupabaseServerClient } from "@hi5tech/auth";
-import { getMemberTenantIds } from "@/lib/tenant";
+import { getMemberTenantIds } from "@/lib/rbac/get-member-tenant-ids";
 
-function clean(v: any) {
-  return String(v ?? "").trim();
+function s(formData: FormData, key: string): string {
+  return String(formData.get(key) ?? "").trim();
 }
 
+async function supabaseFromCookies() {
+  const cookieStore = await cookies();
+  return createSupabaseServerClient({
+    get(name: string) {
+      return cookieStore.get(name)?.value;
+    },
+    set() {},
+    remove() {},
+  });
+}
+
+/**
+ * Form fields:
+ * - incident_id
+ * - message
+ */
 export async function addIncidentComment(formData: FormData) {
-  const supabase = await createSupabaseServerClient();
+  const incident_id = s(formData, "incident_id");
+  const message = s(formData, "message");
+
+  if (!incident_id || !message) return;
+
+  const supabase = await supabaseFromCookies();
   const tenantIds = await getMemberTenantIds();
 
   const { data: userRes } = await supabase.auth.getUser();
-  const user = userRes.user;
-  if (!user) throw new Error("Not logged in");
+  const user = userRes?.user;
+  if (!user) return;
 
-  const number = clean(formData.get("number"));
-  const body = clean(formData.get("body"));
-  const is_internal = clean(formData.get("is_internal")) !== "false";
-
-  if (!number) throw new Error("Missing incident number");
-  if (!body) throw new Error("Comment cannot be empty");
-
-  const { data: incident, error: incErr } = await supabase
+  // Ensure incident belongs to one of the member's tenants (basic guard)
+  const { data: incident } = await supabase
     .from("incidents")
-    .select("id, tenant_id")
-    .in("tenant_id", tenantIds.length ? tenantIds : ["00000000-0000-0000-0000-000000000000"])
-    .eq("number", number)
+    .select("id,tenant_id")
+    .eq("id", incident_id)
     .maybeSingle();
 
-  if (incErr) throw new Error(incErr.message);
-  if (!incident) throw new Error("Incident not found");
+  if (!incident || !tenantIds.includes(incident.tenant_id)) return;
 
-  const { error } = await supabase.from("itsm_comments").insert({
+  await supabase.from("incident_comments").insert({
+    incident_id,
     tenant_id: incident.tenant_id,
-    entity_type: "incident",
-    entity_id: incident.id,
-    body,
-    is_internal,
-    created_by: user.id,
+    author_id: user.id,
+    message,
   });
 
-  if (error) throw new Error(error.message);
-
-  redirect(`/itsm/incidents/${number}`);
+  revalidatePath(`/itsm/incidents/${incident_id}`);
 }
