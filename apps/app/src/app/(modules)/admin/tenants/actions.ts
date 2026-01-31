@@ -24,7 +24,7 @@ export async function upsertTenant(formData: FormData): Promise<void> {
 
   if (!name || !subdomain) return;
 
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
 
   await supabase.from("tenants").upsert(
     {
