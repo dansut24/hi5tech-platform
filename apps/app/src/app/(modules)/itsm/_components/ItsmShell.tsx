@@ -124,47 +124,62 @@ export default function ItsmShell({ children }: Props) {
           </div>
         </div>
 
-        {/* ===== Tabs bar (full width, single line) ===== */}
-        <div className="border-t hi5-border px-2">
-          <div className="h-12 flex items-center gap-1 overflow-hidden">
-            {(tabs ?? []).map((t) => {
-              const isActive = pathname === t.href || (t.id !== "dashboard" && pathname === t.id);
-              const canClose = !t.pinned && t.id !== "dashboard";
+{/* ===== Tabs bar (full width, single line) ===== */}
+<div className="border-t hi5-border px-2">
+  <div className="h-12 flex items-center gap-2">
+    {/* Scroll strip */}
+    <div
+      className="flex-1 flex items-center gap-2 flex-nowrap overflow-x-auto overflow-y-hidden no-scrollbar"
+      style={{ WebkitOverflowScrolling: "touch" }}
+    >
+      {(tabs ?? []).map((t) => {
+        const isActive = pathname === t.href || (t.id !== "dashboard" && pathname === t.id);
+        const canClose = !t.pinned && t.id !== "dashboard";
 
-              return (
-                <div
-                  key={t.id}
-                  className={[
-                    "flex items-center gap-2 min-w-0",
-                    "rounded-xl border hi5-border",
-                    "h-9 px-3",
-                    "max-w-[40vw] md:max-w-[18vw]",
-                    isActive
-                      ? "bg-[rgba(var(--hi5-accent),0.12)] border-[rgba(var(--hi5-accent),0.30)]"
-                      : "opacity-90 hover:bg-black/5 dark:hover:bg-white/5",
-                  ].join(" ")}
-                >
-                  <Link href={t.href} className="min-w-0 text-sm font-medium truncate">
-                    {t.title}
-                  </Link>
+        return (
+          <div
+            key={t.id}
+            className={[
+              "shrink-0",                       // IMPORTANT: prevents shrinking
+              "inline-flex items-center gap-2",
+              "h-9 px-3 rounded-xl border hi5-border",
+              "min-w-[160px] max-w-[70vw]",      // MOBILE: forces overflow -> scroll
+              "md:min-w-0 md:max-w-[18vw]",      // DESKTOP: keep your sizing behaviour
+              isActive
+                ? "bg-[rgba(var(--hi5-accent),0.12)] border-[rgba(var(--hi5-accent),0.30)]"
+                : "opacity-90 hover:bg-black/5 dark:hover:bg-white/5",
+            ].join(" ")}
+          >
+            <Link href={t.href} className="min-w-0 text-sm font-medium truncate">
+              {t.title}
+            </Link>
 
-                  {canClose ? (
-                    <button
-                      type="button"
-                      className="text-xs opacity-70 hover:opacity-100"
-                      onClick={() => closeTab(t.id)}
-                      aria-label="Close tab"
-                    >
-                      ✕
-                    </button>
-                  ) : null}
-                </div>
-              );
-            })}
+            {canClose ? (
+              <button
+                type="button"
+                className="text-xs opacity-70 hover:opacity-100"
+                onClick={() => closeTab(t.id)}
+                aria-label="Close tab"
+              >
+                ✕
+              </button>
+            ) : null}
           </div>
-        </div>
-      </div>
+        );
+      })}
+    </div>
 
+    {/* Pinned + button */}
+    <Link
+      href="/itsm/new-tab"
+      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border hi5-border hover:bg-black/5 dark:hover:bg-white/5"
+      aria-label="New tab"
+      title="New tab"
+    >
+      <Plus size={16} />
+    </Link>
+  </div>
+</div>
       {/* ===== Body: sidebar + content ===== */}
       <div className="flex w-full">
         {/* Desktop sidebar (fixed 280) */}
