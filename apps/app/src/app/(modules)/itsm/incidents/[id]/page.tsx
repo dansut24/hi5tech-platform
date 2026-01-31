@@ -21,33 +21,16 @@ function fmt(ts: string) {
   }
 }
 
-async function supabaseServer() {
-  const cookieStore = await cookies();
-
-  return createSupabaseServerClient({
-    get(name: string) {
-      return cookieStore.get(name)?.value;
-    },
-    set(name: string, value: string, options: any) {
-      cookieStore.set({ name, value, ...(options ?? {}) });
-    },
-    remove(name: string, options: any) {
-      const anyStore = cookieStore as any;
-      if (typeof anyStore.delete === "function") {
-        anyStore.delete(name);
-        return;
-      }
-      cookieStore.set({ name, value: "", ...(options ?? {}), maxAge: 0 });
-    },
-  });
-}
-
 export default async function IncidentDetail(props: {
   params: Promise<{ id: string }>;
 }) {
+  // route param is [id]; your code treats it like "number"
   const { id: number } = await props.params;
 
-  const supabase = await supabaseServer();
+  // ✅ Fix: createSupabaseServerClient requires cookies()
+  const supabase = await createSupabaseServerClient(cookies());
+
+  // ✅ Your getMemberTenantIds is 0-arg (do not pass supabase)
   const tenantIds = await getMemberTenantIds();
 
   const { data: incident, error } = await supabase
@@ -104,13 +87,13 @@ export default async function IncidentDetail(props: {
     .order("created_at", { ascending: false })
     .limit(50);
 
-  // Signed URLs
+  // Create signed URLs for attachments (private bucket)
   const signed: Record<string, string> = {};
   if (attachments && attachments.length) {
     for (const a of attachments) {
       const { data } = await supabase.storage
         .from("itsm-attachments")
-        .createSignedUrl(a.storage_path, 60 * 10);
+        .createSignedUrl(a.storage_path, 60 * 10); // 10 min
       if (data?.signedUrl) signed[a.id] = data.signedUrl;
     }
   }
@@ -158,7 +141,7 @@ export default async function IncidentDetail(props: {
             </form>
           </div>
 
-          <div>
+          <div id="comments">
             <div className="font-semibold">Comments</div>
             {cErr ? <div className="text-sm text-red-600 mt-2">{cErr.message}</div> : null}
 
@@ -179,7 +162,7 @@ export default async function IncidentDetail(props: {
           </div>
         </div>
 
-        <div className="hi5-card p-4 space-y-4">
+        <div className="hi5-card p-4 space-y-4" id="attachments">
           <div>
             <div className="font-semibold">Details</div>
             <div className="flex gap-2 flex-wrap mt-2">
@@ -192,8 +175,12 @@ export default async function IncidentDetail(props: {
 
           <div>
             <div className="font-semibold">Attachments</div>
+
+            {/* ✅ Fix: send incident_id + tenant_id (matches attachments.actions.ts) */}
             <form action={uploadIncidentAttachment} className="mt-2 space-y-2">
-              <input type="hidden" name="number" value={incident.number} />
+              <input type="hidden" name="incident_id" value={incident.id} />
+              <input type="hidden" name="tenant_id" value={incident.tenant_id} />
+
               <input
                 type="file"
                 name="file"
@@ -227,9 +214,7 @@ export default async function IncidentDetail(props: {
               ) : null}
             </div>
 
-            <div className="text-xs opacity-60 mt-2">
-              Links are signed (expire in ~10 minutes).
-            </div>
+            <div className="text-xs opacity-60 mt-2">Links are signed (expire in ~10 minutes).</div>
           </div>
         </div>
       </div>
