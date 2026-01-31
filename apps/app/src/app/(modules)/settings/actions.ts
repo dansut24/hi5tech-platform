@@ -1,6 +1,6 @@
 "use server";
 
-import { createSupabaseServerClient } from "@hi5tech/auth";
+import { supabaseServer } from "@/lib/supabase/server";
 
 function isHex(v: string) {
   return /^#[0-9a-fA-F]{6}$/.test(v);
@@ -12,7 +12,7 @@ function clampHex(v: string, fallback: string) {
 }
 
 export async function saveUserSettings(formData: FormData) {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await supabaseServer();
 
   const { data: userRes } = await supabase.auth.getUser();
   const user = userRes.user;
