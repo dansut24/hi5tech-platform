@@ -136,17 +136,6 @@ export default function ItsmShell({ children, allowedModules, tenantLabel }: Pro
             <ItsmSidebar />
 
             {/* Resize handle (desktop only) */}
-            {sidebarMode === "resizable" ? (
-              <div
-                onPointerDown={onDragStart}
-                onPointerMove={onDragMove}
-                onPointerUp={onDragEnd}
-                onPointerCancel={onDragEnd}
-                className="hidden md:block absolute top-0 right-0 h-full w-2 cursor-col-resize"
-                aria-label="Resize sidebar"
-                title="Drag to resize"
-              />
-            ) : null}
           </div>
 
           {/* Main content */}
