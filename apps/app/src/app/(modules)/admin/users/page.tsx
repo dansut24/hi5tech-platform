@@ -1,161 +1,215 @@
-﻿import Link from "next/link";
+import { cookies } from "next/headers";
 import { createSupabaseServerClient } from "@hi5tech/auth";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+
 import { requireSuperAdmin } from "../_admin";
-import { createMembership, updateModules } from "./actions";
+import { createMembership, removeMembership, addUserToTenant, updateModules } from "./actions";
 
-const ALL = ["itsm", "control", "selfservice", "admin"] as const;
+async function supabaseFromCookies() {
+  const cookieStore = await cookies();
+  return createSupabaseServerClient({
+    get(name: string) {
+      return cookieStore.get(name)?.value;
+    },
+    set() {},
+    remove() {},
+  });
+}
 
-export default async function UsersAccessPage() {
+export default async function UsersAdminPage() {
   const gate = await requireSuperAdmin();
+
   if (!gate.ok) {
-    return (
-      <div className="space-y-3">
-        <h1 className="text-2xl font-semibold">Users & Access</h1>
-        <p className="opacity-80">Not authorized.</p>
-        <Link className="underline" href="/admin">
-          Back
-        </Link>
-      </div>
-    );
+    if (gate.reason === "not_logged_in") redirect("/login");
+    redirect("/no-access");
   }
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = await supabaseFromCookies();
 
+  // Tenants for dropdown
   const { data: tenants } = await supabase
     .from("tenants")
-    .select("id,name,domain,subdomain,is_active")
-    .order("name");
-
-  const { data: profiles } = await supabase
-    .from("profiles")
-    .select("id,email,full_name")
+    .select("id,name,subdomain")
     .order("created_at", { ascending: false });
 
-  const { data: memberships } = await supabase
+  // Memberships list (basic view)
+  const { data: memberships, error: membershipsError } = await supabase
     .from("memberships")
-    .select("id, tenant_id, user_id, role, created_at")
+    .select("id,tenant_id,user_id,role,created_at")
     .order("created_at", { ascending: false });
-
-  const { data: moduleRows } = await supabase.from("module_assignments").select("membership_id, module");
-
-  const modulesByMembership = new Map<string, Set<string>>();
-  (moduleRows ?? []).forEach((r) => {
-    if (!modulesByMembership.has(r.membership_id)) modulesByMembership.set(r.membership_id, new Set());
-    modulesByMembership.get(r.membership_id)!.add(r.module);
-  });
-
-  const tenantById = new Map((tenants ?? []).map((t) => [t.id, t]));
-  const profileById = new Map((profiles ?? []).map((p) => [p.id, p]));
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-end justify-between gap-3">
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold">Users & Access</h1>
-          <p className="opacity-80">Assign roles and modules per tenant.</p>
+          <h1 className="text-2xl font-semibold">Users</h1>
+          <p className="text-sm opacity-70">
+            Manage tenant memberships (assign users to tenants and roles).
+          </p>
         </div>
-        <Link className="underline" href="/admin">
+
+        <Link
+          href="/admin"
+          className="rounded-xl border hi5-border px-3 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/5 transition"
+        >
           Back
         </Link>
       </div>
 
-      <form action={createMembership} className="rounded-2xl border p-4 space-y-3">
-        <div className="font-semibold">Add user to tenant</div>
+      {/* Create membership */}
+      <div className="hi5-panel p-4">
+        <h2 className="font-semibold mb-3">Add user to tenant</h2>
 
-        <div className="grid gap-3 sm:grid-cols-3">
-          <label className="text-sm">
-            Tenant
-            <select name="tenant_id" className="mt-1 w-full rounded-xl border px-3 py-2 bg-transparent">
-              {(tenants ?? []).map((t) => {
-                const host = t.subdomain ? `${t.subdomain}.${t.domain}` : t.domain;
-                return (
-                  <option key={t.id} value={t.id} disabled={t.is_active === false}>
-                    {t.name} â€¢ {host} {t.is_active === false ? "(inactive)" : ""}
-                  </option>
-                );
-              })}
-            </select>
-          </label>
-
-          <label className="text-sm">
-            User (profile)
-            <select name="user_id" className="mt-1 w-full rounded-xl border px-3 py-2 bg-transparent">
-              {(profiles ?? []).map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.email ?? p.id}
+        <form action={createMembership} className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-1 sm:col-span-1">
+            <label className="text-sm opacity-80">Tenant</label>
+            <select
+              name="tenant_id"
+              className="w-full rounded-xl border hi5-border px-3 py-2 bg-transparent"
+              required
+              defaultValue=""
+            >
+              <option value="" disabled>
+                Select tenant…
+              </option>
+              {(tenants ?? []).map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} ({t.subdomain})
                 </option>
               ))}
             </select>
-          </label>
+          </div>
 
-          <label className="text-sm">
-            Role
-            <select name="role" defaultValue="user" className="mt-1 w-full rounded-xl border px-3 py-2 bg-transparent">
-              <option value="user">user</option>
-              <option value="tech">tech</option>
-              <option value="admin">admin</option>
-              <option value="super_admin">super_admin</option>
+          <div className="grid gap-1 sm:col-span-1">
+            <label className="text-sm opacity-80">User ID</label>
+            <input
+              name="user_id"
+              placeholder="UUID"
+              className="w-full rounded-xl border hi5-border px-3 py-2 bg-transparent"
+              required
+            />
+          </div>
+
+          <div className="grid gap-1 sm:col-span-1">
+            <label className="text-sm opacity-80">Role</label>
+            <select
+              name="role"
+              className="w-full rounded-xl border hi5-border px-3 py-2 bg-transparent"
+              defaultValue="user"
+            >
+              <option value="user">User</option>
+              <option value="admin">Admin</option>
+              <option value="super_admin">Super admin</option>
             </select>
-          </label>
+          </div>
+
+          <div className="sm:col-span-3 flex items-center gap-2 pt-2">
+            <button
+              type="submit"
+              className="rounded-xl border hi5-border px-4 py-2 text-sm font-medium hover:bg-black/5 dark:hover:bg-white/5 transition"
+            >
+              Add membership
+            </button>
+
+            {/* Optional alias action, in case your UI still uses it */}
+            <button
+              formAction={addUserToTenant}
+              type="submit"
+              className="rounded-xl border hi5-border px-4 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/5 transition"
+              title="Alias of createMembership"
+            >
+              Add (alias)
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* List memberships */}
+      <div className="hi5-panel p-0 overflow-hidden">
+        <div className="px-4 py-3 border-b hi5-border flex items-center justify-between">
+          <div className="font-semibold">Memberships</div>
+          <div className="text-sm opacity-70">
+            {membershipsError ? "Failed to load" : `${memberships?.length ?? 0} total`}
+          </div>
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-4">
-          {ALL.map((m) => (
-            <label key={m} className="text-sm flex items-center gap-2">
-              <input type="checkbox" name={`m_${m}`} />
-              {m.toUpperCase()}
-            </label>
-          ))}
-        </div>
-
-        <button className="rounded-xl border px-3 py-2 text-sm font-medium">Add membership</button>
-        <p className="text-xs opacity-70">Users appear after they sign up (profile trigger).</p>
-      </form>
-
-      <div className="rounded-2xl border overflow-hidden">
-        <div className="px-4 py-3 border-b font-semibold">Memberships</div>
-        <div className="divide-y">
-          {(memberships ?? []).map((m) => {
-            const t = tenantById.get(m.tenant_id);
-            const p = profileById.get(m.user_id);
-            const mods = modulesByMembership.get(m.id) ?? new Set<string>();
-            const host = t ? (t.subdomain ? `${t.subdomain}.${t.domain}` : t.domain) : "";
-
-            return (
-              <div key={m.id} className="px-4 py-4 space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                  <div>
-                    <div className="font-semibold">{p?.email ?? m.user_id}</div>
-                    <div className="text-sm opacity-70">
-                      Tenant: {t?.name ?? m.tenant_id}
-                      {host ? ` â€¢ ${host}` : ""} â€¢ Role: {m.role}
-                    </div>
-                  </div>
-                  <div className="text-xs opacity-60">{new Date(m.created_at).toLocaleString()}</div>
+        <div className="divide-y hi5-border">
+          {(memberships ?? []).map((m) => (
+            <div
+              key={m.id}
+              className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <div className="min-w-0">
+                <div className="font-semibold truncate">{m.user_id}</div>
+                <div className="text-sm opacity-70 truncate">
+                  Tenant: {m.tenant_id} · Role: {m.role}
                 </div>
+              </div>
 
-                <form action={updateModules} className="flex flex-col gap-2">
-                  <input type="hidden" name="membership_id" value={m.id} />
-                  <div className="grid gap-2 sm:grid-cols-4">
-                    {ALL.map((mm) => (
-                      <label key={mm} className="text-sm flex items-center gap-2">
-                        <input type="checkbox" name={`m_${mm}`} defaultChecked={mods.has(mm)} />
-                        {mm.toUpperCase()}
-                      </label>
-                    ))}
-                  </div>
-                  <div>
-                    <button className="rounded-xl border px-3 py-2 text-sm font-medium">Save modules</button>
-                  </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <form action={removeMembership} className="inline-flex">
+                  <input type="hidden" name="id" value={m.id} />
+                  <button
+                    type="submit"
+                    className="rounded-xl border hi5-border px-3 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/5 transition"
+                  >
+                    Remove
+                  </button>
                 </form>
               </div>
-            );
-          })}
+            </div>
+          ))}
 
-          {!memberships?.length && <div className="px-4 py-3 opacity-70">No memberships yet.</div>}
+          {!membershipsError && (memberships?.length ?? 0) === 0 ? (
+            <div className="p-6 text-sm opacity-70">No memberships yet.</div>
+          ) : null}
         </div>
+      </div>
+
+      {/* Optional: tenant module update helper (only if you actually use it) */}
+      <div className="hi5-panel p-4">
+        <h2 className="font-semibold mb-3">Update tenant modules (optional)</h2>
+
+        <form action={updateModules} className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-1">
+            <label className="text-sm opacity-80">Tenant</label>
+            <select
+              name="tenant_id"
+              className="w-full rounded-xl border hi5-border px-3 py-2 bg-transparent"
+              required
+              defaultValue=""
+            >
+              <option value="" disabled>
+                Select tenant…
+              </option>
+              {(tenants ?? []).map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} ({t.subdomain})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid gap-1">
+            <label className="text-sm opacity-80">Modules (comma separated)</label>
+            <input
+              name="modules"
+              placeholder="itsm, control, selfservice, admin"
+              className="w-full rounded-xl border hi5-border px-3 py-2 bg-transparent"
+            />
+          </div>
+
+          <div className="sm:col-span-2 flex items-center gap-2 pt-2">
+            <button
+              type="submit"
+              className="rounded-xl border hi5-border px-4 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/5 transition"
+            >
+              Save modules
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );
 }
-
