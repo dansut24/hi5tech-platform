@@ -1,7 +1,10 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { supabaseServer } from "@/lib/supabase/server";
 
 type ModuleKey = "itsm" | "control" | "selfservice" | "admin";
+
+const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "hi5tech.co.uk";
 
 /** HEX (#RRGGBB or #RGB) -> "r g b" */
 function hexToRgbTriplet(hex?: string | null, fallback = "0 0 0") {
@@ -33,6 +36,40 @@ function clamp01(n: any, fallback: number) {
   return Math.max(0, Math.min(1, v));
 }
 
+function normalizeHost(rawHost: string) {
+  return (rawHost || "").split(":")[0].trim().toLowerCase();
+}
+
+/**
+ * Resolve tenant lookup keys from host.
+ * - tenant subdomain: dan-sutton.hi5tech.co.uk  -> { domain: hi5tech.co.uk, subdomain: dan-sutton }
+ * - custom domain:    acme.com                  -> { domain: acme.com, subdomain: null }
+ * - root / non-tenant: hi5tech.co.uk or app.hi5tech.co.uk -> null (we don't gate here)
+ */
+function tenantKeyFromHost(host: string): { domain: string; subdomain: string | null } | null {
+  const h = normalizeHost(host);
+
+  // local / previews
+  if (!h) return null;
+  if (h === "localhost" || h.endsWith(".vercel.app")) return null;
+
+  // Under our root domain => expect subdomain tenants
+  if (h.endsWith(ROOT_DOMAIN)) {
+    if (h === ROOT_DOMAIN) return null;
+
+    const sub = h.slice(0, -ROOT_DOMAIN.length - 1); // remove ".hi5tech.co.uk"
+    if (!sub) return null;
+
+    // allow these to behave as non-tenant (adjust if you want)
+    if (sub === "www" || sub === "app") return null;
+
+    return { domain: ROOT_DOMAIN, subdomain: sub };
+  }
+
+  // Not under root domain => treat as custom domain tenant
+  return { domain: h, subdomain: null };
+}
+
 export default async function ModulesLayout({
   children,
 }: {
@@ -45,77 +82,114 @@ export default async function ModulesLayout({
   const user = userRes.user;
   if (!user) redirect("/login");
 
-  // Load memberships
+  // Determine which tenant this request is for (from Host header)
+  const h = await headers();
+  const host = normalizeHost(h.get("host") || "");
+  const tenantKey = tenantKeyFromHost(host);
+
+  // If we can't resolve a tenant key, you can decide what to do.
+  // For safety: send logged-in users to /apps (or /login).
+  if (!tenantKey) {
+    redirect("/apps");
+  }
+
+  // Load the tenant row that matches the current host
+  const { data: tenant, error: tenantErr } = await supabase
+    .from("tenants")
+    .select("id, domain, subdomain, name")
+    .eq("domain", tenantKey.domain)
+    // when subdomain is null (custom domain), require DB to also have null
+    .is("subdomain", tenantKey.subdomain === null ? null : undefined)
+    // when subdomain is set, match it
+    .eq(tenantKey.subdomain ? "subdomain" : "domain", tenantKey.subdomain ? tenantKey.subdomain : tenantKey.domain)
+    .maybeSingle();
+
+  // The above .eq logic can be a bit awkward with conditional columns.
+  // So if tenantKey.subdomain is NOT null, re-query cleanly:
+  let resolvedTenant = tenant ?? null;
+  if (!resolvedTenant && tenantKey.subdomain) {
+    const { data: t2 } = await supabase
+      .from("tenants")
+      .select("id, domain, subdomain, name")
+      .eq("domain", tenantKey.domain)
+      .eq("subdomain", tenantKey.subdomain)
+      .maybeSingle();
+    resolvedTenant = t2 ?? null;
+  }
+  // If custom domain, ensure subdomain null:
+  if (!resolvedTenant && tenantKey.subdomain === null) {
+    const { data: t3 } = await supabase
+      .from("tenants")
+      .select("id, domain, subdomain, name")
+      .eq("domain", tenantKey.domain)
+      .is("subdomain", null)
+      .maybeSingle();
+    resolvedTenant = t3 ?? null;
+  }
+
+  // If tenant doesn't exist, your middleware should already rewrite to /tenant-available.
+  // But fail-safe:
+  if (!resolvedTenant) {
+    redirect(`/tenant-available?requested=${encodeURIComponent(tenantKey.subdomain ?? tenantKey.domain)}`);
+  }
+
+  const tenantId = resolvedTenant.id;
+
+  // Load memberships for THIS tenant only
   const { data: memberships } = await supabase
     .from("memberships")
     .select("id, tenant_id, created_at")
     .eq("user_id", user.id)
+    .eq("tenant_id", tenantId)
     .order("created_at", { ascending: false });
 
-  const membershipIds = (memberships ?? []).map((m) => m.id);
+  // If user is not a member of this tenant -> block access
+  const activeMembershipId = memberships?.[0]?.id ?? null;
+  if (!activeMembershipId) {
+    redirect(`/login?error=tenant_access`);
+  }
 
-  // Load module assignments
+  // Load module assignments for this membership only
   const { data: mods } = await supabase
     .from("module_assignments")
     .select("module")
-    .in("membership_id", membershipIds.length ? membershipIds : [""]);
+    .eq("membership_id", activeMembershipId);
 
-  const allowedModules = Array.from(
-    new Set((mods ?? []).map((m) => m.module))
-  ) as ModuleKey[];
+  const allowedModules = Array.from(new Set((mods ?? []).map((m) => m.module))) as ModuleKey[];
 
-  // Resolve tenant label (first membership = active tenant for now)
-  let tenantLabel: string | null = null;
-  const tenantId = memberships?.[0]?.tenant_id;
-
-  if (tenantId) {
-    const { data: t } = await supabase
-      .from("tenants")
-      .select("domain, subdomain, name")
-      .eq("id", tenantId)
-      .maybeSingle();
-
-    if (t) {
-      const host =
-        t.subdomain && t.domain
-          ? `${t.subdomain}.${t.domain}`
-          : t.domain || t.name;
-
-      tenantLabel = host || null;
-    }
-  }
+  // Resolve tenant label
+  const tenantLabel =
+    resolvedTenant.subdomain && resolvedTenant.domain
+      ? `${resolvedTenant.subdomain}.${resolvedTenant.domain}`
+      : resolvedTenant.domain || resolvedTenant.name || null;
 
   // -------------------------------
   // Tenant theme tokens (brand)
   // -------------------------------
-  // Expected optional table: tenant_settings
-  // (safe to be missing; we treat it as any and fall back gracefully)
   let tenantTheme: any = null;
 
-  if (tenantId) {
-    try {
-      const { data } = await supabase
-        .from("tenant_settings")
-        .select(
-          [
-            "accent_hex",
-            "accent_2_hex",
-            "accent_3_hex",
-            "bg_hex",
-            "card_hex",
-            "topbar_hex",
-            "glow_1",
-            "glow_2",
-            "glow_3",
-          ].join(",")
-        )
-        .eq("tenant_id", tenantId)
-        .maybeSingle();
+  try {
+    const { data } = await supabase
+      .from("tenant_settings")
+      .select(
+        [
+          "accent_hex",
+          "accent_2_hex",
+          "accent_3_hex",
+          "bg_hex",
+          "card_hex",
+          "topbar_hex",
+          "glow_1",
+          "glow_2",
+          "glow_3",
+        ].join(",")
+      )
+      .eq("tenant_id", tenantId)
+      .maybeSingle();
 
-      tenantTheme = data ?? null;
-    } catch {
-      tenantTheme = null;
-    }
+    tenantTheme = data ?? null;
+  } catch {
+    tenantTheme = null;
   }
 
   // -------------------------------
@@ -161,11 +235,12 @@ export default async function ModulesLayout({
 `;
 
   return (
-  <div className={forceDarkClass}>
-    <style dangerouslySetInnerHTML={{ __html: cssVars }} />
-    <div className="hi5-bg min-h-dvh">
-      <main className="w-full">{children}</main>
+    <div className={forceDarkClass}>
+      <style dangerouslySetInnerHTML={{ __html: cssVars }} />
+      <div className="hi5-bg min-h-dvh">
+        {/* allowedModules + tenantLabel are ready to pass into a module shell later */}
+        <main className="w-full">{children}</main>
+      </div>
     </div>
-  </div>
-);
+  );
 }
