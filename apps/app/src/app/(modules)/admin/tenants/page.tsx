@@ -1,4 +1,5 @@
-﻿import { createSupabaseServerClient } from "@hi5tech/auth";
+import { cookies } from "next/headers";
+import { createSupabaseServerClient } from "@hi5tech/auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
@@ -14,7 +15,7 @@ export default async function TenantsPage() {
     redirect("/no-access");
   }
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient(cookies());
 
   const { data: tenants, error } = await supabase
     .from("tenants")
