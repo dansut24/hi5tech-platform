@@ -1,59 +1,73 @@
 "use server";
 
-import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { createSupabaseServerClient } from "@hi5tech/auth";
 import { getActiveTenantId } from "@/lib/tenant";
 
-function clean(v: any) {
-  return String(v ?? "").trim();
+function s(formData: FormData, key: string): string {
+  return String(formData.get(key) ?? "").trim();
 }
 
+async function supabaseServer() {
+  const cookieStore = await cookies();
+
+  return createSupabaseServerClient({
+    get(name: string) {
+      return cookieStore.get(name)?.value;
+    },
+    set(name: string, value: string, options: any) {
+      cookieStore.set({ name, value, ...(options ?? {}) });
+    },
+    remove(name: string, options: any) {
+      const anyStore = cookieStore as any;
+      if (typeof anyStore.delete === "function") {
+        anyStore.delete(name);
+        return;
+      }
+      cookieStore.set({ name, value: "", ...(options ?? {}), maxAge: 0 });
+    },
+  });
+}
+
+/**
+ * Create a new incident.
+ * Expects: title, description, priority (optional), etc.
+ * Uses active tenant from session/tenant helper.
+ */
 export async function createIncident(formData: FormData) {
-  const supabase = await createSupabaseServerClient();
+  const title = s(formData, "title");
+  const description = s(formData, "description");
+  const priority = s(formData, "priority") || null;
+
+  if (!title) return;
+
+  const supabase = await supabaseServer();
   const tenant_id = await getActiveTenantId();
 
   const { data: userRes } = await supabase.auth.getUser();
   const user = userRes.user;
-  if (!user) throw new Error("Not logged in");
+  if (!user) return;
+  if (!tenant_id) return;
 
-  const title = clean(formData.get("title"));
-  const description = clean(formData.get("description"));
-  const priority = clean(formData.get("priority")) || "medium";
-
-  if (!title) throw new Error("Title is required");
-
-  // Generate INC-xxxxxx using your next_itsm_number() function if it exists.
-  // If it doesn't exist yet, we fall back to a simple timestamp number.
-  let number: string | null = null;
-
-  const { data: num, error: numErr } = await supabase.rpc("next_itsm_number", {
-    _tenant_id: tenant_id,
-    _prefix: "INC",
-    _key: "incident",
-  });
-
-  if (!numErr && typeof num === "string") {
-    number = num;
-  } else {
-    number = "INC-" + String(Date.now()).slice(-6);
-  }
-
-  const { data, error } = await supabase
+  // Minimal insert (adjust columns to your schema)
+  const insert = await supabase
     .from("incidents")
     .insert({
       tenant_id,
-      number,
       title,
       description: description || null,
       priority,
-      status: "new",
       requester_id: user.id,
-      created_by: user.id,
+      status: "open",
     })
-    .select("number")
-    .single();
+    .select("id, number")
+    .maybeSingle();
 
-  if (error) throw new Error(error.message);
+  if (insert.error) {
+    // If you want UI to show the error, throw:
+    // throw new Error(insert.error.message);
+    return;
+  }
 
-  redirect(`/itsm/incidents/${data.number}`);
+  return insert.data ?? null;
 }
