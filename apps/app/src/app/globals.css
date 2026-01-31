@@ -4,9 +4,8 @@
 
 /* ----------------------------------------------------------
    Hi5Tech Theme Tokens
-   - All color values are RGB triples so you can use:
+   - RGB triples so you can use:
      rgb(var(--token)) and rgba(var(--token), alpha)
-   - Tenant branding can override these tokens later.
 ---------------------------------------------------------- */
 
 :root {
@@ -43,7 +42,7 @@
   --hi5-glow-2: 0.14;
   --hi5-glow-3: 0.10;
 
-  /* Global backdrop token (LIGHT default) */
+  /* Global backdrop (LIGHT default) */
   --hi5-bg-gradient:
     radial-gradient(1100px 600px at 18% 8%, rgba(var(--hi5-accent), var(--hi5-glow-1)), transparent 62%),
     radial-gradient(980px 560px at 88% 18%, rgba(var(--hi5-accent-3), var(--hi5-glow-2)), transparent 62%),
@@ -51,31 +50,63 @@
     linear-gradient(180deg, rgba(var(--hi5-bg), 1), rgba(var(--hi5-bg), 1));
 }
 
+/* System dark (when user theme_mode = system and no .dark class) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --hi5-bg: 2 6 23;
+    --hi5-fg: 226 232 240;
+    --hi5-muted: 148 163 184;
+
+    --hi5-card: 14 18 28;
+    --hi5-card-alpha: 0.28;
+
+    --hi5-border: 220 230 255;
+    --hi5-border-alpha: 0.16;
+
+    --hi5-shadow: 0 0 0;
+    --hi5-shadow-alpha: 0;
+
+    --hi5-topbar: 12 14 20;
+    --hi5-topbar-alpha: 0.48;
+
+    --hi5-glow-1: 0.22;
+    --hi5-glow-2: 0.18;
+    --hi5-glow-3: 0.14;
+
+    --hi5-bg-gradient:
+      radial-gradient(980px 640px at 22% 6%, rgba(var(--hi5-accent), var(--hi5-glow-1)), transparent 60%),
+      radial-gradient(900px 620px at 82% 20%, rgba(var(--hi5-accent-2), var(--hi5-glow-2)), transparent 62%),
+      radial-gradient(860px 620px at 55% 95%, rgba(var(--hi5-accent-3), var(--hi5-glow-3)), transparent 62%),
+      linear-gradient(180deg, rgba(6,7,10,1) 0%, rgba(10,10,18,1) 55%, rgba(8,9,14,1) 100%);
+  }
+}
+
+/* Forced dark always wins */
 .dark {
   color-scheme: dark;
 
-  --hi5-bg: 2 6 23;                 /* deep navy */
-  --hi5-fg: 226 232 240;            /* slate-200 */
-  --hi5-muted: 148 163 184;         /* slate-400 */
+  --hi5-bg: 2 6 23;
+  --hi5-fg: 226 232 240;
+  --hi5-muted: 148 163 184;
 
-  --hi5-card: 14 18 28;             /* deep surface */
+  --hi5-card: 14 18 28;
   --hi5-card-alpha: 0.28;
 
   --hi5-border: 220 230 255;
   --hi5-border-alpha: 0.16;
 
   --hi5-shadow: 0 0 0;
-  --hi5-shadow-alpha: 0.0;
+  --hi5-shadow-alpha: 0;
 
   --hi5-topbar: 12 14 20;
   --hi5-topbar-alpha: 0.48;
 
-  /* Slightly stronger glow in dark mode */
   --hi5-glow-1: 0.22;
   --hi5-glow-2: 0.18;
   --hi5-glow-3: 0.14;
 
-  /* Global backdrop token (FORCED DARK) */
   --hi5-bg-gradient:
     radial-gradient(980px 640px at 22% 6%, rgba(var(--hi5-accent), var(--hi5-glow-1)), transparent 60%),
     radial-gradient(900px 620px at 82% 20%, rgba(var(--hi5-accent-2), var(--hi5-glow-2)), transparent 62%),
@@ -83,57 +114,37 @@
     linear-gradient(180deg, rgba(6,7,10,1) 0%, rgba(10,10,18,1) 55%, rgba(8,9,14,1) 100%);
 }
 
-/* System dark fallback (when theme_mode = system and no .dark class) */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --hi5-bg-gradient:
-      radial-gradient(980px 640px at 22% 6%, rgba(var(--hi5-accent), var(--hi5-glow-1, 0.22)), transparent 60%),
-      radial-gradient(900px 620px at 82% 20%, rgba(var(--hi5-accent-2), var(--hi5-glow-2, 0.18)), transparent 62%),
-      radial-gradient(860px 620px at 55% 95%, rgba(var(--hi5-accent-3), var(--hi5-glow-3, 0.14)), transparent 62%),
-      linear-gradient(180deg, rgba(6,7,10,1) 0%, rgba(10,10,18,1) 55%, rgba(8,9,14,1) 100%);
-  }
-}
-
 /* ----------------------------------------------------------
    Base
 ---------------------------------------------------------- */
 html, body {
   margin: 0;
-  height: 100%;
   min-height: 100%;
-}
-
-/* ✅ THE FIX: paint the gradient directly on HTML (no ::before) */
-html {
-  background: var(--hi5-bg-gradient);
-  background-attachment: fixed;
 }
 
 body {
-  margin: 0;
-  min-height: 100%;
   color: rgb(var(--hi5-fg));
   background: transparent !important;
+  position: relative;
 }
 
-/* Optional wrapper helper (kept for compatibility) */
-.hi5-bg {
-  min-height: 100dvh;
-  width: 100%;
+/* ✅ GLOBAL BACKDROP (reliable on iOS): paint behind everything */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
   background: var(--hi5-bg-gradient);
-  background-attachment: fixed;
+  pointer-events: none;
+  z-index: -1;
+  /* Helps some iOS/WebKit cases with fixed rendering */
+  transform: translateZ(0);
 }
 
 /* ----------------------------------------------------------
    Utility classes used across the app
 ---------------------------------------------------------- */
-.hi5-border {
-  border-color: rgba(var(--hi5-border), var(--hi5-border-alpha));
-}
-
-.hi5-divider {
-  border-color: rgba(var(--hi5-border), calc(var(--hi5-border-alpha) * 0.90));
-}
+.hi5-border { border-color: rgba(var(--hi5-border), var(--hi5-border-alpha)); }
+.hi5-divider { border-color: rgba(var(--hi5-border), calc(var(--hi5-border-alpha) * 0.90)); }
 
 .hi5-card {
   background: rgba(var(--hi5-card), var(--hi5-card-alpha));
@@ -154,16 +165,13 @@ body {
     0 12px 34px rgba(0,0,0,0.07),
     0 1px 0 rgba(255,255,255,0.35) inset;
 }
-
 .dark .hi5-panel {
   box-shadow:
     0 18px 50px rgba(0,0,0,0.42),
     0 1px 0 rgba(255,255,255,0.06) inset;
 }
 
-.hi5-accent {
-  color: rgb(var(--hi5-accent));
-}
+.hi5-accent { color: rgb(var(--hi5-accent)); }
 
 .hi5-accent-btn {
   color: #071019;
@@ -177,16 +185,8 @@ body {
     0 12px 26px rgba(var(--hi5-accent), 0.22),
     0 8px 18px rgba(var(--hi5-accent-2), 0.16);
 }
-
 .hi5-accent-btn:hover { filter: brightness(1.03) saturate(1.05); }
 .hi5-accent-btn:active { transform: translateY(1px); }
-
-.hi5-glass-bar {
-  background: rgba(var(--hi5-card), 0.42);
-  border-bottom: 1px solid rgba(var(--hi5-border), var(--hi5-border-alpha));
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-}
 
 .hi5-topbar {
   background: rgba(var(--hi5-topbar), var(--hi5-topbar-alpha));
@@ -204,12 +204,10 @@ body {
   outline: none;
   transition: box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
 }
-
 .dark .hi5-input {
   background: rgba(var(--hi5-card), 0.22);
   border: 1px solid rgba(var(--hi5-border), 0.22) !important;
 }
-
 .hi5-input:focus {
   border-color: rgba(var(--hi5-accent), 0.75) !important;
   box-shadow:
@@ -217,7 +215,6 @@ body {
     0 8px 22px rgba(var(--hi5-accent), 0.14);
 }
 
-/* Sidebar / overlay */
 .hi5-overlay {
   position: fixed;
   inset: 0;
@@ -226,17 +223,12 @@ body {
   -webkit-backdrop-filter: blur(6px);
 }
 
-/* Selection */
-::selection {
-  background: rgba(var(--hi5-accent), 0.25);
-}
+::selection { background: rgba(var(--hi5-accent), 0.25); }
 
-/* Reduce motion */
 @media (prefers-reduced-motion: reduce) {
   .hi5-accent-btn:active { transform: none; }
 }
 
-/* Layout helpers */
 .hi5-container {
   max-width: 1400px;
   margin-inline: auto;
@@ -246,6 +238,5 @@ body {
   .hi5-container { padding-inline: 24px; }
 }
 
-/* Scrollbar utilities */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
