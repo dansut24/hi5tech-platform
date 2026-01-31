@@ -35,11 +35,16 @@ export async function POST(req: Request) {
     const trialEnds = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
 
     // Insert tenant (adjust column names to match YOUR schema)
+
+    const PLATFORM_DOMAIN =
+    process.env.PLATFORM_DOMAIN?.trim() || "hi5tech.co.uk"; // change default if needed
+    
     const { data: tenant, error: tenantErr } = await supabase
       .from("tenants")
       .insert({
         name: companyName,
         subdomain,
+        domain: PLATFORM_DOMAIN,
         trial_ends_at: trialEnds.toISOString(),
         status: "trial",
       })
