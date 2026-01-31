@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { cookies } from "next/headers";
-import { createSupabaseServerClient } from "@hi5tech/auth";
 import IncidentDetailFrame from "./incident-detail-frame";
+import { createSupabaseServerClient } from "@hi5tech/auth";
 
 type Incident = {
   id: string;
@@ -22,43 +22,22 @@ type Incident = {
   resolution_due_at?: string | null;
 };
 
-async function supabaseServer() {
-  const cookieStore = await cookies();
-
-  return createSupabaseServerClient({
-    get(name: string) {
-      return cookieStore.get(name)?.value;
-    },
-    set(name: string, value: string, options: any) {
-      cookieStore.set({ name, value, ...(options ?? {}) });
-    },
-    remove(name: string, options: any) {
-      const anyStore = cookieStore as any;
-      if (typeof anyStore.delete === "function") {
-        anyStore.delete(name);
-        return;
-      }
-      cookieStore.set({ name, value: "", ...(options ?? {}), maxAge: 0 });
-    },
-  });
-}
-
 export default async function Layout({
   children,
   params,
 }: {
   children: ReactNode;
-  params: any;
+  params: any; // Next 16: params can be Promise in some runtimes
 }) {
   const p = await params;
-  const number = p?.id as string; // URL param is incident number in this module
+  const id = p?.id as string;
 
   let incident: Incident | null = null;
 
   try {
-    const supabase = await supabaseServer();
+    // ✅ Fix: createSupabaseServerClient requires cookies()
+    const supabase = await createSupabaseServerClient(cookies());
 
-    // Query by incident number to match page.tsx behavior
     const { data } = await supabase
       .from("incidents")
       .select(
@@ -78,7 +57,7 @@ export default async function Layout({
         resolution_due_at
       `
       )
-      .eq("number", number)
+      .eq("id", id)
       .maybeSingle();
 
     incident = (data as any) ?? null;
@@ -86,10 +65,8 @@ export default async function Layout({
     incident = null;
   }
 
-  const frameId = incident?.id ?? number;
-
   return (
-    <IncidentDetailFrame id={frameId} incident={incident}>
+    <IncidentDetailFrame id={id} incident={incident}>
       {children}
     </IncidentDetailFrame>
   );
