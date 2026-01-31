@@ -236,3 +236,54 @@ body {
 /* Scrollbar utilities */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* =========================================================
+   GLOBAL BACKDROP (applies everywhere, not just wrappers)
+   - uses variables and supports dark/system automatically
+========================================================= */
+
+:root {
+  --hi5-bg-gradient:
+    radial-gradient(900px 550px at 75% 15%, rgba(var(--hi5-accent), var(--hi5-glow-1, 0.18)), transparent 62%),
+    radial-gradient(760px 520px at 25% 30%, rgba(var(--hi5-accent-2), var(--hi5-glow-2, 0.14)), transparent 60%),
+    radial-gradient(820px 560px at 60% 95%, rgba(var(--hi5-accent-3), var(--hi5-glow-3, 0.10)), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255,1) 0%, rgba(248,250,252,1) 60%, rgba(246,247,255,1) 100%);
+}
+
+/* System dark fallback (when theme_mode = system and no .dark class) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --hi5-bg-gradient:
+      radial-gradient(980px 640px at 70% 10%, rgba(var(--hi5-accent), var(--hi5-glow-1, 0.22)), transparent 60%),
+      radial-gradient(820px 600px at 30% 35%, rgba(var(--hi5-accent-2), var(--hi5-glow-2, 0.18)), transparent 62%),
+      radial-gradient(860px 620px at 55% 95%, rgba(var(--hi5-accent-3), var(--hi5-glow-3, 0.14)), transparent 62%),
+      linear-gradient(180deg, rgba(6,7,10,1) 0%, rgba(10,10,18,1) 55%, rgba(8,9,14,1) 100%);
+  }
+}
+
+/* Forced dark always wins */
+.dark {
+  --hi5-bg-gradient:
+    radial-gradient(980px 640px at 70% 10%, rgba(var(--hi5-accent), var(--hi5-glow-1, 0.22)), transparent 60%),
+    radial-gradient(820px 600px at 30% 35%, rgba(var(--hi5-accent-2), var(--hi5-glow-2, 0.18)), transparent 62%),
+    radial-gradient(860px 620px at 55% 95%, rgba(var(--hi5-accent-3), var(--hi5-glow-3, 0.14)), transparent 62%),
+    linear-gradient(180deg, rgba(6,7,10,1) 0%, rgba(10,10,18,1) 55%, rgba(8,9,14,1) 100%);
+}
+
+/* Paint the gradient behind everything */
+html::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: var(--hi5-bg-gradient);
+  z-index: -1;
+  pointer-events: none;
+}
+
+html, body {
+  min-height: 100%;
+}
+
+body {
+  background: transparent !important;
+}
