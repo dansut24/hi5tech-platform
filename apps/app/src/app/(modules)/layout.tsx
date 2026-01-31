@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import TopBar from "./_components/topbar";
 import { supabaseServer } from "@/lib/supabase/server";
 
 type ModuleKey = "itsm" | "control" | "selfservice" | "admin";
