@@ -1,32 +1,10 @@
 "use server";
 
-import { cookies } from "next/headers";
-import { createSupabaseServerClient } from "@hi5tech/auth";
+import { supabaseServer } from "@/lib/supabase/server";
 import { getActiveTenantId } from "@/lib/tenant";
 
 function s(formData: FormData, key: string): string {
   return String(formData.get(key) ?? "").trim();
-}
-
-async function supabaseServer() {
-  const cookieStore = await cookies();
-
-  return createSupabaseServerClient({
-    get(name: string) {
-      return cookieStore.get(name)?.value;
-    },
-    set(name: string, value: string, options: any) {
-      cookieStore.set({ name, value, ...(options ?? {}) });
-    },
-    remove(name: string, options: any) {
-      const anyStore = cookieStore as any;
-      if (typeof anyStore.delete === "function") {
-        anyStore.delete(name);
-        return;
-      }
-      cookieStore.set({ name, value: "", ...(options ?? {}), maxAge: 0 });
-    },
-  });
 }
 
 /**
@@ -46,11 +24,9 @@ export async function createIncident(formData: FormData) {
 
   const { data: userRes } = await supabase.auth.getUser();
   const user = userRes.user;
-  if (!user) return;
-  if (!tenant_id) return;
+  if (!user || !tenant_id) return;
 
-  // Minimal insert (adjust columns to your schema)
-  const insert = await supabase
+  const { data, error } = await supabase
     .from("incidents")
     .insert({
       tenant_id,
@@ -63,11 +39,7 @@ export async function createIncident(formData: FormData) {
     .select("id, number")
     .maybeSingle();
 
-  if (insert.error) {
-    // If you want UI to show the error, throw:
-    // throw new Error(insert.error.message);
-    return;
-  }
+  if (error) return;
 
-  return insert.data ?? null;
+  return data ?? null;
 }
