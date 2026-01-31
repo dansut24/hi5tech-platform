@@ -1,91 +1,85 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-import { MODULE_PATH, type ModuleKey } from "@hi5tech/rbac";
 
-const PUBLIC_PREFIXES = [
-  "/login",
-  "/auth/callback",
-  "/_next",
-  "/favicon.ico"
-];
+const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "hi5tech.co.uk";
 
-function isPublic(pathname: string) {
-  return PUBLIC_PREFIXES.some((p) => pathname === p || pathname.startsWith(p));
+// Paths we should never block/rewrite
+function isBypassPath(pathname: string) {
+  if (pathname.startsWith("/_next")) return true;
+  if (pathname.startsWith("/favicon")) return true;
+  if (pathname.startsWith("/robots.txt")) return true;
+  if (pathname.startsWith("/sitemap")) return true;
+  if (pathname.startsWith("/api")) return true;
+  if (pathname.startsWith("/tenant-available")) return true;
+  return false;
 }
 
-export async function middleware(request: NextRequest) {
-  const pathname = request.nextUrl.pathname;
+function getSubdomain(hostname: string) {
+  // strip port if any
+  const host = hostname.split(":")[0].toLowerCase();
 
-  // Debug: mark every response so we can see middleware ran
-  const res = NextResponse.next();
-  res.headers.set("x-hi5-mw", "1");
+  // localhost / preview domains — don’t gate
+  if (host === "localhost" || host.endsWith(".vercel.app")) return null;
 
-  if (isPublic(pathname)) return res;
+  // Only gate things under root domain
+  if (!host.endsWith(ROOT_DOMAIN)) return null;
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return request.cookies.get(name)?.value;
-        },
-        set(name: string, value: string, options: any) {
-          res.cookies.set({ name, value, ...options });
-        },
-        remove(name: string, options: any) {
-          res.cookies.set({ name, value: "", ...options });
-        }
-      }
-    }
-  );
+  // root domain (hi5tech.co.uk) => no subdomain
+  if (host === ROOT_DOMAIN) return null;
 
-  const { data: { user } } = await supabase.auth.getUser();
+  // www / app etc can be treated as “non-tenant”
+  const sub = host.slice(0, -ROOT_DOMAIN.length - 1); // remove ".hi5tech.co.uk"
+  if (!sub) return null;
 
-  if (!user) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.searchParams.set("next", pathname + request.nextUrl.search);
-    const redirect = NextResponse.redirect(url);
-    redirect.headers.set("x-hi5-mw", "1");
-    return redirect;
+  // ignore common non-tenant subdomains
+  if (sub === "www" || sub === "app") return null;
+
+  return sub;
+}
+
+export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+
+  if (isBypassPath(pathname)) return NextResponse.next();
+
+  const host = req.headers.get("host") || "";
+  const subdomain = getSubdomain(host);
+
+  // No tenant subdomain → allow (root domain / app subdomain / localhost)
+  if (!subdomain) return NextResponse.next();
+
+  // Ask our own API if tenant exists
+  const url = new URL(req.nextUrl.origin);
+  url.pathname = "/api/tenant-exists";
+  url.searchParams.set("subdomain", subdomain);
+
+  const res = await fetch(url.toString(), {
+    // Edge fetch; keep it simple
+    headers: { "x-forwarded-host": host },
+    cache: "no-store",
+  });
+
+  if (!res.ok) {
+    // If the check fails, fail open (don’t lock users out)
+    return NextResponse.next();
   }
 
-  if (pathname === "/") {
-    const { data } = await supabase
-      .from("user_modules")
-      .select("modules")
-      .eq("user_id", user.id)
-      .limit(1)
-      .maybeSingle();
+  const data = (await res.json()) as { exists?: boolean };
+  const exists = Boolean(data?.exists);
 
-    const modules = (data?.modules ?? []) as ModuleKey[];
+  if (exists) return NextResponse.next();
 
-    const url = request.nextUrl.clone();
+  // Tenant does NOT exist → rewrite to tenant-available page
+  const rewriteUrl = req.nextUrl.clone();
+  rewriteUrl.pathname = "/tenant-available";
+  rewriteUrl.searchParams.set("requested", subdomain);
+  rewriteUrl.searchParams.set("path", pathname);
 
-    if (!modules.length) {
-      url.pathname = "/no-access";
-      const redirect = NextResponse.redirect(url);
-      redirect.headers.set("x-hi5-mw", "1");
-      return redirect;
-    }
-
-    if (modules.length === 1) {
-      url.pathname = MODULE_PATH[modules[0]];
-      const redirect = NextResponse.redirect(url);
-      redirect.headers.set("x-hi5-mw", "1");
-      return redirect;
-    }
-
-    url.pathname = "/apps";
-    const redirect = NextResponse.redirect(url);
-    redirect.headers.set("x-hi5-mw", "1");
-    return redirect;
-  }
-
-  return res;
+  return NextResponse.rewrite(rewriteUrl);
 }
 
 export const config = {
-  matcher: ["/:path*"]
+  matcher: [
+    // Run on all routes except static assets handled above
+    "/((?!_next/static|_next/image).*)",
+  ],
 };
