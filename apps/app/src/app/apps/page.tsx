@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@hi5tech/auth";
+import { supabaseServer } from "@/lib/supabase/server";
 import { MODULE_PATH, pickDefaultModule, type ModuleKey } from "@hi5tech/rbac";
 
 const ALL: ModuleKey[] = ["itsm", "control", "selfservice", "admin"];
 
 export default async function AppsPage() {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await supabaseServer();
 
   const { data: userRes } = await supabase.auth.getUser();
   const user = userRes.user;
