@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { createSupabaseServerClient } from "@hi5tech/auth";
-import { getMemberTenantIds } from "@hi5tech/rbac";
+import { getMemberTenantIds } from "@hi5tech/rbac/server";
 
 function s(formData: FormData, key: string): string {
   return String(formData.get(key) ?? "").trim();
