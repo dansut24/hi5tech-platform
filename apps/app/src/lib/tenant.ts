@@ -1,7 +1,9 @@
-import { createSupabaseServerClient } from "@hi5tech/auth";
+// src/lib/tenant.ts (or wherever this file lives)
+
+import { supabaseServer } from "@/lib/supabase/server";
 
 export async function getActiveTenantId(): Promise<string> {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await supabaseServer();
 
   const { data: userRes } = await supabase.auth.getUser();
   const user = userRes.user;
@@ -23,7 +25,7 @@ export async function getActiveTenantId(): Promise<string> {
 }
 
 export async function getMemberTenantIds(): Promise<string[]> {
-  const supabase = await createSupabaseServerClient();
+  const supabase = await supabaseServer();
 
   const { data: userRes } = await supabase.auth.getUser();
   const user = userRes.user;
@@ -36,6 +38,9 @@ export async function getMemberTenantIds(): Promise<string[]> {
 
   if (error) throw new Error(error.message);
 
-  const ids = (memberships ?? []).map((m: any) => m.tenant_id).filter(Boolean);
+  const ids = (memberships ?? [])
+    .map((m: any) => m.tenant_id)
+    .filter(Boolean);
+
   return Array.from(new Set(ids));
 }
