@@ -20,9 +20,10 @@ export default async function ItsmLayout({ children }: { children: ReactNode }) 
     .order("created_at", { ascending: false })
     .limit(1);
 
-  let tenantLabel: string | null = null;
-  const tenantId = memberships?.[0]?.tenant_id;
+  const tenantId = memberships?.[0]?.tenant_id ?? null;
 
+  // Optional: tenant label (kept for later use in ItsmShell if you want)
+  let tenantLabel: string | null = null;
   if (tenantId) {
     const { data: t } = await supabase
       .from("tenants")
@@ -47,11 +48,6 @@ export default async function ItsmLayout({ children }: { children: ReactNode }) 
     new Set((mods ?? []).map((m) => m.module))
   ) as ModuleKey[];
 
-  return (
-    <div className="min-h-dvh">
-      {/* Theme is global now (RootLayout + globals.css).
-          This layout should only provide ITSM chrome. */}
-      <ItsmShell>{children}</ItsmShell>
-    </div>
-  );
+  // Theme comes from RootLayout globally now
+  return <ItsmShell>{children}</ItsmShell>;
 }
