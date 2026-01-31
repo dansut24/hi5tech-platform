@@ -43,7 +43,7 @@
   --hi5-glow-2: 0.14;
   --hi5-glow-3: 0.10;
 
-  /* Default global background (LIGHT) */
+  /* Global backdrop token (LIGHT default) */
   --hi5-bg-gradient:
     radial-gradient(1100px 600px at 18% 8%, rgba(var(--hi5-accent), var(--hi5-glow-1)), transparent 62%),
     radial-gradient(980px 560px at 88% 18%, rgba(var(--hi5-accent-3), var(--hi5-glow-2)), transparent 62%),
@@ -75,7 +75,7 @@
   --hi5-glow-2: 0.18;
   --hi5-glow-3: 0.14;
 
-  /* Forced dark background */
+  /* Global backdrop token (FORCED DARK) */
   --hi5-bg-gradient:
     radial-gradient(980px 640px at 22% 6%, rgba(var(--hi5-accent), var(--hi5-glow-1)), transparent 60%),
     radial-gradient(900px 620px at 82% 20%, rgba(var(--hi5-accent-2), var(--hi5-glow-2)), transparent 62%),
@@ -100,10 +100,11 @@
 html, body {
   margin: 0;
   height: 100%;
+  min-height: 100%;
 }
 
+/* ✅ THE FIX: paint the gradient directly on HTML (no ::before) */
 html {
-  min-height: 100%;
   background: var(--hi5-bg-gradient);
   background-attachment: fixed;
 }
@@ -112,13 +113,15 @@ body {
   margin: 0;
   min-height: 100%;
   color: rgb(var(--hi5-fg));
-  background: transparent !important; /* IMPORTANT: keep transparent so html gradient shows */
+  background: transparent !important;
 }
 
-/* Optional wrapper helper (no background here, just sizing) */
+/* Optional wrapper helper (kept for compatibility) */
 .hi5-bg {
   min-height: 100dvh;
   width: 100%;
+  background: var(--hi5-bg-gradient);
+  background-attachment: fixed;
 }
 
 /* ----------------------------------------------------------
