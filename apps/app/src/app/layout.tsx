@@ -1,3 +1,4 @@
+// apps/app/src/app/layout.tsx
 import "./globals.css";
 import type { Metadata } from "next";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -129,9 +130,6 @@ export default async function RootLayout({
   // Force class-based dark only when user explicitly picks dark
   const htmlClass = theme_mode === "dark" ? "dark" : "";
 
-  // IMPORTANT:
-  // - We only set RGB triplets here (globals.css expects rgb(var(--token)) style)
-  // - Background gradient is painted globally via html::before in globals.css
   const cssVars = `
 :root{
   --hi5-accent: ${hexToRgbTriplet(accent_hex, "0 193 255")};
@@ -140,7 +138,10 @@ export default async function RootLayout({
 
   --hi5-bg: ${hexToRgbTriplet(bg_hex, "248 250 252")};
   --hi5-card: ${hexToRgbTriplet(card_hex, "255 255 255")};
-  --hi5-topbar: ${hexToRgbTriplet(topbar_hex, hexToRgbTriplet(card_hex, "255 255 255"))};
+  --hi5-topbar: ${hexToRgbTriplet(
+    topbar_hex,
+    hexToRgbTriplet(card_hex, "255 255 255")
+  )};
 
   --hi5-glow-1: ${glow_1};
   --hi5-glow-2: ${glow_2};
@@ -150,7 +151,8 @@ export default async function RootLayout({
 
   return (
     <html lang="en" suppressHydrationWarning className={htmlClass}>
-      <body>
+      {/* IMPORTANT: put the background class on BODY so it cannot be hidden */}
+      <body className="hi5-bg">
         <style dangerouslySetInnerHTML={{ __html: cssVars }} />
         {children}
       </body>
