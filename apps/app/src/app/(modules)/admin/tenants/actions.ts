@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createSupabaseServerClient } from "@hi5tech/auth";
+import { supabaseServer } from "@/lib/supabase/server";
 
 function s(formData: FormData, key: string): string {
   return String(formData.get(key) ?? "").trim();
@@ -22,12 +22,9 @@ export async function upsertTenant(formData: FormData): Promise<void> {
   const company_name = s(formData, "company_name");
   const domain = s(formData, "domain");
 
-  if (!name || !subdomain) {
-    // Keep it simple for now; UI can improve later
-    return;
-  }
+  if (!name || !subdomain) return;
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = supabaseServer();
 
   await supabase.from("tenants").upsert(
     {
@@ -53,7 +50,7 @@ export async function setTenantActive(formData: FormData): Promise<void> {
 
   if (!subdomain) return;
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = supabaseServer();
 
   await supabase.from("tenants").update({ is_active }).eq("subdomain", subdomain);
 
@@ -68,7 +65,7 @@ export async function deleteTenant(formData: FormData): Promise<void> {
   const subdomain = s(formData, "subdomain").toLowerCase();
   if (!subdomain) return;
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = supabaseServer();
 
   await supabase.from("tenants").delete().eq("subdomain", subdomain);
 
