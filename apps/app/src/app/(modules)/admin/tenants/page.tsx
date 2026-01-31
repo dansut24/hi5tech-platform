@@ -1,8 +1,7 @@
-import { cookies } from "next/headers";
-import { createSupabaseServerClient } from "@hi5tech/auth";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { supabaseServer } from "@/lib/supabase/server";
 import { requireSuperAdmin } from "../_admin";
 import { upsertTenant, setTenantActive, deleteTenant } from "./actions";
 
@@ -14,16 +13,8 @@ export default async function TenantsPage() {
     redirect("/no-access");
   }
 
-  // Next 16+: cookies() is async and @hi5tech/auth expects a CookieAdapter (get/set/remove)
-  const cookieStore = await cookies();
-  const supabase = await createSupabaseServerClient({
-    get(name: string) {
-      return cookieStore.get(name)?.value;
-    },
-    // Server Components: keep as no-ops (read-only)
-    set() {},
-    remove() {},
-  });
+  // ✅ canonical server client
+  const supabase = await supabaseServer();
 
   const { data: tenants, error } = await supabase
     .from("tenants")
