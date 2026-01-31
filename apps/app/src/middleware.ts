@@ -10,11 +10,16 @@ function isBypassPath(pathname: string) {
   if (pathname.startsWith("/sitemap")) return true;
   if (pathname.startsWith("/api")) return true;
   if (pathname.startsWith("/tenant-available")) return true;
+
+  // Optional common static paths
+  if (pathname.startsWith("/assets")) return true;
+  if (pathname.startsWith("/images")) return true;
+  if (pathname.startsWith("/fonts")) return true;
+
   return false;
 }
 
 function getSubdomain(hostname: string) {
-  // strip port if any
   const host = hostname.split(":")[0].toLowerCase();
 
   // localhost / preview domains — don’t gate
@@ -23,15 +28,17 @@ function getSubdomain(hostname: string) {
   // Only gate things under root domain
   if (!host.endsWith(ROOT_DOMAIN)) return null;
 
-  // root domain (hi5tech.co.uk) => no subdomain
+  // root domain => no subdomain
   if (host === ROOT_DOMAIN) return null;
 
-  // www / app etc can be treated as “non-tenant”
-  const sub = host.slice(0, -ROOT_DOMAIN.length - 1); // remove ".hi5tech.co.uk"
+  const sub = host.slice(0, -ROOT_DOMAIN.length - 1);
   if (!sub) return null;
 
+  // Avoid multi-level (a.b.hi5tech.co.uk)
+  if (sub.includes(".")) return null;
+
   // ignore common non-tenant subdomains
-  if (sub === "www" || sub === "app") return null;
+  if (["www", "app"].includes(sub)) return null;
 
   return sub;
 }
@@ -44,7 +51,7 @@ export async function middleware(req: NextRequest) {
   const host = req.headers.get("host") || "";
   const subdomain = getSubdomain(host);
 
-  // No tenant subdomain → allow (root domain / app subdomain / localhost)
+  // No tenant subdomain → allow
   if (!subdomain) return NextResponse.next();
 
   // Ask our own API if tenant exists
@@ -53,20 +60,14 @@ export async function middleware(req: NextRequest) {
   url.searchParams.set("subdomain", subdomain);
 
   const res = await fetch(url.toString(), {
-    // Edge fetch; keep it simple
     headers: { "x-forwarded-host": host },
     cache: "no-store",
   });
 
-  if (!res.ok) {
-    // If the check fails, fail open (don’t lock users out)
-    return NextResponse.next();
-  }
+  if (!res.ok) return NextResponse.next(); // fail open
 
   const data = (await res.json()) as { exists?: boolean };
-  const exists = Boolean(data?.exists);
-
-  if (exists) return NextResponse.next();
+  if (data?.exists) return NextResponse.next();
 
   // Tenant does NOT exist → rewrite to tenant-available page
   const rewriteUrl = req.nextUrl.clone();
@@ -78,8 +79,5 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    // Run on all routes except static assets handled above
-    "/((?!_next/static|_next/image).*)",
-  ],
+  matcher: ["/((?!_next/static|_next/image).*)"],
 };
