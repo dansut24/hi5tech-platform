@@ -9,10 +9,10 @@ function s(formData: FormData, key: string): string {
 
 /**
  * Create a new incident.
- * Expects: title, description, priority (optional), etc.
+ * Expects: title, description, priority (optional).
  * Uses active tenant from session/tenant helper.
  */
-export async function createIncident(formData: FormData) {
+export async function createIncident(formData: FormData): Promise<void> {
   const title = s(formData, "title");
   const description = s(formData, "description");
   const priority = s(formData, "priority") || null;
@@ -24,22 +24,21 @@ export async function createIncident(formData: FormData) {
 
   const { data: userRes } = await supabase.auth.getUser();
   const user = userRes.user;
+
   if (!user || !tenant_id) return;
 
-  const { data, error } = await supabase
-    .from("incidents")
-    .insert({
-      tenant_id,
-      title,
-      description: description || null,
-      priority,
-      requester_id: user.id,
-      status: "open",
-    })
-    .select("id, number")
-    .maybeSingle();
+  const { error } = await supabase.from("incidents").insert({
+    tenant_id,
+    title,
+    description: description || null,
+    priority,
+    requester_id: user.id,
+    status: "open",
+  });
 
-  if (error) return;
+  if (error) {
+    throw new Error(error.message);
+  }
 
-  return data ?? null;
+  // ✅ IMPORTANT: do not return anything from server actions used by <form>
 }
