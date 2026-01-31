@@ -1,47 +1,34 @@
-﻿import { cookies } from "next/headers";
+import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import type { CookieOptions } from "@supabase/ssr";
 
-type CookieOptions = {
-  path?: string;
-  domain?: string;
-  maxAge?: number;
-  expires?: Date;
-  httpOnly?: boolean;
-  secure?: boolean;
-  sameSite?: "lax" | "strict" | "none";
+type CookieToSet = {
+  name: string;
+  value: string;
+  options: CookieOptions;
 };
 
-function getCookieValue(cookieStore: any, name: string): string | undefined {
-  if (cookieStore && typeof cookieStore.getAll === "function") {
-    const all = cookieStore.getAll();
-    const found = all?.find((c: any) => c?.name === name);
-    return found?.value;
-  }
-  if (cookieStore && typeof cookieStore.get === "function") {
-    return cookieStore.get(name)?.value;
-  }
-  return undefined;
-}
-
-// IMPORTANT: async because Next 16 cookies() can be a Promise (sync dynamic API)
 export async function createSupabaseServerClient() {
+  // Next 16: cookies() is async
   const cookieStore = await cookies();
 
-  return createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return getCookieValue(cookieStore as any, name);
-        },
-        set(name: string, value: string, options: CookieOptions) {
-          (cookieStore as any).set({ name, value, ...options });
-        },
-        remove(name: string, options: CookieOptions) {
-          (cookieStore as any).set({ name, value: "", ...options });
-        }
-      }
-    }
-  );
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url || !anon) {
+    throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  }
+
+  return createServerClient(url, anon, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
+      },
+      setAll(cookiesToSet: CookieToSet[]) {
+        cookiesToSet.forEach(({ name, value, options }) => {
+          cookieStore.set({ name, value, ...options });
+        });
+      },
+    },
+  });
 }
