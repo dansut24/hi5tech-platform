@@ -9,13 +9,21 @@ import { upsertTenant, setTenantActive, deleteTenant } from "./actions";
 export default async function TenantsPage() {
   const gate = await requireSuperAdmin();
 
-  // ✅ Fix: gate no longer returns gate.response
   if (!gate.ok) {
     if (gate.reason === "not_logged_in") redirect("/login");
     redirect("/no-access");
   }
 
-  const supabase = await createSupabaseServerClient(cookies());
+  // Next 16+: cookies() is async and @hi5tech/auth expects a CookieAdapter (get/set/remove)
+  const cookieStore = await cookies();
+  const supabase = await createSupabaseServerClient({
+    get(name: string) {
+      return cookieStore.get(name)?.value;
+    },
+    // Server Components: keep as no-ops (read-only)
+    set() {},
+    remove() {},
+  });
 
   const { data: tenants, error } = await supabase
     .from("tenants")
@@ -103,7 +111,10 @@ export default async function TenantsPage() {
 
         <div className="divide-y hi5-border">
           {(tenants ?? []).map((t) => (
-            <div key={t.id} className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div
+              key={t.id}
+              className="p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+            >
               <div className="min-w-0">
                 <div className="font-semibold truncate">{t.name}</div>
                 <div className="text-sm opacity-70 truncate">
@@ -115,7 +126,11 @@ export default async function TenantsPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <form action={setTenantActive} className="inline-flex">
                   <input type="hidden" name="subdomain" value={t.subdomain} />
-                  <input type="hidden" name="is_active" value={(!t.is_active).toString()} />
+                  <input
+                    type="hidden"
+                    name="is_active"
+                    value={(!t.is_active).toString()}
+                  />
                   <button
                     type="submit"
                     className="rounded-xl border hi5-border px-3 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/5 transition"
