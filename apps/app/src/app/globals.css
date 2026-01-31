@@ -43,11 +43,11 @@
   --hi5-glow-2: 0.14;
   --hi5-glow-3: 0.10;
 
-  /* The actual global background paint (light default) */
+  /* Default global background (LIGHT) */
   --hi5-bg-gradient:
-    radial-gradient(1100px 620px at 18% 8%, rgba(var(--hi5-accent), var(--hi5-glow-1)), transparent 62%),
-    radial-gradient(980px 580px at 88% 18%, rgba(var(--hi5-accent-3), var(--hi5-glow-2)), transparent 62%),
-    radial-gradient(900px 540px at 55% 105%, rgba(var(--hi5-accent-2), var(--hi5-glow-3)), transparent 60%),
+    radial-gradient(1100px 600px at 18% 8%, rgba(var(--hi5-accent), var(--hi5-glow-1)), transparent 62%),
+    radial-gradient(980px 560px at 88% 18%, rgba(var(--hi5-accent-3), var(--hi5-glow-2)), transparent 62%),
+    radial-gradient(900px 520px at 55% 105%, rgba(var(--hi5-accent-2), var(--hi5-glow-3)), transparent 60%),
     linear-gradient(180deg, rgba(var(--hi5-bg), 1), rgba(var(--hi5-bg), 1));
 }
 
@@ -75,6 +75,7 @@
   --hi5-glow-2: 0.18;
   --hi5-glow-3: 0.14;
 
+  /* Forced dark background */
   --hi5-bg-gradient:
     radial-gradient(980px 640px at 22% 6%, rgba(var(--hi5-accent), var(--hi5-glow-1)), transparent 60%),
     radial-gradient(900px 620px at 82% 20%, rgba(var(--hi5-accent-2), var(--hi5-glow-2)), transparent 62%),
@@ -82,17 +83,13 @@
     linear-gradient(180deg, rgba(6,7,10,1) 0%, rgba(10,10,18,1) 55%, rgba(8,9,14,1) 100%);
 }
 
-/* System dark fallback when theme_mode = system and no .dark class */
+/* System dark fallback (when theme_mode = system and no .dark class) */
 @media (prefers-color-scheme: dark) {
   :root {
-    --hi5-glow-1: 0.22;
-    --hi5-glow-2: 0.18;
-    --hi5-glow-3: 0.14;
-
     --hi5-bg-gradient:
-      radial-gradient(980px 640px at 22% 6%, rgba(var(--hi5-accent), var(--hi5-glow-1)), transparent 60%),
-      radial-gradient(900px 620px at 82% 20%, rgba(var(--hi5-accent-2), var(--hi5-glow-2)), transparent 62%),
-      radial-gradient(860px 620px at 55% 95%, rgba(var(--hi5-accent-3), var(--hi5-glow-3)), transparent 62%),
+      radial-gradient(980px 640px at 22% 6%, rgba(var(--hi5-accent), var(--hi5-glow-1, 0.22)), transparent 60%),
+      radial-gradient(900px 620px at 82% 20%, rgba(var(--hi5-accent-2), var(--hi5-glow-2, 0.18)), transparent 62%),
+      radial-gradient(860px 620px at 55% 95%, rgba(var(--hi5-accent-3), var(--hi5-glow-3, 0.14)), transparent 62%),
       linear-gradient(180deg, rgba(6,7,10,1) 0%, rgba(10,10,18,1) 55%, rgba(8,9,14,1) 100%);
   }
 }
@@ -102,16 +99,23 @@
 ---------------------------------------------------------- */
 html, body {
   margin: 0;
+  height: 100%;
+}
+
+html {
   min-height: 100%;
+  background: var(--hi5-bg-gradient);
+  background-attachment: fixed;
 }
 
 body {
   margin: 0;
   min-height: 100%;
   color: rgb(var(--hi5-fg));
+  background: transparent !important; /* IMPORTANT: keep transparent so html gradient shows */
 }
 
-/* Optional layout helper (no background here, just sizing) */
+/* Optional wrapper helper (no background here, just sizing) */
 .hi5-bg {
   min-height: 100dvh;
   width: 100%;
@@ -154,7 +158,9 @@ body {
     0 1px 0 rgba(255,255,255,0.06) inset;
 }
 
-.hi5-accent { color: rgb(var(--hi5-accent)); }
+.hi5-accent {
+  color: rgb(var(--hi5-accent));
+}
 
 .hi5-accent-btn {
   color: #071019;
@@ -168,6 +174,7 @@ body {
     0 12px 26px rgba(var(--hi5-accent), 0.22),
     0 8px 18px rgba(var(--hi5-accent-2), 0.16);
 }
+
 .hi5-accent-btn:hover { filter: brightness(1.03) saturate(1.05); }
 .hi5-accent-btn:active { transform: translateY(1px); }
 
@@ -217,7 +224,9 @@ body {
 }
 
 /* Selection */
-::selection { background: rgba(var(--hi5-accent), 0.25); }
+::selection {
+  background: rgba(var(--hi5-accent), 0.25);
+}
 
 /* Reduce motion */
 @media (prefers-reduced-motion: reduce) {
