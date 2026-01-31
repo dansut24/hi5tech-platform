@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { createSupabaseServerClient } from "@hi5tech/auth";
 import { getMemberTenantIds } from "@/lib/tenant";
 import { addIncidentComment } from "./actions";
@@ -13,19 +14,49 @@ function Badge({ children }: { children: React.ReactNode }) {
 }
 
 function fmt(ts: string) {
-  try { return new Date(ts).toLocaleString(); } catch { return ts; }
+  try {
+    return new Date(ts).toLocaleString();
+  } catch {
+    return ts;
+  }
 }
 
-export default async function IncidentDetail(props: { params: Promise<{ id: string }> }) {
+async function supabaseServer() {
+  const cookieStore = await cookies();
+
+  return createSupabaseServerClient({
+    get(name: string) {
+      return cookieStore.get(name)?.value;
+    },
+    set(name: string, value: string, options: any) {
+      cookieStore.set({ name, value, ...(options ?? {}) });
+    },
+    remove(name: string, options: any) {
+      const anyStore = cookieStore as any;
+      if (typeof anyStore.delete === "function") {
+        anyStore.delete(name);
+        return;
+      }
+      cookieStore.set({ name, value: "", ...(options ?? {}), maxAge: 0 });
+    },
+  });
+}
+
+export default async function IncidentDetail(props: {
+  params: Promise<{ id: string }>;
+}) {
   const { id: number } = await props.params;
 
-  const supabase = await createSupabaseServerClient();
+  const supabase = await supabaseServer();
   const tenantIds = await getMemberTenantIds();
 
   const { data: incident, error } = await supabase
     .from("incidents")
     .select("id,tenant_id,number,title,description,status,priority,created_at,updated_at")
-    .in("tenant_id", tenantIds.length ? tenantIds : ["00000000-0000-0000-0000-000000000000"])
+    .in(
+      "tenant_id",
+      tenantIds.length ? tenantIds : ["00000000-0000-0000-0000-000000000000"]
+    )
     .eq("number", number)
     .maybeSingle();
 
@@ -34,7 +65,9 @@ export default async function IncidentDetail(props: { params: Promise<{ id: stri
       <div className="space-y-3">
         <h1 className="text-2xl font-semibold">Incident {number}</h1>
         <div className="hi5-card p-4 text-sm text-red-600">{error.message}</div>
-        <Link className="underline" href="/itsm/incidents">Back</Link>
+        <Link className="underline" href="/itsm/incidents">
+          Back
+        </Link>
       </div>
     );
   }
@@ -46,7 +79,9 @@ export default async function IncidentDetail(props: { params: Promise<{ id: stri
         <div className="hi5-card p-4 text-sm opacity-80">
           Not found in any of your tenant memberships.
         </div>
-        <Link className="underline" href="/itsm/incidents">Back</Link>
+        <Link className="underline" href="/itsm/incidents">
+          Back
+        </Link>
       </div>
     );
   }
@@ -69,13 +104,13 @@ export default async function IncidentDetail(props: { params: Promise<{ id: stri
     .order("created_at", { ascending: false })
     .limit(50);
 
-  // Create signed URLs for attachments (private bucket)
+  // Signed URLs
   const signed: Record<string, string> = {};
   if (attachments && attachments.length) {
     for (const a of attachments) {
       const { data } = await supabase.storage
         .from("itsm-attachments")
-        .createSignedUrl(a.storage_path, 60 * 10); // 10 min
+        .createSignedUrl(a.storage_path, 60 * 10);
       if (data?.signedUrl) signed[a.id] = data.signedUrl;
     }
   }
@@ -87,7 +122,9 @@ export default async function IncidentDetail(props: { params: Promise<{ id: stri
           <h1 className="text-2xl font-semibold truncate">{incident.number}</h1>
           <p className="opacity-80 truncate">{incident.title}</p>
         </div>
-        <Link className="underline" href="/itsm/incidents">Back to list</Link>
+        <Link className="underline" href="/itsm/incidents">
+          Back to list
+        </Link>
       </div>
 
       <div className="grid gap-3 lg:grid-cols-3">
@@ -135,7 +172,7 @@ export default async function IncidentDetail(props: { params: Promise<{ id: stri
                   <div className="text-sm whitespace-pre-wrap mt-2">{c.body}</div>
                 </div>
               ))}
-              {(!comments || comments.length === 0) ? (
+              {!comments || comments.length === 0 ? (
                 <div className="text-sm opacity-70">No comments yet.</div>
               ) : null}
             </div>
@@ -146,7 +183,7 @@ export default async function IncidentDetail(props: { params: Promise<{ id: stri
           <div>
             <div className="font-semibold">Details</div>
             <div className="flex gap-2 flex-wrap mt-2">
-              <Badge>Status: {String(incident.status).replace("_"," ")}</Badge>
+              <Badge>Status: {String(incident.status).replace("_", " ")}</Badge>
               <Badge>Priority: {incident.priority}</Badge>
             </div>
             <div className="text-xs opacity-70 mt-2">Created: {fmt(incident.created_at)}</div>
@@ -179,14 +216,17 @@ export default async function IncidentDetail(props: { params: Promise<{ id: stri
                 >
                   <div className="text-sm font-medium truncate">{a.file_name}</div>
                   <div className="text-xs opacity-70 mt-1">
-                    {a.mime_type || "file"} • {a.byte_size ? `${Math.round(a.byte_size/1024)} KB` : "—"} • {fmt(a.created_at)}
+                    {a.mime_type || "file"} •{" "}
+                    {a.byte_size ? `${Math.round(a.byte_size / 1024)} KB` : "—"} •{" "}
+                    {fmt(a.created_at)}
                   </div>
                 </a>
               ))}
-              {(!attachments || attachments.length === 0) ? (
+              {!attachments || attachments.length === 0 ? (
                 <div className="text-sm opacity-70">No attachments yet.</div>
               ) : null}
             </div>
+
             <div className="text-xs opacity-60 mt-2">
               Links are signed (expire in ~10 minutes).
             </div>
