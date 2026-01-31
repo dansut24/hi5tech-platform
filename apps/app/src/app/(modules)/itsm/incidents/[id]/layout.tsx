@@ -1,7 +1,8 @@
+// apps/app/src/app/(modules)/itsm/incidents/[id]/layout.tsx
+
 import type { ReactNode } from "react";
-import { cookies } from "next/headers";
 import IncidentDetailFrame from "./incident-detail-frame";
-import { createSupabaseServerClient } from "@hi5tech/auth";
+import { supabaseServer } from "@/lib/supabase/server";
 
 type Incident = {
   id: string;
@@ -21,29 +22,6 @@ type Incident = {
   response_due_at?: string | null;
   resolution_due_at?: string | null;
 };
-
-async function supabaseServer() {
-  const cookieStore = await cookies();
-
-  return createSupabaseServerClient({
-    get(name: string) {
-      return cookieStore.get(name)?.value;
-    },
-    set(name: string, value: string, options: any) {
-      // next/headers cookies().set supports object form
-      (cookieStore as any).set({ name, value, ...(options ?? {}) });
-    },
-    remove(name: string, options: any) {
-      const anyStore = cookieStore as any;
-      if (typeof anyStore.delete === "function") {
-        anyStore.delete(name);
-        return;
-      }
-      // Fallback: expire cookie
-      anyStore.set({ name, value: "", ...(options ?? {}), maxAge: 0 });
-    },
-  });
-}
 
 export default async function Layout({
   children,
