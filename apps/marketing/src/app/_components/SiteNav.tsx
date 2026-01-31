@@ -26,7 +26,7 @@ export default function SiteNav({ appUrl }: { appUrl: string }) {
               Sign in
             </a>
             <Link className="hi5-btn hi5-btn-primary" href="/signup">
-              Create tenant
+              Start free trial
             </Link>
           </div>
         </div>
