@@ -52,6 +52,9 @@ function Slider({
   );
 }
 
+// Patch type that preserves the same call sites (update({ mode: ... }), update({ accent: ... }), etc.)
+type ThemePatch = Partial<Hi5Theme>;
+
 export default function ThemeSettingsClient() {
   const [theme, setTheme] = useState<Hi5Theme | null>(null);
 
@@ -79,8 +82,20 @@ export default function ThemeSettingsClient() {
     return <div className="hi5-card p-4 text-sm opacity-80">Loading theme…</div>;
   }
 
-  function update(next: Partial<Hi5Theme>) {
-    const merged: Hi5Theme = { ...theme, ...next };
+  function update(next: ThemePatch) {
+    // Explicitly build the merged object so required fields cannot become undefined.
+    const merged: Hi5Theme = {
+      ...theme,
+      ...next,
+
+      // guarantee required keys stay defined
+      mode: next.mode ?? theme.mode,
+      accent: next.accent ?? theme.accent,
+      accent2: next.accent2 ?? theme.accent2,
+      cardAlpha: typeof next.cardAlpha === "number" ? next.cardAlpha : theme.cardAlpha,
+      borderAlpha: typeof next.borderAlpha === "number" ? next.borderAlpha : theme.borderAlpha,
+    };
+
     setTheme(merged);
     saveTheme(merged);
     applyTheme(merged);
@@ -89,10 +104,7 @@ export default function ThemeSettingsClient() {
   return (
     <div className="grid gap-3 lg:grid-cols-2">
       <div className="space-y-3">
-        <Card
-          title="Mode"
-          desc="System follows your device. Dark mode uses the same colour tokens."
-        >
+        <Card title="Mode" desc="System follows your device. Dark mode uses the same colour tokens.">
           <div className="flex gap-2 flex-wrap">
             {(["system", "light", "dark"] as const).map((m) => {
               const active = theme.mode === m;
@@ -115,10 +127,7 @@ export default function ThemeSettingsClient() {
           </div>
         </Card>
 
-        <Card
-          title="Accent colours"
-          desc="Accent drives buttons, highlights and selection glow."
-        >
+        <Card title="Accent colours" desc="Accent drives buttons, highlights and selection glow.">
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="space-y-2 text-sm">
               <div className="opacity-80">Accent</div>
@@ -156,10 +165,7 @@ export default function ThemeSettingsClient() {
           </div>
         </Card>
 
-        <Card
-          title="Glass intensity"
-          desc="Controls translucency of cards and border visibility."
-        >
+        <Card title="Glass intensity" desc="Controls translucency of cards and border visibility.">
           <div className="space-y-4">
             <Slider
               label="Card opacity"
@@ -206,15 +212,11 @@ export default function ThemeSettingsClient() {
             <div className="mt-3 grid gap-3">
               <div className="hi5-card p-3">
                 <div className="text-sm font-semibold">Card</div>
-                <div className="text-sm opacity-70 mt-1">
-                  Borders + blur + translucency.
-                </div>
+                <div className="text-sm opacity-70 mt-1">Borders + blur + translucency.</div>
               </div>
 
               <div className="flex gap-2 flex-wrap">
-                <button className="rounded-xl px-3 py-2 text-sm font-medium hi5-accent-btn">
-                  Primary action
-                </button>
+                <button className="rounded-xl px-3 py-2 text-sm font-medium hi5-accent-btn">Primary action</button>
                 <button className="rounded-xl border px-3 py-2 text-sm hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition">
                   Secondary
                 </button>
