@@ -22,6 +22,29 @@ type Incident = {
   resolution_due_at?: string | null;
 };
 
+async function supabaseServer() {
+  const cookieStore = await cookies();
+
+  return createSupabaseServerClient({
+    get(name: string) {
+      return cookieStore.get(name)?.value;
+    },
+    set(name: string, value: string, options: any) {
+      // next/headers cookies().set supports object form
+      (cookieStore as any).set({ name, value, ...(options ?? {}) });
+    },
+    remove(name: string, options: any) {
+      const anyStore = cookieStore as any;
+      if (typeof anyStore.delete === "function") {
+        anyStore.delete(name);
+        return;
+      }
+      // Fallback: expire cookie
+      anyStore.set({ name, value: "", ...(options ?? {}), maxAge: 0 });
+    },
+  });
+}
+
 export default async function Layout({
   children,
   params,
@@ -35,27 +58,26 @@ export default async function Layout({
   let incident: Incident | null = null;
 
   try {
-    // ✅ Fix: createSupabaseServerClient requires cookies()
-    const supabase = await createSupabaseServerClient(cookies());
+    const supabase = await supabaseServer();
 
     const { data } = await supabase
       .from("incidents")
       .select(
         `
-        id,
-        number,
-        title,
-        subject,
-        status,
-        priority,
-        created_at,
-        updated_at,
-        requester_name,
-        requester_email,
-        assignee_name,
-        response_due_at,
-        resolution_due_at
-      `
+          id,
+          number,
+          title,
+          subject,
+          status,
+          priority,
+          created_at,
+          updated_at,
+          requester_name,
+          requester_email,
+          assignee_name,
+          response_due_at,
+          resolution_due_at
+        `
       )
       .eq("id", id)
       .maybeSingle();
