@@ -1,7 +1,7 @@
 import { supabaseServer } from "@/lib/supabase/server";
 
 export async function requireSuperAdmin() {
-  const supabase = supabaseServer();
+  const supabase = await supabaseServer();
 
   const { data: u } = await supabase.auth.getUser();
   const user = u.user;
