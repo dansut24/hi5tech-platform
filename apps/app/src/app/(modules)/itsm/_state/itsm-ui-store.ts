@@ -44,9 +44,13 @@ const DASH_TAB: ItsmTab = {
 export const useItsmUiStore = create<State>()(
   persist(
     (set, get) => ({
-      sidebarMode: "resizable",
+      // BEFORE
+      // sidebarMode: "resizable",
+      // sidebarWidth: 280,
+
+      // ✅ AFTER
+      sidebarMode: "fixed",
       sidebarWidth: 280,
-      sidebarDrawerOpen: false,
 
       setSidebarMode: (mode) => set({ sidebarMode: mode }),
       setSidebarWidth: (w) => set({ sidebarWidth: clamp(w, 80, 280) }),
