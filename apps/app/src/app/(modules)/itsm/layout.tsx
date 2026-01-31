@@ -12,5 +12,10 @@ export default async function ItsmLayout({ children }: { children: ReactNode }) 
 
   // Theme is GLOBAL in /app/layout.tsx now.
   // Keep ITSM layout focused on ITSM chrome only.
-  return <ItsmShell>{children}</ItsmShell>;
+  return (
+  <div className={`min-h-dvh ${forceDarkClass}`}>
+    <style dangerouslySetInnerHTML={{ __html: cssVars }} />
+    <ItsmShell>{children}</ItsmShell>
+  </div>
+);
 }
