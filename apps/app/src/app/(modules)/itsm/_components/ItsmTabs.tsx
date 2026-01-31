@@ -12,15 +12,16 @@ export default function ItsmTabs() {
   return (
     <div className="border-t hi5-border">
       <div className="h-12 flex items-center">
-        {/* MOBILE: scrollable tab strip */}
+        {/* MOBILE: horizontal finger-scroll tab strip */}
         <div className="md:hidden relative w-full h-full">
           {/* Scroll area */}
           <div
             className={[
-              "h-full flex items-center gap-1",
+              "h-full flex items-center gap-2",
+              "flex-nowrap", // IMPORTANT: never wrap
               "overflow-x-auto overflow-y-hidden",
-              "whitespace-nowrap",
-              "px-2 pr-14", // leave room for the pinned + button
+              "px-2 pr-14", // room for pinned + button
+              "touch-pan-x", // IMPORTANT: finger scroll
               "[-webkit-overflow-scrolling:touch]",
               "scrollbar-hide",
             ].join(" ")}
@@ -33,16 +34,18 @@ export default function ItsmTabs() {
                 <div
                   key={t.id}
                   className={[
-                    "shrink-0", // critical for horizontal scroll
-                    "flex items-center gap-2 rounded-xl border hi5-border",
-                    "px-3 h-9",
-                    "max-w-[62vw]", // allow bigger tabs on mobile
+                    "flex-none", // IMPORTANT: never shrink
+                    "inline-flex items-center gap-2",
+                    "rounded-xl border hi5-border",
+                    "h-9 px-3",
+                    "min-w-[140px]", // gives tabs a stable readable size
+                    "max-w-[72vw]", // still prevents huge tabs
                     isActive
                       ? "bg-[rgba(var(--hi5-accent),0.12)] border-[rgba(var(--hi5-accent),0.30)]"
                       : "opacity-90 hover:bg-black/5 dark:hover:bg-white/5",
                   ].join(" ")}
                 >
-                  <Link href={t.href} className="min-w-0 text-sm font-medium truncate">
+                  <Link href={t.href} className="text-sm font-medium truncate">
                     {t.title}
                   </Link>
 
@@ -74,7 +77,7 @@ export default function ItsmTabs() {
           </div>
         </div>
 
-        {/* DESKTOP: no scrolling (unchanged behaviour) */}
+        {/* DESKTOP: keep current behaviour */}
         <div className="hidden md:flex w-full items-center gap-1 px-2 overflow-hidden">
           {(tabs ?? []).map((t) => {
             const isActive = pathname === t.href;
