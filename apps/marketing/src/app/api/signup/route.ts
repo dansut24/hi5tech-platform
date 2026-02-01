@@ -17,21 +17,47 @@ function getAdminClient() {
 export async function POST(req: Request) {
   const supabase = getAdminClient();
 
-  const body = await req.json();
-  const companyName = String(body.companyName || "").trim();
-  const adminEmail = String(body.email || "").trim().toLowerCase();
-  const subdomain = String(body.subdomain || "").trim().toLowerCase();
-  const domain = String(body.domain || process.env.NEXT_PUBLIC_ROOT_DOMAIN || "hi5tech.co.uk")
+  const body = await req.json().catch(() => ({} as any));
+
+  // Accept multiple possible names from the client form
+  const companyName = String(
+    body.companyName ?? body.company_name ?? body.company ?? body.name ?? ""
+  ).trim();
+
+  const adminEmail = String(
+    body.email ?? body.adminEmail ?? body.admin_email ?? ""
+  )
+    .trim()
+    .toLowerCase();
+
+  const subdomain = String(
+    body.subdomain ?? body.tenant ?? body.tenantSubdomain ?? ""
+  )
+    .trim()
+    .toLowerCase();
+
+  const domain = String(
+    body.domain ?? process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "hi5tech.co.uk"
+  )
     .trim()
     .toLowerCase();
 
   if (!companyName || !adminEmail || !subdomain) {
-    return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    return NextResponse.json(
+      {
+        error: "Missing required fields",
+        // helpful debug to see what the client actually sent
+        got: {
+          companyName: Boolean(companyName),
+          email: Boolean(adminEmail),
+          subdomain: Boolean(subdomain),
+          keys: Object.keys(body ?? {}),
+        },
+      },
+      { status: 400 }
+    );
   }
 
-  // 1) Create tenant (or whatever you already do)
-  //    IMPORTANT: use your existing logic here (trial_ends_at etc).
-  //    Example only:
   const { data: tenant, error: tenantErr } = await supabase
     .from("tenants")
     .insert({
@@ -51,19 +77,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: tenantErr.message }, { status: 400 });
   }
 
-  // 2) Ensure profile/membership rows exist as YOU currently do
-  //    (depends on your schema). If you rely on a trigger, keep it.
-  //    If not, you can “pre-provision” the admin user by email later.
-
-  // 3) Send invite email (best effort)
-  const redirectTo = `https://${tenant.subdomain}.${tenant.domain}/auth/callback`; // adjust if you use different route
-  const { data: inviteData, error: inviteErr } = await supabase.auth.admin.inviteUserByEmail(
-    adminEmail,
-    { redirectTo }
-  );
-
-  // NOTE: inviteUserByEmail creates an auth user if it doesn't exist.
-  // If you want to block invites unless the user is in your DB, you can do that check first.
+  // Invite (best effort)
+  const redirectTo = `https://${tenant.subdomain}.${tenant.domain}/auth/callback`;
+  const { data: inviteData, error: inviteErr } =
+    await supabase.auth.admin.inviteUserByEmail(adminEmail, { redirectTo });
 
   return NextResponse.json({
     ok: true,
