@@ -117,6 +117,34 @@ export async function POST(req: Request) {
       },
     });
 
+  // If invite succeeded, pre-provision profile + membership so login is authorised immediately
+if (!inviteErr && inviteData?.user?.id) {
+  const userId = inviteData.user.id;
+
+  // Ensure profile exists (id must match auth user id)
+  await supabase.from("profiles").upsert(
+    {
+      id: userId,
+      email: adminEmail,
+      tenant_id: tenant.id,
+      full_name: companyName, // optional
+      created_at: new Date().toISOString(),
+    },
+    { onConflict: "id" }
+  );
+
+  // Ensure membership exists
+  await supabase.from("memberships").upsert(
+    {
+      tenant_id: tenant.id,
+      user_id: userId,
+      role: "admin",
+      created_at: new Date().toISOString(),
+    },
+    { onConflict: "tenant_id,user_id" }
+  );
+}
+
   // Best effort — even if invite fails, tenant is created.
   return NextResponse.json({
     ok: true,
