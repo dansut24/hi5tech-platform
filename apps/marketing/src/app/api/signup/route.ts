@@ -72,7 +72,9 @@ export async function POST(req: Request) {
   }
 
   // 1) Create tenant
-  const trialEndsAtIso = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+  const trialEndsAtIso = new Date(
+    Date.now() + 14 * 24 * 60 * 60 * 1000
+  ).toISOString();
 
   const { data: tenant, error: tenantErr } = await supabase
     .from("tenants")
@@ -118,32 +120,59 @@ export async function POST(req: Request) {
     });
 
   // If invite succeeded, pre-provision profile + membership so login is authorised immediately
-if (!inviteErr && inviteData?.user?.id) {
-  const userId = inviteData.user.id;
+  if (!inviteErr && inviteData?.user?.id) {
+    const userId = inviteData.user.id;
 
-  // Ensure profile exists (id must match auth user id)
-  await supabase.from("profiles").upsert(
-    {
-      id: userId,
-      email: adminEmail,
-      tenant_id: tenant.id,
-      full_name: companyName, // optional
-      created_at: new Date().toISOString(),
-    },
-    { onConflict: "id" }
-  );
+    // (Optional but recommended) set created_by on the tenant
+    // so you always know who the original owner was.
+    await supabase.from("tenants").update({ created_by: userId }).eq("id", tenant.id);
 
-  // Ensure membership exists
-  await supabase.from("memberships").upsert(
-    {
-      tenant_id: tenant.id,
-      user_id: userId,
-      role: "admin",
-      created_at: new Date().toISOString(),
-    },
-    { onConflict: "tenant_id,user_id" }
-  );
-}
+    // Ensure profile exists (id must match auth user id)
+    await supabase.from("profiles").upsert(
+      {
+        id: userId,
+        email: adminEmail,
+        tenant_id: tenant.id,
+        full_name: companyName, // optional
+        created_at: new Date().toISOString(),
+      },
+      { onConflict: "id" }
+    );
+
+    // ✅ FIRST USER = OWNER / SUPER ADMIN
+    // Pick ONE role string and use it consistently everywhere.
+    // I recommend: "owner"
+    await supabase.from("memberships").upsert(
+      {
+        tenant_id: tenant.id,
+        user_id: userId,
+        role: "owner", // <-- CHANGED (was "admin")
+        created_at: new Date().toISOString(),
+      },
+      { onConflict: "tenant_id,user_id" }
+    );
+
+    // Optional: give them all modules right away (if your app expects module_assignments)
+    // Comment out if you handle modules elsewhere.
+    const { data: membershipRow } = await supabase
+      .from("memberships")
+      .select("id")
+      .eq("tenant_id", tenant.id)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (membershipRow?.id) {
+      await supabase.from("module_assignments").upsert(
+        [
+          { membership_id: membershipRow.id, module: "itsm" },
+          { membership_id: membershipRow.id, module: "control" },
+          { membership_id: membershipRow.id, module: "selfservice" },
+          { membership_id: membershipRow.id, module: "admin" },
+        ],
+        { onConflict: "membership_id,module" }
+      );
+    }
+  }
 
   // Best effort — even if invite fails, tenant is created.
   return NextResponse.json({
