@@ -1,38 +1,27 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
+import { supabaseServer } from "@/lib/supabase/server";
 
-export async function GET(request: Request) {
-  const url = new URL(request.url);
-
-  // Next 16: cookies() is async
-  const cookieStore = await cookies();
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value;
-        },
-        set(name: string, value: string, options: any) {
-          cookieStore.set({ name, value, ...options });
-        },
-        remove(name: string, options: any) {
-          cookieStore.set({ name, value: "", ...options, maxAge: 0 });
-        },
-      },
-    }
-  );
-
-  // If you are using the PKCE code flow, Supabase will exchange the code and set session cookies
+export async function GET(req: Request) {
+  const url = new URL(req.url);
   const code = url.searchParams.get("code");
-  if (code) {
-    await supabase.auth.exchangeCodeForSession(code);
+  const next = url.searchParams.get("next") || "/";
+
+  // If no code, just go login
+  if (!code) {
+    return NextResponse.redirect(new URL("/login", url.origin));
   }
 
-  // Send user where you want after auth
-  const next = url.searchParams.get("next") ?? "/apps";
+  const supabase = await supabaseServer();
+
+  // Exchange code -> session (sets cookies via your server client)
+  const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+  // If exchange fails, go login with an error
+  if (error) {
+    const to = new URL("/login", url.origin);
+    to.searchParams.set("error", "auth_callback_failed");
+    return NextResponse.redirect(to);
+  }
+
   return NextResponse.redirect(new URL(next, url.origin));
 }
