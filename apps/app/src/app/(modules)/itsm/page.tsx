@@ -1,142 +1,194 @@
-import Link from "next/link";
+import { Suspense } from "react";
 
-export default async function ItsmDashboardPage() {
+export default function ITSMDashboard() {
   return (
-    <div className="p-4 sm:p-8 space-y-8">
-
+    <div className="hi5-container py-6 space-y-8">
+      {/* ===================== */}
       {/* HEADER */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">ITSM Dashboard</h1>
-          <p className="text-sm opacity-75 mt-1">
-            Live overview of your service desk
-          </p>
-        </div>
-
-        <Link
-          href="/apps"
-          className="hi5-btn-ghost text-sm"
-        >
-          Back to modules
-        </Link>
+      {/* ===================== */}
+      <div>
+        <h1 className="text-2xl font-semibold">ITSM Dashboard</h1>
+        <p className="opacity-80 mt-1">
+          Live overview of your service desk
+        </p>
       </div>
 
-      {/* KPI CARDS */}
-      <section className="grid grid-cols-2 lg:grid-cols-6 gap-4">
-        {[
-          { label: "Open Incidents", value: 24 },
-          { label: "Breaching SLA", value: 3, danger: true },
-          { label: "Unassigned", value: 7 },
-          { label: "Open Requests", value: 12 },
-          { label: "Pending Changes", value: 4 },
-          { label: "Resolved Today", value: 18 },
-        ].map((kpi) => (
-          <div
-            key={kpi.label}
-            className="hi5-panel p-4"
-          >
-            <p className="text-xs opacity-70">{kpi.label}</p>
-            <p
-              className={`mt-2 text-2xl font-bold ${
-                kpi.danger ? "text-red-400" : ""
-              }`}
-            >
-              {kpi.value}
-            </p>
-          </div>
-        ))}
-      </section>
+      {/* ===================== */}
+      {/* KPI STRIP */}
+      {/* ===================== */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        <Kpi label="Open Incidents" value="42" />
+        <Kpi label="Open Requests" value="18" />
+        <Kpi label="Unassigned" value="7" />
+        <Kpi label="Breaching SLA" value="3" danger />
+        <Kpi label="Resolved Today" value="21" />
+        <Kpi label="Avg 1st Response" value="23m" />
+      </div>
 
+      {/* ===================== */}
+      {/* MY WORK + UNASSIGNED */}
+      {/* ===================== */}
+      <div className="grid lg:grid-cols-2 gap-6">
+        <TicketList
+          title="My Assigned Tickets"
+          tickets={[
+            { id: "INC-1042", title: "VPN not connecting", priority: "P2", age: "2h" },
+            { id: "INC-1040", title: "Email delays", priority: "P1", age: "45m" },
+          ]}
+        />
+        <TicketList
+          title="Unassigned Tickets"
+          tickets={[
+            { id: "INC-1045", title: "New starter access", priority: "P3", age: "1h" },
+            { id: "INC-1046", title: "Printer offline", priority: "P4", age: "3h" },
+          ]}
+        />
+      </div>
+
+      {/* ===================== */}
       {/* CHARTS */}
-      <section className="grid lg:grid-cols-3 gap-6">
-        {/* INCIDENT TREND */}
-        <div className="hi5-panel p-5 lg:col-span-2">
-          <h2 className="text-sm font-medium mb-3 opacity-80">
-            Incident Trend (last 30 days)
-          </h2>
+      {/* ===================== */}
+      <div className="grid lg:grid-cols-2 gap-6">
+        <ChartCard title="Incidents Opened vs Resolved">
+          <FakeChart label="Last 14 days" />
+        </ChartCard>
 
-          {/* Chart placeholder */}
-          <div className="h-48 rounded-xl bg-black/5 dark:bg-white/5 flex items-center justify-center text-sm opacity-60">
-            Line / area chart here
-          </div>
-        </div>
+        <ChartCard title="Backlog Trend">
+          <FakeChart label="Open incidents over time" />
+        </ChartCard>
+      </div>
 
-        {/* BREAKDOWN */}
-        <div className="hi5-panel p-5">
-          <h2 className="text-sm font-medium mb-3 opacity-80">
-            Ticket Breakdown
-          </h2>
+      {/* ===================== */}
+      {/* PRIORITY + CATEGORY */}
+      {/* ===================== */}
+      <div className="grid lg:grid-cols-2 gap-6">
+        <ChartCard title="By Priority">
+          <FakeBar />
+        </ChartCard>
 
-          {/* Donut placeholder */}
-          <div className="h-48 rounded-xl bg-black/5 dark:bg-white/5 flex items-center justify-center text-sm opacity-60">
-            Donut chart here
-          </div>
-        </div>
-      </section>
+        <ChartCard title="By Category">
+          <FakeDonut />
+        </ChartCard>
+      </div>
 
-      {/* WORK + QUEUES */}
-      <section className="grid lg:grid-cols-3 gap-6">
-        {/* MY WORK */}
-        <div className="hi5-panel p-5">
-          <h2 className="text-sm font-semibold mb-4">My Work</h2>
-
-          <ul className="space-y-3 text-sm">
-            <li className="flex justify-between">
-              <span>Assigned to me</span>
-              <span className="font-medium">5</span>
-            </li>
-            <li className="flex justify-between">
-              <span>Due today</span>
-              <span className="font-medium">2</span>
-            </li>
-            <li className="flex justify-between">
-              <span>Overdue</span>
-              <span className="font-medium text-red-400">1</span>
-            </li>
+      {/* ===================== */}
+      {/* SLA HEALTH + ACTIVITY */}
+      {/* ===================== */}
+      <div className="grid lg:grid-cols-2 gap-6">
+        <div className="hi5-panel p-5 space-y-3">
+          <h3 className="font-semibold">SLA Health</h3>
+          <ul className="text-sm opacity-90 space-y-1">
+            <li>✔ 92% within SLA</li>
+            <li>⚠ 3 breaches today</li>
+            <li>⏱ Avg resolution: 4h 12m</li>
+            <li>🔥 Next breach in 37 minutes</li>
           </ul>
         </div>
 
-        {/* PRIORITY QUEUES */}
-        <div className="hi5-panel p-5 lg:col-span-2">
-          <h2 className="text-sm font-semibold mb-4">
-            Priority Queues
-          </h2>
-
-          <div className="grid sm:grid-cols-2 gap-4">
-            {[
-              "Critical (P1)",
-              "Unassigned",
-              "Waiting on User",
-              "Awaiting Approval",
-            ].map((q) => (
-              <div
-                key={q}
-                className="rounded-xl border hi5-border p-4 hover:bg-black/5 dark:hover:bg-white/5 transition"
-              >
-                <p className="text-sm font-medium">{q}</p>
-                <p className="text-xs opacity-70 mt-1">
-                  View items in this queue
-                </p>
-              </div>
-            ))}
-          </div>
+        <div className="hi5-panel p-5">
+          <h3 className="font-semibold mb-3">Recent Activity</h3>
+          <ul className="text-sm opacity-85 space-y-2">
+            <li>INC-1046 assigned to Alex</li>
+            <li>INC-1042 status changed → In Progress</li>
+            <li>INC-1045 created by John</li>
+            <li>INC-1040 resolved</li>
+          </ul>
         </div>
-      </section>
+      </div>
 
-      {/* RECENT ACTIVITY */}
-      <section className="hi5-panel p-5">
-        <h2 className="text-sm font-semibold mb-4">
-          Recent Activity
-        </h2>
+      {/* ===================== */}
+      {/* QUICK ACTIONS */}
+      {/* ===================== */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <QuickAction label="New Incident" />
+        <QuickAction label="New Request" />
+        <QuickAction label="Search Tickets" />
+        <QuickAction label="Reports" />
+      </div>
 
-        <ul className="space-y-3 text-sm opacity-80">
-          <li>Incident INC-1024 assigned to you</li>
-          <li>Request REQ-553 approved</li>
-          <li>SLA warning on INC-1018</li>
-          <li>User replied to INC-1012</li>
-        </ul>
-      </section>
-
+      {/* ===================== */}
+      {/* ANNOUNCEMENTS */}
+      {/* ===================== */}
+      <div className="hi5-panel p-5">
+        <h3 className="font-semibold mb-2">Announcements</h3>
+        <p className="text-sm opacity-85">
+          🔧 Planned maintenance tonight 22:00–23:00 (VPN services)
+        </p>
+      </div>
     </div>
+  );
+}
+
+/* ======================================================
+   SMALL COMPONENTS
+====================================================== */
+
+function Kpi({ label, value, danger }: any) {
+  return (
+    <div className="hi5-panel p-4 text-center">
+      <div className={`text-xl font-bold ${danger ? "text-red-500" : ""}`}>
+        {value}
+      </div>
+      <div className="text-xs opacity-75 mt-1">{label}</div>
+    </div>
+  );
+}
+
+function TicketList({ title, tickets }: any) {
+  return (
+    <div className="hi5-panel p-5">
+      <h3 className="font-semibold mb-3">{title}</h3>
+      <ul className="space-y-2 text-sm">
+        {tickets.map((t: any) => (
+          <li key={t.id} className="flex justify-between opacity-90">
+            <span>
+              <strong>{t.id}</strong> — {t.title}
+            </span>
+            <span>{t.priority} · {t.age}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ChartCard({ title, children }: any) {
+  return (
+    <div className="hi5-panel p-5">
+      <h3 className="font-semibold mb-3">{title}</h3>
+      {children}
+    </div>
+  );
+}
+
+function FakeChart({ label }: any) {
+  return (
+    <div className="h-40 rounded-lg bg-black/5 dark:bg-white/10 flex items-center justify-center text-xs opacity-60">
+      {label} (chart placeholder)
+    </div>
+  );
+}
+
+function FakeBar() {
+  return (
+    <div className="h-40 rounded-lg bg-black/5 dark:bg-white/10 flex items-center justify-center text-xs opacity-60">
+      Priority bar chart
+    </div>
+  );
+}
+
+function FakeDonut() {
+  return (
+    <div className="h-40 rounded-lg bg-black/5 dark:bg-white/10 flex items-center justify-center text-xs opacity-60">
+      Category donut chart
+    </div>
+  );
+}
+
+function QuickAction({ label }: any) {
+  return (
+    <button className="hi5-btn-primary w-full">
+      {label}
+    </button>
   );
 }
