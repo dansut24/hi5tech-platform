@@ -1,81 +1,90 @@
-import { NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { createClient } from "@supabase/supabase-js";
+// apps/app/src/app/api/auth/allowed/route.ts
+import { NextResponse, type NextRequest } from "next/server";
+import { supabaseServer } from "@/lib/supabase/server";
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "hi5tech.co.uk";
 
-function getTenantFromHost(host: string) {
-  const hostname = (host || "").split(":")[0].toLowerCase();
+function getTenantFromHost(hostname: string) {
+  const host = (hostname || "").split(":")[0].toLowerCase().trim();
 
-  // preview/local => don't gate
-  if (hostname === "localhost" || hostname.endsWith(".vercel.app")) return null;
+  // Local / preview => no gating
+  if (!host || host === "localhost" || host.endsWith(".vercel.app")) {
+    return { domain: null as string | null, subdomain: null as string | null };
+  }
 
-  // must be under root domain
-  if (!hostname.endsWith(ROOT_DOMAIN)) return null;
+  // Must be under root domain
+  if (!host.endsWith(ROOT_DOMAIN)) {
+    return { domain: null as string | null, subdomain: null as string | null };
+  }
 
-  // root => no tenant
-  if (hostname === ROOT_DOMAIN) return null;
+  // Root domain => not a tenant
+  if (host === ROOT_DOMAIN) {
+    return { domain: ROOT_DOMAIN, subdomain: null };
+  }
 
-  const sub = hostname.slice(0, -ROOT_DOMAIN.length - 1);
-  if (!sub) return null;
+  // "dan-sutton.hi5tech.co.uk" => "dan-sutton"
+  const sub = host.slice(0, -ROOT_DOMAIN.length - 1);
+  if (!sub) return { domain: ROOT_DOMAIN, subdomain: null };
 
-  // non-tenant subdomains
-  if (sub === "www" || sub === "app") return null;
+  // Ignore non-tenant subdomains if you use them
+  if (sub === "www" || sub === "app") {
+    return { domain: ROOT_DOMAIN, subdomain: null };
+  }
 
   return { domain: ROOT_DOMAIN, subdomain: sub };
 }
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  {
-    auth: { persistSession: false, autoRefreshToken: false },
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const email = String(body?.email || "").trim().toLowerCase();
+
+    if (!email) {
+      return NextResponse.json(
+        { allowed: false, reason: "missing_email" },
+        { status: 400 }
+      );
+    }
+
+    // Prefer forwarded host on Vercel/Proxies
+    const host =
+      req.headers.get("x-forwarded-host") ||
+      req.headers.get("host") ||
+      "";
+
+    const { domain, subdomain } = getTenantFromHost(host);
+
+    // If no tenant subdomain (root domain/app/www/etc), you can choose:
+    // - allow false (safer), or
+    // - allow true (if you want global login)
+    if (!domain || !subdomain) {
+      return NextResponse.json({
+        allowed: false,
+        reason: "no_tenant_subdomain",
+      });
+    }
+
+    const supabase = await supabaseServer();
+
+    // Call your SQL function
+    const { data, error } = await supabase.rpc("is_email_allowed_for_tenant", {
+      p_domain: domain,
+      p_subdomain: subdomain,
+      p_email: email,
+    });
+
+    if (error) {
+      return NextResponse.json(
+        { allowed: false, reason: "rpc_error", detail: error.message },
+        { status: 200 }
+      );
+    }
+
+    return NextResponse.json({ allowed: Boolean(data) });
+  } catch (e: any) {
+    return NextResponse.json(
+      { allowed: false, reason: "server_error", detail: e?.message || String(e) },
+      { status: 200 }
+    );
   }
-);
-
-export async function POST(req: Request) {
-  const h = await headers();
-  const host = h.get("x-forwarded-host") || h.get("host") || "";
-
-  const tenant = getTenantFromHost(host);
-
-  // if not a tenant host, allow (root / app / preview)
-  if (!tenant) {
-    return NextResponse.json({ allowed: true, reason: "no-tenant-host" });
-  }
-
-  const body = await req.json().catch(() => ({}));
-  const email = String(body?.email || "").trim().toLowerCase();
-
-  if (!email) {
-    return NextResponse.json({ allowed: false, reason: "missing-email" }, { status: 400 });
-  }
-
-  // 1) find tenant by (domain, subdomain)
-  const { data: t, error: terr } = await supabase
-    .from("tenants")
-    .select("id")
-    .eq("domain", tenant.domain)
-    .eq("subdomain", tenant.subdomain)
-    .maybeSingle();
-
-  if (terr || !t?.id) {
-    return NextResponse.json({ allowed: false, reason: "tenant-not-found" });
-  }
-
-  // 2) check membership by email (profiles.email)
-  const { data: rows, error: merr } = await supabase
-    .from("memberships")
-    .select("id, profiles!inner(email)")
-    .eq("tenant_id", t.id)
-    .ilike("profiles.email", email)
-    .limit(1);
-
-  if (merr) {
-    return NextResponse.json({ allowed: false, reason: "query-error" }, { status: 500 });
-  }
-
-  const allowed = Array.isArray(rows) && rows.length > 0;
-
-  return NextResponse.json({ allowed });
 }
