@@ -17,17 +17,13 @@
 
   /* Surface glass */
   --hi5-card: 255 255 255;
-  --hi5-card-alpha: 0.62;
+  --hi5-card-alpha: 0.64;
 
   /* Borders / dividers */
   --hi5-border: 10 12 16;
   --hi5-border-alpha: 0.10;
 
-  /* Shadows */
-  --hi5-shadow: 0 0 0;
-  --hi5-shadow-alpha: 0.0;
-
-  /* Accent (brandable) */
+  /* Accents (brandable) */
   --hi5-accent: 0 193 255;          /* cyan */
   --hi5-accent-2: 255 79 225;       /* pink */
   --hi5-accent-3: 255 196 45;       /* warm yellow */
@@ -37,41 +33,79 @@
   --hi5-topbar-alpha: 0.55;
 
   /* Glow knobs */
-  --hi5-glow-1: 0.20;
-  --hi5-glow-2: 0.18;
-  --hi5-glow-3: 0.16;
+  --hi5-glow-1: 0.16;
+  --hi5-glow-2: 0.14;
+  --hi5-glow-3: 0.12;
 
-  /* “Ball” sizes */
-  --hi5-blob-size-1: 520px;
-  --hi5-blob-size-2: 560px;
-  --hi5-blob-size-3: 620px;
-
-  /* Backdrop base (white) */
+  /* Background base */
   --hi5-backdrop-base: linear-gradient(180deg, rgb(255 255 255 / 1), rgb(255 255 255 / 1));
 
-  /* Aurora wash (subtle layer) */
+  /* Subtle aurora wash (kept subtle in light mode) */
   --hi5-aurora-wash:
-    radial-gradient(900px 520px at 14% 8%,
-      rgb(var(--hi5-accent) / 0.20),
+    radial-gradient(1000px 700px at 16% 10%,
+      rgb(var(--hi5-accent) / 0.10),
       transparent 60%),
-    radial-gradient(860px 520px at 86% 18%,
-      rgb(var(--hi5-accent-2) / 0.16),
+    radial-gradient(1000px 700px at 86% 18%,
+      rgb(var(--hi5-accent-2) / 0.09),
       transparent 62%),
-    radial-gradient(920px 560px at 50% 100%,
-      rgb(var(--hi5-accent-3) / 0.14),
-      transparent 60%);
-
-  /* The balls (more saturated + distinct) */
-  --hi5-balls:
-    radial-gradient(circle var(--hi5-blob-size-1) at 16% 12%,
-      rgb(var(--hi5-accent) / 0.95),
-      transparent 58%),
-    radial-gradient(circle var(--hi5-blob-size-2) at 88% 22%,
-      rgb(var(--hi5-accent-2) / 0.92),
-      transparent 58%),
-    radial-gradient(circle var(--hi5-blob-size-3) at 35% 92%,
-      rgb(var(--hi5-accent-3) / 0.86),
+    radial-gradient(1100px 820px at 45% 95%,
+      rgb(var(--hi5-accent-3) / 0.08),
       transparent 62%);
+
+  /* ----------------------------------------------------------
+     SPHERES (3D look)
+     - Each sphere is built from:
+       1) body color (radial)
+       2) shadow/volume (radial)
+       3) specular highlight (small white radial)
+       4) rim glow (subtle radial)
+  ---------------------------------------------------------- */
+
+  /* Sphere sizes (tweak if needed) */
+  --hi5-sphere-a: 520px; /* top-left */
+  --hi5-sphere-b: 560px; /* top-right */
+  --hi5-sphere-c: 640px; /* bottom-left */
+
+  /* Layer: 3 spheres */
+  --hi5-spheres:
+    /* === Sphere 1 (cyan) top-left === */
+    radial-gradient(circle calc(var(--hi5-sphere-a) * 0.22) at 20% 16%,
+      rgb(255 255 255 / 0.70),
+      rgb(255 255 255 / 0) 70%),
+    radial-gradient(circle calc(var(--hi5-sphere-a) * 0.58) at 16% 12%,
+      rgb(255 255 255 / 0.22),
+      rgb(255 255 255 / 0) 65%),
+    radial-gradient(circle var(--hi5-sphere-a) at 16% 12%,
+      rgb(var(--hi5-accent) / 0.96) 0%,
+      rgb(var(--hi5-accent) / 0.90) 30%,
+      rgb(var(--hi5-accent) / 0.72) 52%,
+      rgb(var(--hi5-accent) / 0.00) 72%),
+
+    /* === Sphere 2 (pink) top-right === */
+    radial-gradient(circle calc(var(--hi5-sphere-b) * 0.22) at 78% 24%,
+      rgb(255 255 255 / 0.68),
+      rgb(255 255 255 / 0) 70%),
+    radial-gradient(circle calc(var(--hi5-sphere-b) * 0.58) at 88% 22%,
+      rgb(255 255 255 / 0.20),
+      rgb(255 255 255 / 0) 66%),
+    radial-gradient(circle var(--hi5-sphere-b) at 88% 22%,
+      rgb(var(--hi5-accent-2) / 0.96) 0%,
+      rgb(var(--hi5-accent-2) / 0.90) 30%,
+      rgb(var(--hi5-accent-2) / 0.70) 52%,
+      rgb(var(--hi5-accent-2) / 0.00) 72%),
+
+    /* === Sphere 3 (yellow) bottom-left === */
+    radial-gradient(circle calc(var(--hi5-sphere-c) * 0.22) at 28% 86%,
+      rgb(255 255 255 / 0.62),
+      rgb(255 255 255 / 0) 70%),
+    radial-gradient(circle calc(var(--hi5-sphere-c) * 0.58) at 30% 92%,
+      rgb(255 255 255 / 0.18),
+      rgb(255 255 255 / 0) 66%),
+    radial-gradient(circle var(--hi5-sphere-c) at 30% 92%,
+      rgb(var(--hi5-accent-3) / 0.94) 0%,
+      rgb(var(--hi5-accent-3) / 0.86) 30%,
+      rgb(var(--hi5-accent-3) / 0.66) 52%,
+      rgb(var(--hi5-accent-3) / 0.00) 74%);
 
   /* Button gradient */
   --hi5-btn-grad:
@@ -81,12 +115,18 @@
 
   /* Button glow */
   --hi5-btn-glow:
-    0 14px 38px rgb(var(--hi5-accent) / 0.18),
-    0 10px 26px rgb(var(--hi5-accent-2) / 0.14);
+    0 18px 42px rgb(var(--hi5-accent) / 0.20),
+    0 14px 34px rgb(var(--hi5-accent-2) / 0.16);
 
-  /* Subtle grain (light) */
+  /* 3D button inner highlights */
+  --hi5-btn-highlight: 0 1px 0 rgb(255 255 255 / 0.55) inset;
+  --hi5-btn-shadow: 0 10px 20px rgb(0 0 0 / 0.14);
+
+  /* Grain (light) */
   --hi5-grain-opacity: 0.06;
 }
+
+/* -------------------- DARK -------------------- */
 
 .dark {
   color-scheme: dark;
@@ -98,9 +138,9 @@
 
   /* Surface glass */
   --hi5-card: 10 12 16;
-  --hi5-card-alpha: 0.34;
+  --hi5-card-alpha: 0.36;
 
-  /* Borders / dividers */
+  /* Borders */
   --hi5-border: 255 255 255;
   --hi5-border-alpha: 0.14;
 
@@ -109,43 +149,76 @@
   --hi5-topbar-alpha: 0.46;
 
   /* Glow knobs */
-  --hi5-glow-1: 0.26;
-  --hi5-glow-2: 0.22;
-  --hi5-glow-3: 0.20;
+  --hi5-glow-1: 0.22;
+  --hi5-glow-2: 0.20;
+  --hi5-glow-3: 0.18;
 
-  /* Backdrop base (black) */
+  /* Background base */
   --hi5-backdrop-base: linear-gradient(180deg, rgb(0 0 0 / 1), rgb(0 0 0 / 1));
 
-  /* Dark mode needs stronger wash so it pops */
+  /* Dark wash stronger so it pops */
   --hi5-aurora-wash:
-    radial-gradient(980px 620px at 18% 10%,
-      rgb(var(--hi5-accent) / 0.26),
-      transparent 60%),
-    radial-gradient(940px 620px at 86% 18%,
-      rgb(var(--hi5-accent-2) / 0.22),
+    radial-gradient(1200px 820px at 16% 10%,
+      rgb(var(--hi5-accent) / 0.18),
       transparent 62%),
-    radial-gradient(980px 680px at 52% 96%,
-      rgb(var(--hi5-accent-3) / 0.20),
-      transparent 62%);
+    radial-gradient(1200px 820px at 86% 18%,
+      rgb(var(--hi5-accent-2) / 0.17),
+      transparent 64%),
+    radial-gradient(1300px 900px at 45% 95%,
+      rgb(var(--hi5-accent-3) / 0.14),
+      transparent 66%);
 
-  /* Balls: slightly stronger in dark */
-  --hi5-balls:
-    radial-gradient(circle var(--hi5-blob-size-1) at 16% 12%,
-      rgb(var(--hi5-accent) / 1),
-      transparent 58%),
-    radial-gradient(circle var(--hi5-blob-size-2) at 88% 22%,
-      rgb(var(--hi5-accent-2) / 0.98),
-      transparent 58%),
-    radial-gradient(circle var(--hi5-blob-size-3) at 35% 92%,
-      rgb(var(--hi5-accent-3) / 0.92),
-      transparent 62%);
+  /* Dark spheres: slightly more present + different highlight */
+  --hi5-spheres:
+    /* Cyan */
+    radial-gradient(circle calc(var(--hi5-sphere-a) * 0.22) at 20% 16%,
+      rgb(255 255 255 / 0.35),
+      rgb(255 255 255 / 0) 72%),
+    radial-gradient(circle calc(var(--hi5-sphere-a) * 0.58) at 16% 12%,
+      rgb(255 255 255 / 0.10),
+      rgb(255 255 255 / 0) 68%),
+    radial-gradient(circle var(--hi5-sphere-a) at 16% 12%,
+      rgb(var(--hi5-accent) / 1.0) 0%,
+      rgb(var(--hi5-accent) / 0.92) 30%,
+      rgb(var(--hi5-accent) / 0.72) 52%,
+      rgb(var(--hi5-accent) / 0.00) 74%),
+
+    /* Pink */
+    radial-gradient(circle calc(var(--hi5-sphere-b) * 0.22) at 78% 24%,
+      rgb(255 255 255 / 0.34),
+      rgb(255 255 255 / 0) 72%),
+    radial-gradient(circle calc(var(--hi5-sphere-b) * 0.58) at 88% 22%,
+      rgb(255 255 255 / 0.10),
+      rgb(255 255 255 / 0) 68%),
+    radial-gradient(circle var(--hi5-sphere-b) at 88% 22%,
+      rgb(var(--hi5-accent-2) / 1.0) 0%,
+      rgb(var(--hi5-accent-2) / 0.92) 30%,
+      rgb(var(--hi5-accent-2) / 0.72) 52%,
+      rgb(var(--hi5-accent-2) / 0.00) 74%),
+
+    /* Yellow */
+    radial-gradient(circle calc(var(--hi5-sphere-c) * 0.22) at 28% 86%,
+      rgb(255 255 255 / 0.30),
+      rgb(255 255 255 / 0) 72%),
+    radial-gradient(circle calc(var(--hi5-sphere-c) * 0.58) at 30% 92%,
+      rgb(255 255 255 / 0.09),
+      rgb(255 255 255 / 0) 68%),
+    radial-gradient(circle var(--hi5-sphere-c) at 30% 92%,
+      rgb(var(--hi5-accent-3) / 0.98) 0%,
+      rgb(var(--hi5-accent-3) / 0.88) 30%,
+      rgb(var(--hi5-accent-3) / 0.68) 52%,
+      rgb(var(--hi5-accent-3) / 0.00) 76%);
 
   /* Button glow stronger in dark */
   --hi5-btn-glow:
-    0 16px 46px rgb(var(--hi5-accent) / 0.22),
-    0 12px 34px rgb(var(--hi5-accent-2) / 0.18);
+    0 22px 56px rgb(var(--hi5-accent) / 0.22),
+    0 18px 44px rgb(var(--hi5-accent-2) / 0.18);
 
-  /* Subtle grain (dark) */
+  /* 3D button highlights in dark */
+  --hi5-btn-highlight: 0 1px 0 rgb(255 255 255 / 0.10) inset;
+  --hi5-btn-shadow: 0 14px 28px rgb(0 0 0 / 0.60);
+
+  /* Grain */
   --hi5-grain-opacity: 0.10;
 }
 
@@ -176,10 +249,10 @@ body {
 
 /* ----------------------------------------------------------
    BACKDROP LAYERS (fixed behind everything)
-   - layer 1: base white/black
+   - layer 1: base
    - layer 2: subtle aurora wash
-   - layer 3: the colourful balls (blurred)
-   - layer 4: grain for depth
+   - layer 3: 3D spheres
+   - layer 4: grain
 ---------------------------------------------------------- */
 
 /* Base */
@@ -202,19 +275,20 @@ html::after {
   pointer-events: none;
 }
 
-/* Balls layer (needs its own pseudo-element via body) */
+/* Spheres */
 body::before {
   content: "";
   position: fixed;
-  inset: -80px;
-  background: var(--hi5-balls);
-  filter: blur(46px);
-  opacity: 0.90;
+  inset: 0;
+  background: var(--hi5-spheres);
+  /* Less blur than before — spheres must stay "round", not paint-stains */
+  filter: blur(10px) saturate(1.05);
+  opacity: 0.95;
   z-index: -2;
   pointer-events: none;
 }
 
-/* Grain layer */
+/* Grain */
 body::after {
   content: "";
   position: fixed;
@@ -226,7 +300,7 @@ body::after {
   background-size: 240px 240px;
 }
 
-/* Optional layout helper (no background here, just sizing) */
+/* Optional layout helper */
 .hi5-bg {
   min-height: 100dvh;
   width: 100%;
@@ -281,7 +355,7 @@ body::after {
 .hi5-accent { color: rgb(var(--hi5-accent)); }
 
 /* ==========================
-   POP Buttons
+   POP 3D Buttons (readable in both modes)
    ========================== */
 
 .hi5-accent-btn,
@@ -290,35 +364,39 @@ body::after {
   border: 1px solid rgb(255 255 255 / 0.22);
   border-radius: 18px;
   padding: 10px 14px;
-  font-weight: 800;
+  font-weight: 900;
+  letter-spacing: 0.2px;
 
   background: var(--hi5-btn-grad);
 
   box-shadow:
     var(--hi5-btn-glow),
-    0 1px 0 rgb(255 255 255 / 0.20) inset;
+    var(--hi5-btn-shadow),
+    var(--hi5-btn-highlight);
 
-  transition: transform 140ms ease, filter 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
+  transition:
+    transform 140ms ease,
+    filter 140ms ease,
+    box-shadow 140ms ease,
+    opacity 140ms ease;
 }
 
 .dark .hi5-accent-btn,
 .dark .hi5-btn-primary {
   color: #ffffff;
   border: 1px solid rgb(255 255 255 / 0.14);
-  box-shadow:
-    var(--hi5-btn-glow),
-    0 1px 0 rgb(255 255 255 / 0.08) inset;
 }
 
 .hi5-accent-btn:hover,
 .hi5-btn-primary:hover {
-  filter: brightness(1.05) saturate(1.10);
+  filter: brightness(1.06) saturate(1.12);
   transform: translateY(-1px);
 }
 
 .hi5-accent-btn:active,
 .hi5-btn-primary:active {
   transform: translateY(0px);
+  filter: brightness(1.02) saturate(1.06);
 }
 
 .hi5-accent-btn:disabled,
@@ -329,38 +407,49 @@ body::after {
   box-shadow: none;
 }
 
-/* Secondary / “glass” button */
+/* Secondary / glass button */
 .hi5-btn-ghost {
   border-radius: 18px;
   padding: 10px 14px;
-  font-weight: 700;
+  font-weight: 800;
   border: 1px solid rgb(var(--hi5-border) / 0.14);
-  background: rgb(255 255 255 / 0.58);
+  background: rgb(255 255 255 / 0.62);
+  color: rgb(var(--hi5-fg));
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  transition: transform 140ms ease, background 140ms ease, opacity 140ms ease;
+  box-shadow:
+    0 10px 20px rgb(0 0 0 / 0.06),
+    0 1px 0 rgb(255 255 255 / 0.35) inset;
+
+  transition: transform 140ms ease, background 140ms ease, opacity 140ms ease, box-shadow 140ms ease;
 }
 
 .dark .hi5-btn-ghost {
   border: 1px solid rgb(255 255 255 / 0.14);
-  background: rgb(10 12 16 / 0.34);
+  background: rgb(10 12 16 / 0.38);
+  box-shadow:
+    0 14px 28px rgb(0 0 0 / 0.55),
+    0 1px 0 rgb(255 255 255 / 0.06) inset;
 }
 
 .hi5-btn-ghost:hover {
   transform: translateY(-1px);
-  background: rgb(255 255 255 / 0.70);
+  background: rgb(255 255 255 / 0.74);
 }
 
 .dark .hi5-btn-ghost:hover {
-  background: rgb(10 12 16 / 0.44);
+  background: rgb(10 12 16 / 0.48);
 }
+
+.hi5-btn-ghost:disabled { opacity: 0.55; transform: none; }
 
 /* ==========================
    Inputs
    ========================== */
+
 .hi5-input {
   width: 100%;
-  background: rgb(255 255 255 / 0.62);
+  background: rgb(255 255 255 / 0.64);
   border: 1px solid rgb(var(--hi5-border) / 0.16) !important;
   border-radius: 18px;
   padding: 10px 12px;
@@ -368,11 +457,15 @@ body::after {
   outline: none;
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  transition: box-shadow 160ms ease, border-color 160ms ease, background 160ms ease, transform 160ms ease;
+  transition:
+    box-shadow 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    transform 160ms ease;
 }
 
 .dark .hi5-input {
-  background: rgb(10 12 16 / 0.34);
+  background: rgb(10 12 16 / 0.38);
   border: 1px solid rgb(255 255 255 / 0.14) !important;
 }
 
