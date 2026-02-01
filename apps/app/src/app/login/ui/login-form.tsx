@@ -3,10 +3,9 @@
 import { useMemo, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 
-type Step = "enterEmail" | "enterCode";
+type Mode = "password" | "code";
 
 function MicrosoftIcon() {
-  // Simple 4-square mark (no external asset)
   return (
     <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
       <rect x="1" y="1" width="7" height="7" fill="#f25022" />
@@ -16,7 +15,6 @@ function MicrosoftIcon() {
     </svg>
   );
 }
-
 function GoogleIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
@@ -27,7 +25,6 @@ function GoogleIcon() {
     </svg>
   );
 }
-
 function GitHubIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true">
@@ -47,9 +44,13 @@ export default function LoginForm() {
     );
   }, []);
 
-  const [step, setStep] = useState<Step>("enterEmail");
+  const [mode, setMode] = useState<Mode>("password");
+
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
   const [code, setCode] = useState("");
+  const [codeSent, setCodeSent] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -62,10 +63,77 @@ export default function LoginForm() {
       body: JSON.stringify({ email: e }),
       cache: "no-store",
     });
-
     if (!res.ok) return false;
     const data = (await res.json()) as { allowed?: boolean };
     return Boolean(data?.allowed);
+  }
+
+  async function signInPassword() {
+    setLoading(true);
+    setErr(null);
+    setInfo(null);
+
+    const e = email.trim().toLowerCase();
+    if (!e || !password) {
+      setLoading(false);
+      setErr("Enter your email and password.");
+      return;
+    }
+
+    const allowed = await isAllowedForThisTenant(e);
+    if (!allowed) {
+      setLoading(false);
+      setErr("That email isn’t authorised for this tenant.");
+      return;
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: e,
+      password,
+    });
+
+    setLoading(false);
+
+    if (error) {
+      setErr(error.message);
+      return;
+    }
+
+    window.location.assign("/");
+  }
+
+  async function resetPassword() {
+    setLoading(true);
+    setErr(null);
+    setInfo(null);
+
+    const e = email.trim().toLowerCase();
+    if (!e) {
+      setLoading(false);
+      setErr("Enter your email first.");
+      return;
+    }
+
+    const allowed = await isAllowedForThisTenant(e);
+    if (!allowed) {
+      setLoading(false);
+      setErr("That email isn’t authorised for this tenant.");
+      return;
+    }
+
+    // You’ll need a reset page later, e.g. /auth/reset
+    const { error } = await supabase.auth.resetPasswordForEmail(e, {
+      redirectTo: `${window.location.origin}/auth/reset`,
+    });
+
+    setLoading(false);
+
+    if (error) {
+      setErr(error.message);
+      return;
+    }
+
+    setInfo("Password reset email sent.");
   }
 
   async function sendCode() {
@@ -80,7 +148,6 @@ export default function LoginForm() {
       return;
     }
 
-    // ✅ Tenant gate BEFORE sending OTP
     const allowed = await isAllowedForThisTenant(e);
     if (!allowed) {
       setLoading(false);
@@ -97,7 +164,7 @@ export default function LoginForm() {
       return;
     }
 
-    setStep("enterCode");
+    setCodeSent(true);
     setInfo("Code sent. Check your email and enter the 6-digit code.");
   }
 
@@ -108,7 +175,6 @@ export default function LoginForm() {
 
     const e = email.trim().toLowerCase();
     const token = code.trim();
-
     if (!token) {
       setLoading(false);
       setErr("Please enter the code.");
@@ -133,7 +199,6 @@ export default function LoginForm() {
       return;
     }
 
-    // ✅ Tenant gate AFTER verify (safety net)
     const allowed = await isAllowedForThisTenant(e);
     if (!allowed) {
       await supabase.auth.signOut();
@@ -143,16 +208,16 @@ export default function LoginForm() {
     }
 
     setLoading(false);
-    window.location.assign("/"); // app will redirect to /login if still not authed
+    window.location.assign("/");
   }
 
   async function oauth(provider: "google" | "github" | "azure") {
     setErr(null);
     setInfo(null);
 
+    // optional pre-check: require email for now
     const e = email.trim().toLowerCase();
     if (!e) {
-      // Optional: you can remove this requirement later if you don’t want pre-check for OAuth
       setErr("Enter your email first so we can validate tenant access.");
       return;
     }
@@ -166,14 +231,9 @@ export default function LoginForm() {
       return;
     }
 
-    // NOTE:
-    // - Provider keys must be configured in Supabase Auth.
-    // - "azure" corresponds to Microsoft in Supabase.
     const { error } = await supabase.auth.signInWithOAuth({
       provider: provider === "azure" ? "azure" : provider,
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
 
     setLoading(false);
@@ -182,14 +242,13 @@ export default function LoginForm() {
 
   return (
     <div className="space-y-4">
-      {/* OAuth buttons (for later; wiring is ready) */}
+      {/* SSO */}
       <div className="space-y-2">
         <button
           type="button"
           className="w-full inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
           disabled={loading}
           onClick={() => oauth("azure")}
-          title="Sign in with Microsoft"
         >
           <MicrosoftIcon />
           Continue with Microsoft
@@ -200,7 +259,6 @@ export default function LoginForm() {
           className="w-full inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
           disabled={loading}
           onClick={() => oauth("google")}
-          title="Sign in with Google"
         >
           <GoogleIcon />
           Continue with Google
@@ -211,7 +269,6 @@ export default function LoginForm() {
           className="w-full inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
           disabled={loading}
           onClick={() => oauth("github")}
-          title="Sign in with GitHub"
         >
           <GitHubIcon />
           Continue with GitHub
@@ -229,76 +286,152 @@ export default function LoginForm() {
         </div>
       </div>
 
-      {/* OTP flow */}
-      <div className="space-y-3">
-        <label className="block text-sm">
-          Email
-          <input
-            className="mt-1 w-full hi5-input"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            inputMode="email"
-            placeholder="you@company.com"
-            disabled={step === "enterCode" || loading}
-          />
-        </label>
+      {/* Mode toggle */}
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          className={[
+            "rounded-xl border px-3 py-2 text-sm hi5-border transition",
+            mode === "password"
+              ? "bg-[rgba(var(--hi5-accent),0.12)] border-[rgba(var(--hi5-accent),0.30)]"
+              : "hover:bg-black/5 dark:hover:bg-white/5 opacity-85",
+          ].join(" ")}
+          onClick={() => {
+            setMode("password");
+            setErr(null);
+            setInfo(null);
+          }}
+          disabled={loading}
+        >
+          Password
+        </button>
 
-        {step === "enterEmail" ? (
-          <button
-            className="w-full rounded-xl border px-3 py-2 font-medium hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
-            disabled={!email.trim() || loading}
-            onClick={sendCode}
-          >
-            {loading ? "Sending..." : "Send code"}
-          </button>
-        ) : (
-          <>
-            <label className="block text-sm">
-              6-digit code
-              <input
-                className="mt-1 w-full hi5-input tracking-widest"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                inputMode="numeric"
-                placeholder="123456"
-                disabled={loading}
-              />
-            </label>
+        <button
+          type="button"
+          className={[
+            "rounded-xl border px-3 py-2 text-sm hi5-border transition",
+            mode === "code"
+              ? "bg-[rgba(var(--hi5-accent),0.12)] border-[rgba(var(--hi5-accent),0.30)]"
+              : "hover:bg-black/5 dark:hover:bg-white/5 opacity-85",
+          ].join(" ")}
+          onClick={() => {
+            setMode("code");
+            setErr(null);
+            setInfo(null);
+          }}
+          disabled={loading}
+        >
+          Email code
+        </button>
+      </div>
 
+      {/* Email */}
+      <label className="block text-sm">
+        Email
+        <input
+          className="mt-1 w-full hi5-input"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          inputMode="email"
+          placeholder="you@company.com"
+          disabled={loading || (mode === "code" && codeSent)}
+        />
+      </label>
+
+      {mode === "password" ? (
+        <>
+          <label className="block text-sm">
+            Password
+            <input
+              className="mt-1 w-full hi5-input"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              type="password"
+              placeholder="••••••••"
+              disabled={loading}
+            />
+          </label>
+
+          <div className="flex items-center justify-between gap-3">
+            <button
+              type="button"
+              className="text-sm opacity-80 hover:opacity-100 underline underline-offset-4"
+              onClick={resetPassword}
+              disabled={loading}
+            >
+              Forgot password?
+            </button>
+
+            <button
+              className="rounded-xl border px-4 py-2 text-sm font-medium hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
+              disabled={!email.trim() || !password || loading}
+              onClick={signInPassword}
+            >
+              {loading ? "Signing in..." : "Sign in"}
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          {!codeSent ? (
             <button
               className="w-full rounded-xl border px-3 py-2 font-medium hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
-              disabled={!code.trim() || loading}
-              onClick={verifyCode}
-            >
-              {loading ? "Verifying..." : "Verify & sign in"}
-            </button>
-
-            <button
-              className="w-full rounded-xl border px-3 py-2 text-sm hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
-              disabled={loading}
-              onClick={() => {
-                setStep("enterEmail");
-                setCode("");
-                setErr(null);
-                setInfo(null);
-              }}
-            >
-              Use a different email
-            </button>
-
-            <button
-              className="w-full rounded-xl border px-3 py-2 text-sm hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
-              disabled={loading}
+              disabled={!email.trim() || loading}
               onClick={sendCode}
             >
-              Resend code
+              {loading ? "Sending..." : "Send code"}
             </button>
-          </>
-        )}
+          ) : (
+            <>
+              <label className="block text-sm">
+                6-digit code
+                <input
+                  className="mt-1 w-full hi5-input tracking-widest"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  inputMode="numeric"
+                  placeholder="123456"
+                  disabled={loading}
+                />
+              </label>
 
-        {info && <p className="text-sm opacity-80">{info}</p>}
-        {err && <p className="text-sm text-red-600">{err}</p>}
-      </div>
+              <button
+                className="w-full rounded-xl border px-3 py-2 font-medium hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
+                disabled={!code.trim() || loading}
+                onClick={verifyCode}
+              >
+                {loading ? "Verifying..." : "Verify & sign in"}
+              </button>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  className="rounded-xl border px-3 py-2 text-sm hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
+                  disabled={loading}
+                  onClick={() => {
+                    setCodeSent(false);
+                    setCode("");
+                    setErr(null);
+                    setInfo(null);
+                  }}
+                >
+                  Change email
+                </button>
+
+                <button
+                  className="rounded-xl border px-3 py-2 text-sm hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
+                  disabled={loading}
+                  onClick={sendCode}
+                >
+                  Resend
+                </button>
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+      {info && <p className="text-sm opacity-80">{info}</p>}
+      {err && <p className="text-sm text-red-600">{err}</p>}
     </div>
   );
 }
