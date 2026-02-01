@@ -14,6 +14,22 @@ function getAdminClient() {
   });
 }
 
+// Keep subdomain safe + predictable
+function normalizeSubdomain(input: string) {
+  const s = String(input || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+
+  // basic safety
+  if (!s) return "";
+  if (s.length < 2) return "";
+  if (s.length > 63) return s.slice(0, 63);
+  return s;
+}
+
 export async function POST(req: Request) {
   const supabase = getAdminClient();
 
@@ -30,11 +46,9 @@ export async function POST(req: Request) {
     .trim()
     .toLowerCase();
 
-  const subdomain = String(
+  const subdomain = normalizeSubdomain(
     body.subdomain ?? body.tenant ?? body.tenantSubdomain ?? ""
-  )
-    .trim()
-    .toLowerCase();
+  );
 
   const domain = String(
     body.domain ?? process.env.NEXT_PUBLIC_ROOT_DOMAIN ?? "hi5tech.co.uk"
@@ -46,7 +60,6 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         error: "Missing required fields",
-        // helpful debug to see what the client actually sent
         got: {
           companyName: Boolean(companyName),
           email: Boolean(adminEmail),
@@ -58,6 +71,9 @@ export async function POST(req: Request) {
     );
   }
 
+  // 1) Create tenant
+  const trialEndsAtIso = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+
   const { data: tenant, error: tenantErr } = await supabase
     .from("tenants")
     .insert({
@@ -68,27 +84,40 @@ export async function POST(req: Request) {
       plan: "trial",
       status: "trial",
       is_active: true,
-      trial_ends_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+      trial_ends_at: trialEndsAtIso,
     })
     .select("id, domain, subdomain")
     .single();
 
-  if (tenantErr) {
-    return NextResponse.json({ error: tenantErr.message }, { status: 400 });
+  if (tenantErr || !tenant) {
+    return NextResponse.json(
+      {
+        error: tenantErr?.message ?? "Failed to create tenant",
+      },
+      { status: 400 }
+    );
   }
 
-  // Invite (best effort)
-  // 3) Send invite email (best effort)
-// Land on tenant domain -> /auth/callback -> then redirect into /auth/set-password
-const redirectTo =
-  `https://${tenant.subdomain}.${tenant.domain}/auth/callback` +
-  `?next=/auth/set-password` +
-  `&tenant=${encodeURIComponent(tenant.subdomain)}` +
-  `&company=${encodeURIComponent(companyName)}`;
+  // 2) Invite admin user
+  // IMPORTANT:
+  // - redirectTo must be allow-listed in Supabase Redirect URLs
+  // - We redirect into /auth/invite (landing page), NOT directly to Supabase confirmation URL
+  //   because email scanners can consume OTP links.
+  const redirectTo =
+    `https://${tenant.subdomain}.${tenant.domain}/auth/callback` +
+    `?next=/auth/invite`;
 
-const { data: inviteData, error: inviteErr } =
-  await supabase.auth.admin.inviteUserByEmail(adminEmail, { redirectTo });
+  const { data: inviteData, error: inviteErr } =
+    await supabase.auth.admin.inviteUserByEmail(adminEmail, {
+      redirectTo,
+      data: {
+        tenant: tenant.subdomain,
+        domain: tenant.domain,
+        company: companyName,
+      },
+    });
 
+  // Best effort — even if invite fails, tenant is created.
   return NextResponse.json({
     ok: true,
     tenant,
@@ -96,6 +125,7 @@ const { data: inviteData, error: inviteErr } =
       sent: !inviteErr,
       error: inviteErr?.message ?? null,
       userId: inviteData?.user?.id ?? null,
+      redirectTo,
     },
   });
 }
