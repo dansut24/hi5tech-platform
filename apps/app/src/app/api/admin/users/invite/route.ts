@@ -36,9 +36,9 @@ export async function POST(req: Request) {
   const parsed = parseTenantHost(host);
   if (!parsed.subdomain) return NextResponse.json({ ok: false, error: "Tenant subdomain required" }, { status: 400 });
 
-  const { data: tenant } = await supabase
+    const { data: tenant } = await supabase
     .from("tenants")
-    .select("id, domain, subdomain")
+    .select("id, domain, subdomain, name, company_name")
     .eq("domain", parsed.rootDomain)
     .eq("subdomain", parsed.subdomain)
     .maybeSingle();
@@ -95,15 +95,25 @@ export async function POST(req: Request) {
   }
 
   // Send invite email (goes to tenant set-password flow)
+    const company = String(tenant.company_name || tenant.name || tenant.subdomain || "").trim();
+
   const redirectTo =
     `https://${tenant.subdomain}.${tenant.domain}/auth/callback` +
     `?next=/auth/set-password` +
-    `&tenant=${encodeURIComponent(tenant.subdomain)}`;
+    `&tenant=${encodeURIComponent(tenant.subdomain)}` +
+    `&company=${encodeURIComponent(company)}`;
 
   const { data: inviteData, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(email, {
     redirectTo,
+    data: {
+      tenant: tenant.subdomain,
+      domain: tenant.domain,
+      company,
+      role,
+      invited_by: me.id,
+      tenant_id: tenant.id,
+    },
   });
-
   const invitedUserId = inviteData?.user?.id ?? null;
 
   // Even if email sending fails, we still create membership if we have an auth user id.
