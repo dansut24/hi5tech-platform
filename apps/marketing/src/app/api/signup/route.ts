@@ -78,9 +78,16 @@ export async function POST(req: Request) {
   }
 
   // Invite (best effort)
-  const redirectTo = `https://${tenant.subdomain}.${tenant.domain}/auth/callback`;
-  const { data: inviteData, error: inviteErr } =
-    await supabase.auth.admin.inviteUserByEmail(adminEmail, { redirectTo });
+  // 3) Send invite email (best effort)
+// Land on tenant domain -> /auth/callback -> then redirect into /auth/set-password
+const redirectTo =
+  `https://${tenant.subdomain}.${tenant.domain}/auth/callback` +
+  `?next=/auth/set-password` +
+  `&tenant=${encodeURIComponent(tenant.subdomain)}` +
+  `&company=${encodeURIComponent(companyName)}`;
+
+const { data: inviteData, error: inviteErr } =
+  await supabase.auth.admin.inviteUserByEmail(adminEmail, { redirectTo });
 
   return NextResponse.json({
     ok: true,
