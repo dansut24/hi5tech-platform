@@ -1,90 +1,92 @@
-// apps/app/src/app/api/auth/allowed/route.ts
 import { NextResponse, type NextRequest } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "hi5tech.co.uk";
 
-function getTenantFromHost(hostname: string) {
+function parseTenant(hostname: string) {
   const host = (hostname || "").split(":")[0].toLowerCase().trim();
 
+  if (!host) return { host, domain: null as string | null, subdomain: null as string | null };
+
   // Local / preview => no gating
-  if (!host || host === "localhost" || host.endsWith(".vercel.app")) {
-    return { domain: null as string | null, subdomain: null as string | null };
+  if (host === "localhost" || host.endsWith(".vercel.app")) {
+    return { host, domain: null, subdomain: null };
   }
 
   // Must be under root domain
   if (!host.endsWith(ROOT_DOMAIN)) {
-    return { domain: null as string | null, subdomain: null as string | null };
+    return { host, domain: null, subdomain: null };
   }
 
-  // Root domain => not a tenant
+  // Root domain => not tenant
   if (host === ROOT_DOMAIN) {
-    return { domain: ROOT_DOMAIN, subdomain: null };
+    return { host, domain: ROOT_DOMAIN, subdomain: null };
   }
 
-  // "dan-sutton.hi5tech.co.uk" => "dan-sutton"
-  const sub = host.slice(0, -ROOT_DOMAIN.length - 1);
-  if (!sub) return { domain: ROOT_DOMAIN, subdomain: null };
+  const sub = host.slice(0, -ROOT_DOMAIN.length - 1); // remove ".hi5tech.co.uk"
+  if (!sub) return { host, domain: ROOT_DOMAIN, subdomain: null };
 
-  // Ignore non-tenant subdomains if you use them
+  // Ignore non-tenant subdomains
   if (sub === "www" || sub === "app") {
-    return { domain: ROOT_DOMAIN, subdomain: null };
+    return { host, domain: ROOT_DOMAIN, subdomain: null };
   }
 
-  return { domain: ROOT_DOMAIN, subdomain: sub };
+  return { host, domain: ROOT_DOMAIN, subdomain: sub };
 }
 
 export async function POST(req: NextRequest) {
+  const debug: any = {
+    root_domain: ROOT_DOMAIN,
+    hdr_host: req.headers.get("host"),
+    hdr_x_forwarded_host: req.headers.get("x-forwarded-host"),
+    hdr_x_forwarded_proto: req.headers.get("x-forwarded-proto"),
+  };
+
   try {
     const body = await req.json().catch(() => ({}));
     const email = String(body?.email || "").trim().toLowerCase();
+    debug.email = email;
 
-    if (!email) {
-      return NextResponse.json(
-        { allowed: false, reason: "missing_email" },
-        { status: 400 }
-      );
-    }
-
-    // Prefer forwarded host on Vercel/Proxies
     const host =
       req.headers.get("x-forwarded-host") ||
       req.headers.get("host") ||
       "";
 
-    const { domain, subdomain } = getTenantFromHost(host);
+    const parsed = parseTenant(host);
+    debug.parsed = parsed;
 
-    // If no tenant subdomain (root domain/app/www/etc), you can choose:
-    // - allow false (safer), or
-    // - allow true (if you want global login)
-    if (!domain || !subdomain) {
-      return NextResponse.json({
-        allowed: false,
-        reason: "no_tenant_subdomain",
-      });
+    if (!email) {
+      return NextResponse.json({ allowed: false, reason: "missing_email", debug }, { status: 200 });
     }
 
-    const supabase = await supabaseServer();
-
-    // Call your SQL function
-    const { data, error } = await supabase.rpc("is_email_allowed_for_tenant", {
-      p_domain: domain,
-      p_subdomain: subdomain,
-      p_email: email,
-    });
-
-    if (error) {
+    if (!parsed.domain || !parsed.subdomain) {
       return NextResponse.json(
-        { allowed: false, reason: "rpc_error", detail: error.message },
+        { allowed: false, reason: "no_tenant_subdomain", debug },
         { status: 200 }
       );
     }
 
-    return NextResponse.json({ allowed: Boolean(data) });
+    const supabase = await supabaseServer();
+
+    const { data, error } = await supabase.rpc("is_email_allowed_for_tenant", {
+      p_domain: parsed.domain,
+      p_subdomain: parsed.subdomain,
+      p_email: email,
+    });
+
+    debug.rpc = {
+      data,
+      error: error ? { message: error.message, code: (error as any).code } : null,
+      args: { p_domain: parsed.domain, p_subdomain: parsed.subdomain, p_email: email },
+    };
+
+    if (error) {
+      return NextResponse.json({ allowed: false, reason: "rpc_error", debug }, { status: 200 });
+    }
+
+    return NextResponse.json({ allowed: Boolean(data), debug }, { status: 200 });
   } catch (e: any) {
-    return NextResponse.json(
-      { allowed: false, reason: "server_error", detail: e?.message || String(e) },
-      { status: 200 }
-    );
+    debug.exception = e?.message || String(e);
+    return NextResponse.json({ allowed: false, reason: "server_error", debug }, { status: 200 });
   }
 }
