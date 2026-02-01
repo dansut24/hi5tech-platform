@@ -75,42 +75,20 @@ export default function LoginForm() {
     setInfo(null);
 
     const e = email.trim().toLowerCase();
-    if (!e) {
-      setLoading(false);
-      setErr("Please enter your email.");
-      return;
-    }
-    if (!password) {
-      setLoading(false);
-      setErr("Please enter your password.");
-      return;
-    }
+    if (!e) return doneErr("Please enter your email.");
+    if (!password) return doneErr("Please enter your password.");
 
     try {
       const allowed = await checkAllowed(e);
-      if (!allowed) {
-        setLoading(false);
-        setErr("That email isn’t authorised for this tenant.");
-        return;
-      }
+      if (!allowed) return doneErr("That email isn’t authorised for this tenant.");
     } catch (ex: any) {
-      setLoading(false);
-      setErr(ex?.message || "Auth check failed.");
-      return;
+      return doneErr(ex?.message || "Auth check failed.");
     }
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: e,
-      password,
-    });
+    const { error } = await supabase.auth.signInWithPassword({ email: e, password });
+    if (error) return doneErr(error.message);
 
     setLoading(false);
-
-    if (error) {
-      setErr(error.message);
-      return;
-    }
-
     window.location.assign("/");
   }
 
@@ -120,34 +98,19 @@ export default function LoginForm() {
     setInfo(null);
 
     const e = email.trim().toLowerCase();
-    if (!e) {
-      setLoading(false);
-      setErr("Please enter your email.");
-      return;
-    }
+    if (!e) return doneErr("Please enter your email.");
 
     try {
       const allowed = await checkAllowed(e);
-      if (!allowed) {
-        setLoading(false);
-        setErr("That email isn’t authorised for this tenant.");
-        return;
-      }
+      if (!allowed) return doneErr("That email isn’t authorised for this tenant.");
     } catch (ex: any) {
-      setLoading(false);
-      setErr(ex?.message || "Auth check failed.");
-      return;
+      return doneErr(ex?.message || "Auth check failed.");
     }
 
     const { error } = await supabase.auth.signInWithOtp({ email: e });
+    if (error) return doneErr(error.message);
 
     setLoading(false);
-
-    if (error) {
-      setErr(error.message);
-      return;
-    }
-
     setStep("enterCode");
     setInfo("Code sent. Check your email and enter the 6-digit code.");
   }
@@ -159,12 +122,7 @@ export default function LoginForm() {
 
     const e = email.trim().toLowerCase();
     const token = code.trim();
-
-    if (!token) {
-      setLoading(false);
-      setErr("Please enter the code.");
-      return;
-    }
+    if (!token) return doneErr("Please enter the code.");
 
     const { data, error } = await supabase.auth.verifyOtp({
       email: e,
@@ -172,17 +130,10 @@ export default function LoginForm() {
       type: "email",
     });
 
+    if (error) return doneErr(error.message);
+    if (!data.session) return doneErr("Verified, but no session returned.");
+
     setLoading(false);
-
-    if (error) {
-      setErr(error.message);
-      return;
-    }
-    if (!data.session) {
-      setErr("Verified, but no session returned. Check Supabase Auth settings.");
-      return;
-    }
-
     window.location.assign("/");
   }
 
@@ -192,99 +143,75 @@ export default function LoginForm() {
     setInfo(null);
 
     const e = email.trim().toLowerCase();
-    if (!e) {
-      setLoading(false);
-      setErr("Enter your email first.");
-      return;
-    }
+    if (!e) return doneErr("Enter your email first.");
 
-    // Optional: require tenant membership to request reset
     try {
       const allowed = await checkAllowed(e);
-      if (!allowed) {
-        setLoading(false);
-        setErr("That email isn’t authorised for this tenant.");
-        return;
-      }
+      if (!allowed) return doneErr("That email isn’t authorised for this tenant.");
     } catch (ex: any) {
-      setLoading(false);
-      setErr(ex?.message || "Auth check failed.");
-      return;
+      return doneErr(ex?.message || "Auth check failed.");
     }
 
     const redirectTo = `${window.location.origin}/auth/reset`;
+    const { error } = await supabase.auth.resetPasswordForEmail(e, { redirectTo });
 
-    const { error } = await supabase.auth.resetPasswordForEmail(e, {
-      redirectTo,
-    });
+    if (error) return doneErr(error.message);
 
     setLoading(false);
-
-    if (error) {
-      setErr(error.message);
-      return;
-    }
-
     setInfo("Password reset email sent. Check your inbox.");
   }
 
-  // UI-only for now (wire later when you’re ready)
-  async function oauth(provider: "google" | "github" | "azure") {
+  function doneErr(message: string) {
+    setLoading(false);
+    setErr(message);
+    return;
+  }
+
+  // UI-only for now (wire later when providers configured)
+  async function oauth(_provider: "google" | "github" | "azure") {
     setErr(null);
     setInfo("SSO buttons are ready — we’ll wire these once providers are configured.");
   }
+
+  const modeBtn = (label: string, value: Mode) => {
+    const active = mode === value;
+    return (
+      <button
+        type="button"
+        className={[
+          "flex-1 rounded-2xl px-3 py-2 text-sm font-semibold transition",
+          active
+            ? "hi5-btn-primary"
+            : "hi5-btn-ghost",
+        ].join(" ")}
+        onClick={() => {
+          setMode(value);
+          setStep("enterEmail");
+          setErr(null);
+          setInfo(null);
+          setCode("");
+          setPassword("");
+        }}
+        disabled={loading}
+      >
+        {label}
+      </button>
+    );
+  };
 
   return (
     <div className="space-y-4">
       {/* Mode switch */}
       <div className="flex gap-2">
-        <button
-          type="button"
-          className={[
-            "flex-1 rounded-xl border px-3 py-2 text-sm transition",
-            "hi5-border hover:bg-black/5 dark:hover:bg-white/5",
-            mode === "password"
-              ? "bg-[rgba(var(--hi5-accent),0.12)] border-[rgba(var(--hi5-accent),0.30)]"
-              : "opacity-80",
-          ].join(" ")}
-          onClick={() => {
-            setMode("password");
-            setStep("enterEmail");
-            setCode("");
-            setErr(null);
-            setInfo(null);
-          }}
-          disabled={loading}
-        >
-          Password
-        </button>
-        <button
-          type="button"
-          className={[
-            "flex-1 rounded-xl border px-3 py-2 text-sm transition",
-            "hi5-border hover:bg-black/5 dark:hover:bg-white/5",
-            mode === "otp"
-              ? "bg-[rgba(var(--hi5-accent),0.12)] border-[rgba(var(--hi5-accent),0.30)]"
-              : "opacity-80",
-          ].join(" ")}
-          onClick={() => {
-            setMode("otp");
-            setStep("enterEmail");
-            setPassword("");
-            setErr(null);
-            setInfo(null);
-          }}
-          disabled={loading}
-        >
-          Email code
-        </button>
+        {modeBtn("Password", "password")}
+        {modeBtn("Email code", "otp")}
       </div>
 
       {/* Email */}
-      <label className="block text-sm">
-        Email
+      <label className="block text-sm font-medium">
+        Email address
         <input
-          className="mt-1 w-full hi5-input"
+          className="mt-2 hi5-input"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           inputMode="email"
@@ -293,13 +220,12 @@ export default function LoginForm() {
         />
       </label>
 
-      {/* Password mode */}
       {mode === "password" && (
         <>
-          <label className="block text-sm">
+          <label className="block text-sm font-medium">
             Password
             <input
-              className="mt-1 w-full hi5-input"
+              className="mt-2 hi5-input"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               type="password"
@@ -310,16 +236,16 @@ export default function LoginForm() {
 
           <button
             type="button"
-            className="w-full rounded-xl border px-3 py-2 font-medium hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
+            className="w-full hi5-btn-primary"
             disabled={!email.trim() || !password || loading}
             onClick={handlePasswordLogin}
           >
-            {loading ? "Signing in..." : "Sign in"}
+            {loading ? "Signing in..." : "Login"}
           </button>
 
           <button
             type="button"
-            className="w-full rounded-xl border px-3 py-2 text-sm hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
+            className="w-full hi5-btn-ghost"
             disabled={loading}
             onClick={sendPasswordReset}
           >
@@ -328,13 +254,12 @@ export default function LoginForm() {
         </>
       )}
 
-      {/* OTP mode */}
       {mode === "otp" && (
         <>
           {step === "enterEmail" ? (
             <button
               type="button"
-              className="w-full rounded-xl border px-3 py-2 font-medium hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
+              className="w-full hi5-btn-primary"
               disabled={!email.trim() || loading}
               onClick={sendOtpCode}
             >
@@ -342,10 +267,10 @@ export default function LoginForm() {
             </button>
           ) : (
             <>
-              <label className="block text-sm">
+              <label className="block text-sm font-medium">
                 6-digit code
                 <input
-                  className="mt-1 w-full hi5-input tracking-widest"
+                  className="mt-2 hi5-input tracking-widest"
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
                   inputMode="numeric"
@@ -356,77 +281,79 @@ export default function LoginForm() {
 
               <button
                 type="button"
-                className="w-full rounded-xl border px-3 py-2 font-medium hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
+                className="w-full hi5-btn-primary"
                 disabled={!code.trim() || loading}
                 onClick={verifyOtpCode}
               >
-                {loading ? "Verifying..." : "Verify & sign in"}
+                {loading ? "Verifying..." : "Continue"}
               </button>
 
-              <button
-                type="button"
-                className="w-full rounded-xl border px-3 py-2 text-sm hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
-                disabled={loading}
-                onClick={() => {
-                  setStep("enterEmail");
-                  setCode("");
-                  setErr(null);
-                  setInfo(null);
-                }}
-              >
-                Use a different email
-              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  className="w-full hi5-btn-ghost"
+                  disabled={loading}
+                  onClick={() => {
+                    setStep("enterEmail");
+                    setCode("");
+                    setErr(null);
+                    setInfo(null);
+                  }}
+                >
+                  Change email
+                </button>
 
-              <button
-                type="button"
-                className="w-full rounded-xl border px-3 py-2 text-sm hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
-                disabled={loading}
-                onClick={sendOtpCode}
-              >
-                Resend code
-              </button>
+                <button
+                  type="button"
+                  className="w-full hi5-btn-ghost"
+                  disabled={loading}
+                  onClick={sendOtpCode}
+                >
+                  Resend
+                </button>
+              </div>
             </>
           )}
         </>
       )}
 
-      {/* SSO (UI now, wire later) */}
+      {/* SSO */}
       <div className="pt-2">
         <div className="flex items-center gap-3">
           <div className="h-px flex-1 bg-black/10 dark:bg-white/10" />
-          <span className="text-xs opacity-70">or continue with</span>
+          <span className="text-xs opacity-70">Or continue with</span>
           <div className="h-px flex-1 bg-black/10 dark:bg-white/10" />
         </div>
 
-        <div className="mt-3 grid grid-cols-1 gap-2">
+        <div className="mt-3 grid grid-cols-3 gap-2">
           <button
             type="button"
             onClick={() => oauth("google")}
-            className="w-full rounded-xl border px-3 py-2 text-sm hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center justify-center gap-2"
+            className="hi5-btn-ghost flex items-center justify-center gap-2"
             disabled={loading}
+            title="Google"
           >
             <GoogleLogo />
-            Google
           </button>
 
           <button
             type="button"
             onClick={() => oauth("azure")}
-            className="w-full rounded-xl border px-3 py-2 text-sm hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center justify-center gap-2"
+            className="hi5-btn-ghost flex items-center justify-center gap-2"
             disabled={loading}
+            title="Microsoft"
           >
             <MicrosoftLogo />
-            Microsoft
           </button>
 
           <button
             type="button"
             onClick={() => oauth("github")}
-            className="w-full rounded-xl border px-3 py-2 text-sm hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center justify-center gap-2"
+            className="hi5-btn-ghost flex items-center justify-center gap-2"
             disabled={loading}
+            title="GitHub"
           >
             <GitHubLogo />
-            GitHub
           </button>
         </div>
       </div>
