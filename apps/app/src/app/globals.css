@@ -3,32 +3,29 @@
 *, *::before, *::after { box-sizing: border-box; }
 
 /* ----------------------------------------------------------
-   Hi5Tech Theme Tokens
-   - All color values are RGB triples (space separated)
-   - Use:
-       rgb(var(--token))
-       rgb(var(--token) / alpha)
+   Hi5Tech Theme Tokens (RGB triples)
+   Use: rgb(var(--token)) or rgb(var(--token) / alpha)
 ---------------------------------------------------------- */
 
 :root {
   color-scheme: light;
 
   /* Base surfaces / text */
-  --hi5-bg: 248 250 252;            /* slate-50 */
-  --hi5-fg: 15 23 42;               /* slate-900 */
-  --hi5-muted: 100 116 139;         /* slate-500 */
+  --hi5-bg: 255 255 255;            /* pure white */
+  --hi5-fg: 10 12 16;               /* near-black */
+  --hi5-muted: 90 98 110;           /* cool grey */
 
   /* Surface glass */
   --hi5-card: 255 255 255;
-  --hi5-card-alpha: 0.58;
+  --hi5-card-alpha: 0.62;
 
   /* Borders / dividers */
-  --hi5-border: 15 23 42;
-  --hi5-border-alpha: 0.12;
+  --hi5-border: 10 12 16;
+  --hi5-border-alpha: 0.10;
 
   /* Shadows */
-  --hi5-shadow: 2 6 23;
-  --hi5-shadow-alpha: 0.10;
+  --hi5-shadow: 0 0 0;
+  --hi5-shadow-alpha: 0.0;
 
   /* Accent (brandable) */
   --hi5-accent: 0 193 255;          /* cyan */
@@ -39,87 +36,125 @@
   --hi5-topbar: 255 255 255;
   --hi5-topbar-alpha: 0.55;
 
-  /* Gradient intensity knobs (brandable) */
-  --hi5-glow-1: 0.18;
-  --hi5-glow-2: 0.14;
-  --hi5-glow-3: 0.10;
+  /* Glow knobs */
+  --hi5-glow-1: 0.20;
+  --hi5-glow-2: 0.18;
+  --hi5-glow-3: 0.16;
 
-  /* =========================================================
-     GLOBAL BACKDROP (light default)
-     Painted behind everything via html::before
-  ========================================================= */
-  --hi5-bg-gradient:
-    radial-gradient(1100px 600px at 18% 8%,
-      rgb(var(--hi5-accent) / var(--hi5-glow-1)),
-      transparent 62%),
-    radial-gradient(980px 560px at 88% 18%,
-      rgb(var(--hi5-accent-3) / var(--hi5-glow-2)),
-      transparent 62%),
-    radial-gradient(900px 520px at 55% 105%,
-      rgb(var(--hi5-accent-2) / var(--hi5-glow-3)),
+  /* “Ball” sizes */
+  --hi5-blob-size-1: 520px;
+  --hi5-blob-size-2: 560px;
+  --hi5-blob-size-3: 620px;
+
+  /* Backdrop base (white) */
+  --hi5-backdrop-base: linear-gradient(180deg, rgb(255 255 255 / 1), rgb(255 255 255 / 1));
+
+  /* Aurora wash (subtle layer) */
+  --hi5-aurora-wash:
+    radial-gradient(900px 520px at 14% 8%,
+      rgb(var(--hi5-accent) / 0.20),
       transparent 60%),
-    linear-gradient(180deg,
-      rgb(var(--hi5-bg) / 1),
-      rgb(var(--hi5-bg) / 1));
+    radial-gradient(860px 520px at 86% 18%,
+      rgb(var(--hi5-accent-2) / 0.16),
+      transparent 62%),
+    radial-gradient(920px 560px at 50% 100%,
+      rgb(var(--hi5-accent-3) / 0.14),
+      transparent 60%);
+
+  /* The balls (more saturated + distinct) */
+  --hi5-balls:
+    radial-gradient(circle var(--hi5-blob-size-1) at 16% 12%,
+      rgb(var(--hi5-accent) / 0.95),
+      transparent 58%),
+    radial-gradient(circle var(--hi5-blob-size-2) at 88% 22%,
+      rgb(var(--hi5-accent-2) / 0.92),
+      transparent 58%),
+    radial-gradient(circle var(--hi5-blob-size-3) at 35% 92%,
+      rgb(var(--hi5-accent-3) / 0.86),
+      transparent 62%);
+
+  /* Button gradient */
+  --hi5-btn-grad:
+    linear-gradient(90deg,
+      rgb(var(--hi5-accent) / 1),
+      rgb(var(--hi5-accent-2) / 1));
+
+  /* Button glow */
+  --hi5-btn-glow:
+    0 14px 38px rgb(var(--hi5-accent) / 0.18),
+    0 10px 26px rgb(var(--hi5-accent-2) / 0.14);
+
+  /* Subtle grain (light) */
+  --hi5-grain-opacity: 0.06;
 }
 
 .dark {
   color-scheme: dark;
 
-  --hi5-bg: 2 6 23;                 /* deep navy */
-  --hi5-fg: 226 232 240;            /* slate-200 */
-  --hi5-muted: 148 163 184;         /* slate-400 */
+  /* Base surfaces / text */
+  --hi5-bg: 0 0 0;                  /* pure black */
+  --hi5-fg: 240 244 250;            /* near-white */
+  --hi5-muted: 165 176 192;
 
-  --hi5-card: 14 18 28;             /* deep surface */
-  --hi5-card-alpha: 0.28;
+  /* Surface glass */
+  --hi5-card: 10 12 16;
+  --hi5-card-alpha: 0.34;
 
-  --hi5-border: 220 230 255;
-  --hi5-border-alpha: 0.16;
+  /* Borders / dividers */
+  --hi5-border: 255 255 255;
+  --hi5-border-alpha: 0.14;
 
-  --hi5-shadow: 0 0 0;
-  --hi5-shadow-alpha: 0.0;
+  /* Topbar */
+  --hi5-topbar: 10 12 16;
+  --hi5-topbar-alpha: 0.46;
 
-  --hi5-topbar: 12 14 20;
-  --hi5-topbar-alpha: 0.48;
+  /* Glow knobs */
+  --hi5-glow-1: 0.26;
+  --hi5-glow-2: 0.22;
+  --hi5-glow-3: 0.20;
 
-  --hi5-glow-1: 0.22;
-  --hi5-glow-2: 0.18;
-  --hi5-glow-3: 0.14;
+  /* Backdrop base (black) */
+  --hi5-backdrop-base: linear-gradient(180deg, rgb(0 0 0 / 1), rgb(0 0 0 / 1));
 
-  --hi5-bg-gradient:
-    radial-gradient(980px 640px at 22% 6%,
-      rgb(var(--hi5-accent) / var(--hi5-glow-1)),
+  /* Dark mode needs stronger wash so it pops */
+  --hi5-aurora-wash:
+    radial-gradient(980px 620px at 18% 10%,
+      rgb(var(--hi5-accent) / 0.26),
       transparent 60%),
-    radial-gradient(900px 620px at 82% 20%,
-      rgb(var(--hi5-accent-2) / var(--hi5-glow-2)),
+    radial-gradient(940px 620px at 86% 18%,
+      rgb(var(--hi5-accent-2) / 0.22),
       transparent 62%),
-    radial-gradient(860px 620px at 55% 95%,
-      rgb(var(--hi5-accent-3) / var(--hi5-glow-3)),
-      transparent 62%),
-    linear-gradient(180deg,
-      rgb(6 7 10 / 1) 0%,
-      rgb(10 10 18 / 1) 55%,
-      rgb(8 9 14 / 1) 100%);
+    radial-gradient(980px 680px at 52% 96%,
+      rgb(var(--hi5-accent-3) / 0.20),
+      transparent 62%);
+
+  /* Balls: slightly stronger in dark */
+  --hi5-balls:
+    radial-gradient(circle var(--hi5-blob-size-1) at 16% 12%,
+      rgb(var(--hi5-accent) / 1),
+      transparent 58%),
+    radial-gradient(circle var(--hi5-blob-size-2) at 88% 22%,
+      rgb(var(--hi5-accent-2) / 0.98),
+      transparent 58%),
+    radial-gradient(circle var(--hi5-blob-size-3) at 35% 92%,
+      rgb(var(--hi5-accent-3) / 0.92),
+      transparent 62%);
+
+  /* Button glow stronger in dark */
+  --hi5-btn-glow:
+    0 16px 46px rgb(var(--hi5-accent) / 0.22),
+    0 12px 34px rgb(var(--hi5-accent-2) / 0.18);
+
+  /* Subtle grain (dark) */
+  --hi5-grain-opacity: 0.10;
 }
 
-/* System dark fallback (when theme_mode = system and you do NOT add .dark class)
-   This only matters if you want system-dark to apply automatically */
+/* System dark fallback (only if you rely on prefers-color-scheme without adding .dark) */
 @media (prefers-color-scheme: dark) {
   :root:not(.dark) {
-    --hi5-bg-gradient:
-      radial-gradient(980px 640px at 22% 6%,
-        rgb(var(--hi5-accent) / 0.22),
-        transparent 60%),
-      radial-gradient(900px 620px at 82% 20%,
-        rgb(var(--hi5-accent-2) / 0.18),
-        transparent 62%),
-      radial-gradient(860px 620px at 55% 95%,
-        rgb(var(--hi5-accent-3) / 0.14),
-        transparent 62%),
-      linear-gradient(180deg,
-        rgb(6 7 10 / 1) 0%,
-        rgb(10 10 18 / 1) 55%,
-        rgb(8 9 14 / 1) 100%);
+    --hi5-bg: 0 0 0;
+    --hi5-fg: 240 244 250;
+    --hi5-muted: 165 176 192;
   }
 }
 
@@ -139,14 +174,56 @@ body {
   background: transparent !important;
 }
 
-/* Paint the gradient behind everything */
+/* ----------------------------------------------------------
+   BACKDROP LAYERS (fixed behind everything)
+   - layer 1: base white/black
+   - layer 2: subtle aurora wash
+   - layer 3: the colourful balls (blurred)
+   - layer 4: grain for depth
+---------------------------------------------------------- */
+
+/* Base */
 html::before {
   content: "";
   position: fixed;
   inset: 0;
-  background: var(--hi5-bg-gradient);
+  background: var(--hi5-backdrop-base);
+  z-index: -4;
+  pointer-events: none;
+}
+
+/* Aurora wash */
+html::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: var(--hi5-aurora-wash);
+  z-index: -3;
+  pointer-events: none;
+}
+
+/* Balls layer (needs its own pseudo-element via body) */
+body::before {
+  content: "";
+  position: fixed;
+  inset: -80px;
+  background: var(--hi5-balls);
+  filter: blur(46px);
+  opacity: 0.90;
+  z-index: -2;
+  pointer-events: none;
+}
+
+/* Grain layer */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
   z-index: -1;
   pointer-events: none;
+  opacity: var(--hi5-grain-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");
+  background-size: 240px 240px;
 }
 
 /* Optional layout helper (no background here, just sizing) */
@@ -158,6 +235,7 @@ html::before {
 /* ----------------------------------------------------------
    Utility classes used across the app
 ---------------------------------------------------------- */
+
 .hi5-border {
   border-color: rgb(var(--hi5-border) / var(--hi5-border-alpha));
 }
@@ -169,54 +247,148 @@ html::before {
 .hi5-card {
   background: rgb(var(--hi5-card) / var(--hi5-card-alpha));
   border: 1px solid rgb(var(--hi5-border) / var(--hi5-border-alpha));
-  border-radius: 16px;
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  box-shadow: 0 16px 38px rgb(var(--hi5-shadow) / calc(var(--hi5-shadow-alpha) * 0.90));
-}
-
-.hi5-panel {
-  background: rgb(var(--hi5-card) / calc(var(--hi5-card-alpha) + 0.04));
-  border: 1px solid rgb(var(--hi5-border) / calc(var(--hi5-border-alpha) * 0.90));
   border-radius: 18px;
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   box-shadow:
-    0 12px 34px rgb(0 0 0 / 0.07),
-    0 1px 0 rgb(255 255 255 / 0.35) inset;
+    0 18px 48px rgb(0 0 0 / 0.08),
+    0 1px 0 rgb(255 255 255 / 0.28) inset;
+}
+
+.dark .hi5-card {
+  box-shadow:
+    0 22px 58px rgb(0 0 0 / 0.55),
+    0 1px 0 rgb(255 255 255 / 0.06) inset;
+}
+
+.hi5-panel {
+  background: rgb(var(--hi5-card) / calc(var(--hi5-card-alpha) + 0.06));
+  border: 1px solid rgb(var(--hi5-border) / calc(var(--hi5-border-alpha) * 0.95));
+  border-radius: 22px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow:
+    0 20px 60px rgb(0 0 0 / 0.10),
+    0 1px 0 rgb(255 255 255 / 0.30) inset;
 }
 
 .dark .hi5-panel {
   box-shadow:
-    0 18px 50px rgb(0 0 0 / 0.42),
+    0 26px 80px rgb(0 0 0 / 0.62),
     0 1px 0 rgb(255 255 255 / 0.06) inset;
 }
 
-.hi5-accent {
-  color: rgb(var(--hi5-accent));
-}
+.hi5-accent { color: rgb(var(--hi5-accent)); }
 
-.hi5-accent-btn {
-  color: #071019;
-  background: linear-gradient(
-    135deg,
-    rgb(var(--hi5-accent) / 1),
-    rgb(var(--hi5-accent-2) / 0.95)
-  );
-  border: 1px solid rgb(255 255 255 / 0.28);
+/* ==========================
+   POP Buttons
+   ========================== */
+
+.hi5-accent-btn,
+.hi5-btn-primary {
+  color: #07090f;
+  border: 1px solid rgb(255 255 255 / 0.22);
+  border-radius: 18px;
+  padding: 10px 14px;
+  font-weight: 800;
+
+  background: var(--hi5-btn-grad);
+
   box-shadow:
-    0 12px 26px rgb(var(--hi5-accent) / 0.22),
-    0 8px 18px rgb(var(--hi5-accent-2) / 0.16);
+    var(--hi5-btn-glow),
+    0 1px 0 rgb(255 255 255 / 0.20) inset;
+
+  transition: transform 140ms ease, filter 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
 }
 
-.hi5-accent-btn:hover { filter: brightness(1.03) saturate(1.05); }
-.hi5-accent-btn:active { transform: translateY(1px); }
+.dark .hi5-accent-btn,
+.dark .hi5-btn-primary {
+  color: #ffffff;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  box-shadow:
+    var(--hi5-btn-glow),
+    0 1px 0 rgb(255 255 255 / 0.08) inset;
+}
 
-.hi5-glass-bar {
-  background: rgb(var(--hi5-card) / 0.42);
-  border-bottom: 1px solid rgb(var(--hi5-border) / var(--hi5-border-alpha));
+.hi5-accent-btn:hover,
+.hi5-btn-primary:hover {
+  filter: brightness(1.05) saturate(1.10);
+  transform: translateY(-1px);
+}
+
+.hi5-accent-btn:active,
+.hi5-btn-primary:active {
+  transform: translateY(0px);
+}
+
+.hi5-accent-btn:disabled,
+.hi5-btn-primary:disabled {
+  opacity: 0.55;
+  filter: none;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Secondary / “glass” button */
+.hi5-btn-ghost {
+  border-radius: 18px;
+  padding: 10px 14px;
+  font-weight: 700;
+  border: 1px solid rgb(var(--hi5-border) / 0.14);
+  background: rgb(255 255 255 / 0.58);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
+  transition: transform 140ms ease, background 140ms ease, opacity 140ms ease;
+}
+
+.dark .hi5-btn-ghost {
+  border: 1px solid rgb(255 255 255 / 0.14);
+  background: rgb(10 12 16 / 0.34);
+}
+
+.hi5-btn-ghost:hover {
+  transform: translateY(-1px);
+  background: rgb(255 255 255 / 0.70);
+}
+
+.dark .hi5-btn-ghost:hover {
+  background: rgb(10 12 16 / 0.44);
+}
+
+/* ==========================
+   Inputs
+   ========================== */
+.hi5-input {
+  width: 100%;
+  background: rgb(255 255 255 / 0.62);
+  border: 1px solid rgb(var(--hi5-border) / 0.16) !important;
+  border-radius: 18px;
+  padding: 10px 12px;
+  color: rgb(var(--hi5-fg));
+  outline: none;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  transition: box-shadow 160ms ease, border-color 160ms ease, background 160ms ease, transform 160ms ease;
+}
+
+.dark .hi5-input {
+  background: rgb(10 12 16 / 0.34);
+  border: 1px solid rgb(255 255 255 / 0.14) !important;
+}
+
+.hi5-input:focus {
+  border-color: rgb(var(--hi5-accent) / 0.85) !important;
+  box-shadow:
+    0 0 0 5px rgb(var(--hi5-accent) / 0.18),
+    0 14px 40px rgb(var(--hi5-accent-2) / 0.12);
+}
+
+/* Topbar / glass bars */
+.hi5-glass-bar {
+  background: rgb(var(--hi5-card) / 0.44);
+  border-bottom: 1px solid rgb(var(--hi5-border) / var(--hi5-border-alpha));
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 
 .hi5-topbar {
@@ -224,28 +396,6 @@ html::before {
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   border-bottom: 1px solid rgb(var(--hi5-border) / 0.14);
-}
-
-.hi5-input {
-  background: rgb(var(--hi5-card) / 0.55);
-  border: 1px solid rgb(var(--hi5-border) / 0.32) !important;
-  border-radius: 16px;
-  padding: 10px 12px;
-  color: rgb(var(--hi5-fg));
-  outline: none;
-  transition: box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
-}
-
-.dark .hi5-input {
-  background: rgb(var(--hi5-card) / 0.22);
-  border: 1px solid rgb(var(--hi5-border) / 0.22) !important;
-}
-
-.hi5-input:focus {
-  border-color: rgb(var(--hi5-accent) / 0.75) !important;
-  box-shadow:
-    0 0 0 4px rgb(var(--hi5-accent) / 0.22),
-    0 8px 22px rgb(var(--hi5-accent) / 0.14);
 }
 
 /* Sidebar / overlay */
@@ -264,7 +414,11 @@ html::before {
 
 /* Reduce motion */
 @media (prefers-reduced-motion: reduce) {
-  .hi5-accent-btn:active { transform: none; }
+  .hi5-accent-btn:active,
+  .hi5-btn-primary:active,
+  .hi5-btn-ghost:hover {
+    transform: none;
+  }
 }
 
 /* Layout helpers */
