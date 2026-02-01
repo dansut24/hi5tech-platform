@@ -3,34 +3,37 @@
 import { useMemo, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 
-type Mode = "password" | "code";
+type Mode = "password" | "otp";
+type Step = "enterEmail" | "enterCode";
 
-function MicrosoftIcon() {
+function MicrosoftLogo(props: React.SVGProps<SVGSVGElement>) {
   return (
-    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-      <rect x="1" y="1" width="7" height="7" fill="#f25022" />
-      <rect x="10" y="1" width="7" height="7" fill="#7fba00" />
-      <rect x="1" y="10" width="7" height="7" fill="#00a4ef" />
-      <rect x="10" y="10" width="7" height="7" fill="#ffb900" />
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" {...props}>
+      <path fill="#F25022" d="M2 2h9v9H2z" />
+      <path fill="#7FBA00" d="M13 2h9v9h-9z" />
+      <path fill="#00A4EF" d="M2 13h9v9H2z" />
+      <path fill="#FFB900" d="M13 13h9v9h-9z" />
     </svg>
   );
 }
-function GoogleIcon() {
+
+function GoogleLogo(props: React.SVGProps<SVGSVGElement>) {
   return (
-    <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
-      <path fill="#EA4335" d="M24 9.5c3.54 0 6.04 1.53 7.43 2.8l5.43-5.43C33.64 3.96 29.3 2 24 2 14.73 2 6.9 7.38 3.69 15.22l6.66 5.17C12.02 14.02 17.55 9.5 24 9.5z"/>
-      <path fill="#4285F4" d="M46.5 24c0-1.64-.15-3.21-.43-4.73H24v9.02h12.64c-.55 2.96-2.22 5.47-4.73 7.16l7.24 5.61C43.86 36.79 46.5 30.91 46.5 24z"/>
-      <path fill="#FBBC05" d="M10.35 28.61A14.5 14.5 0 0 1 9.5 24c0-1.6.27-3.15.85-4.61l-6.66-5.17A23.9 23.9 0 0 0 2 24c0 3.87.93 7.53 2.58 10.78l7.77-6.17z"/>
-      <path fill="#34A853" d="M24 46c5.3 0 9.76-1.75 13.01-4.74l-7.24-5.61c-2 1.35-4.56 2.14-5.77 2.14-6.45 0-11.98-4.52-13.65-10.89l-7.77 6.17C6.9 40.62 14.73 46 24 46z"/>
+    <svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true" {...props}>
+      <path fill="#EA4335" d="M24 9.5c3.54 0 6.02 1.53 7.4 2.8l5.4-5.4C33.54 3.7 29.2 1.5 24 1.5 14.8 1.5 6.9 6.8 3.1 14.4l6.5 5.1C11.4 13.2 17.2 9.5 24 9.5z"/>
+      <path fill="#4285F4" d="M46.5 24c0-1.6-.15-2.8-.47-4.05H24v7.7h12.7c-.26 2.0-1.67 5.0-4.8 7.05l6.2 4.8C43.8 35.7 46.5 30.4 46.5 24z"/>
+      <path fill="#FBBC05" d="M9.6 28.5c-.45-1.35-.7-2.8-.7-4.5s.25-3.15.68-4.5l-6.5-5.1C1.7 17.2 1 20.5 1 24s.7 6.8 2.1 9.6l6.5-5.1z"/>
+      <path fill="#34A853" d="M24 46.5c6.5 0 12-2.15 16-5.85l-6.2-4.8c-1.65 1.15-3.85 1.95-9.8 1.95-6.8 0-12.55-3.7-15.2-9.0l-6.5 5.1C6.9 41.2 14.8 46.5 24 46.5z"/>
     </svg>
   );
 }
-function GitHubIcon() {
+
+function GitHubLogo(props: React.SVGProps<SVGSVGElement>) {
   return (
-    <svg width="18" height="18" viewBox="0 0 16 16" aria-hidden="true">
+    <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" {...props}>
       <path
         fill="currentColor"
-        d="M8 0C3.58 0 0 3.73 0 8.33c0 3.68 2.29 6.8 5.47 7.9.4.08.55-.18.55-.39 0-.19-.01-.82-.01-1.49-2.01.45-2.53-.81-2.69-1.24-.09-.24-.48-.98-.82-1.18-.28-.16-.68-.56-.01-.57.63-.01 1.08.6 1.23.85.72 1.26 1.87.9 2.33.69.07-.54.28-.9.51-1.11-1.78-.21-3.64-.92-3.64-4.09 0-.9.31-1.63.82-2.2-.08-.21-.36-1.06.08-2.2 0 0 .67-.22 2.2.84a7.3 7.3 0 0 1 2-.28c.68 0 1.36.1 2 .28 1.53-1.06 2.2-.84 2.2-.84.44 1.14.16 1.99.08 2.2.51.57.82 1.3.82 2.2 0 3.18-1.87 3.88-3.65 4.09.29.26.54.77.54 1.56 0 1.13-.01 2.03-.01 2.31 0 .21.15.47.55.39C13.71 15.13 16 12.01 16 8.33 16 3.73 12.42 0 8 0Z"
+        d="M12 .5C5.73.5.75 5.66.75 12.02c0 5.1 3.29 9.43 7.86 10.96.58.11.79-.25.79-.56v-2.04c-3.2.71-3.88-1.37-3.88-1.37-.53-1.36-1.29-1.72-1.29-1.72-1.05-.73.08-.72.08-.72 1.16.08 1.77 1.2 1.77 1.2 1.03 1.79 2.7 1.27 3.36.97.1-.76.4-1.27.72-1.56-2.56-.3-5.26-1.31-5.26-5.83 0-1.29.45-2.34 1.2-3.17-.12-.3-.52-1.51.11-3.14 0 0 .98-.32 3.2 1.2.93-.26 1.93-.39 2.93-.39s2 .13 2.93.39c2.22-1.52 3.2-1.2 3.2-1.2.63 1.63.23 2.84.11 3.14.75.83 1.2 1.88 1.2 3.17 0 4.53-2.7 5.53-5.28 5.82.41.36.78 1.08.78 2.18v3.23c0 .31.21.68.8.56 4.56-1.53 7.85-5.86 7.85-10.96C23.25 5.66 18.27.5 12 .5z"
       />
     </svg>
   );
@@ -45,45 +48,54 @@ export default function LoginForm() {
   }, []);
 
   const [mode, setMode] = useState<Mode>("password");
+  const [step, setStep] = useState<Step>("enterEmail");
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
   const [code, setCode] = useState("");
-  const [codeSent, setCodeSent] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  async function isAllowedForThisTenant(e: string) {
-    const res = await fetch("/api/auth/allowed", {
+  async function checkAllowed(e: string) {
+    const r = await fetch("/api/auth/allowed", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ email: e }),
-      cache: "no-store",
     });
-    if (!res.ok) return false;
-    const data = (await res.json()) as { allowed?: boolean };
-    return Boolean(data?.allowed);
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j?.error || "Auth check failed");
+    return Boolean(j?.allowed);
   }
 
-  async function signInPassword() {
+  async function handlePasswordLogin() {
     setLoading(true);
     setErr(null);
     setInfo(null);
 
     const e = email.trim().toLowerCase();
-    if (!e || !password) {
+    if (!e) {
       setLoading(false);
-      setErr("Enter your email and password.");
+      setErr("Please enter your email.");
+      return;
+    }
+    if (!password) {
+      setLoading(false);
+      setErr("Please enter your password.");
       return;
     }
 
-    const allowed = await isAllowedForThisTenant(e);
-    if (!allowed) {
+    try {
+      const allowed = await checkAllowed(e);
+      if (!allowed) {
+        setLoading(false);
+        setErr("That email isn’t authorised for this tenant.");
+        return;
+      }
+    } catch (ex: any) {
       setLoading(false);
-      setErr("That email isn’t authorised for this tenant.");
+      setErr(ex?.message || "Auth check failed.");
       return;
     }
 
@@ -102,41 +114,7 @@ export default function LoginForm() {
     window.location.assign("/");
   }
 
-  async function resetPassword() {
-    setLoading(true);
-    setErr(null);
-    setInfo(null);
-
-    const e = email.trim().toLowerCase();
-    if (!e) {
-      setLoading(false);
-      setErr("Enter your email first.");
-      return;
-    }
-
-    const allowed = await isAllowedForThisTenant(e);
-    if (!allowed) {
-      setLoading(false);
-      setErr("That email isn’t authorised for this tenant.");
-      return;
-    }
-
-    // You’ll need a reset page later, e.g. /auth/reset
-    const { error } = await supabase.auth.resetPasswordForEmail(e, {
-      redirectTo: `${window.location.origin}/auth/reset`,
-    });
-
-    setLoading(false);
-
-    if (error) {
-      setErr(error.message);
-      return;
-    }
-
-    setInfo("Password reset email sent.");
-  }
-
-  async function sendCode() {
+  async function sendOtpCode() {
     setLoading(true);
     setErr(null);
     setInfo(null);
@@ -148,10 +126,16 @@ export default function LoginForm() {
       return;
     }
 
-    const allowed = await isAllowedForThisTenant(e);
-    if (!allowed) {
+    try {
+      const allowed = await checkAllowed(e);
+      if (!allowed) {
+        setLoading(false);
+        setErr("That email isn’t authorised for this tenant.");
+        return;
+      }
+    } catch (ex: any) {
       setLoading(false);
-      setErr("That email isn’t authorised for this tenant.");
+      setErr(ex?.message || "Auth check failed.");
       return;
     }
 
@@ -164,17 +148,18 @@ export default function LoginForm() {
       return;
     }
 
-    setCodeSent(true);
+    setStep("enterCode");
     setInfo("Code sent. Check your email and enter the 6-digit code.");
   }
 
-  async function verifyCode() {
+  async function verifyOtpCode() {
     setLoading(true);
     setErr(null);
     setInfo(null);
 
     const e = email.trim().toLowerCase();
     const token = code.trim();
+
     if (!token) {
       setLoading(false);
       setErr("Please enter the code.");
@@ -187,117 +172,85 @@ export default function LoginForm() {
       type: "email",
     });
 
+    setLoading(false);
+
     if (error) {
-      setLoading(false);
       setErr(error.message);
       return;
     }
-
     if (!data.session) {
-      setLoading(false);
       setErr("Verified, but no session returned. Check Supabase Auth settings.");
       return;
     }
 
-    const allowed = await isAllowedForThisTenant(e);
-    if (!allowed) {
-      await supabase.auth.signOut();
-      setLoading(false);
-      setErr("Signed in, but you don’t have access to this tenant.");
-      return;
-    }
-
-    setLoading(false);
     window.location.assign("/");
   }
 
-  async function oauth(provider: "google" | "github" | "azure") {
+  async function sendPasswordReset() {
+    setLoading(true);
     setErr(null);
     setInfo(null);
 
-    // optional pre-check: require email for now
     const e = email.trim().toLowerCase();
     if (!e) {
-      setErr("Enter your email first so we can validate tenant access.");
-      return;
-    }
-
-    setLoading(true);
-
-    const allowed = await isAllowedForThisTenant(e);
-    if (!allowed) {
       setLoading(false);
-      setErr("That email isn’t authorised for this tenant.");
+      setErr("Enter your email first.");
       return;
     }
 
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: provider === "azure" ? "azure" : provider,
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+    // Optional: require tenant membership to request reset
+    try {
+      const allowed = await checkAllowed(e);
+      if (!allowed) {
+        setLoading(false);
+        setErr("That email isn’t authorised for this tenant.");
+        return;
+      }
+    } catch (ex: any) {
+      setLoading(false);
+      setErr(ex?.message || "Auth check failed.");
+      return;
+    }
+
+    const redirectTo = `${window.location.origin}/auth/reset`;
+
+    const { error } = await supabase.auth.resetPasswordForEmail(e, {
+      redirectTo,
     });
 
     setLoading(false);
-    if (error) setErr(error.message);
+
+    if (error) {
+      setErr(error.message);
+      return;
+    }
+
+    setInfo("Password reset email sent. Check your inbox.");
+  }
+
+  // UI-only for now (wire later when you’re ready)
+  async function oauth(provider: "google" | "github" | "azure") {
+    setErr(null);
+    setInfo("SSO buttons are ready — we’ll wire these once providers are configured.");
   }
 
   return (
     <div className="space-y-4">
-      {/* SSO */}
-      <div className="space-y-2">
-        <button
-          type="button"
-          className="w-full inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
-          disabled={loading}
-          onClick={() => oauth("azure")}
-        >
-          <MicrosoftIcon />
-          Continue with Microsoft
-        </button>
-
-        <button
-          type="button"
-          className="w-full inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
-          disabled={loading}
-          onClick={() => oauth("google")}
-        >
-          <GoogleIcon />
-          Continue with Google
-        </button>
-
-        <button
-          type="button"
-          className="w-full inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
-          disabled={loading}
-          onClick={() => oauth("github")}
-        >
-          <GitHubIcon />
-          Continue with GitHub
-        </button>
-      </div>
-
-      <div className="relative">
-        <div className="absolute inset-0 flex items-center" aria-hidden="true">
-          <div className="w-full border-t hi5-divider" />
-        </div>
-        <div className="relative flex justify-center">
-          <span className="px-3 text-xs opacity-70 bg-[rgba(var(--hi5-card),0.40)] rounded-full border hi5-border">
-            or sign in with email
-          </span>
-        </div>
-      </div>
-
-      {/* Mode toggle */}
-      <div className="grid grid-cols-2 gap-2">
+      {/* Mode switch */}
+      <div className="flex gap-2">
         <button
           type="button"
           className={[
-            "rounded-xl border px-3 py-2 text-sm hi5-border transition",
+            "flex-1 rounded-xl border px-3 py-2 text-sm transition",
+            "hi5-border hover:bg-black/5 dark:hover:bg-white/5",
             mode === "password"
               ? "bg-[rgba(var(--hi5-accent),0.12)] border-[rgba(var(--hi5-accent),0.30)]"
-              : "hover:bg-black/5 dark:hover:bg-white/5 opacity-85",
+              : "opacity-80",
           ].join(" ")}
           onClick={() => {
             setMode("password");
+            setStep("enterEmail");
+            setCode("");
             setErr(null);
             setInfo(null);
           }}
@@ -305,17 +258,19 @@ export default function LoginForm() {
         >
           Password
         </button>
-
         <button
           type="button"
           className={[
-            "rounded-xl border px-3 py-2 text-sm hi5-border transition",
-            mode === "code"
+            "flex-1 rounded-xl border px-3 py-2 text-sm transition",
+            "hi5-border hover:bg-black/5 dark:hover:bg-white/5",
+            mode === "otp"
               ? "bg-[rgba(var(--hi5-accent),0.12)] border-[rgba(var(--hi5-accent),0.30)]"
-              : "hover:bg-black/5 dark:hover:bg-white/5 opacity-85",
+              : "opacity-80",
           ].join(" ")}
           onClick={() => {
-            setMode("code");
+            setMode("otp");
+            setStep("enterEmail");
+            setPassword("");
             setErr(null);
             setInfo(null);
           }}
@@ -334,11 +289,12 @@ export default function LoginForm() {
           onChange={(e) => setEmail(e.target.value)}
           inputMode="email"
           placeholder="you@company.com"
-          disabled={loading || (mode === "code" && codeSent)}
+          disabled={loading || (mode === "otp" && step === "enterCode")}
         />
       </label>
 
-      {mode === "password" ? (
+      {/* Password mode */}
+      {mode === "password" && (
         <>
           <label className="block text-sm">
             Password
@@ -352,32 +308,35 @@ export default function LoginForm() {
             />
           </label>
 
-          <div className="flex items-center justify-between gap-3">
+          <button
+            type="button"
+            className="w-full rounded-xl border px-3 py-2 font-medium hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
+            disabled={!email.trim() || !password || loading}
+            onClick={handlePasswordLogin}
+          >
+            {loading ? "Signing in..." : "Sign in"}
+          </button>
+
+          <button
+            type="button"
+            className="w-full rounded-xl border px-3 py-2 text-sm hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
+            disabled={loading}
+            onClick={sendPasswordReset}
+          >
+            Forgot password?
+          </button>
+        </>
+      )}
+
+      {/* OTP mode */}
+      {mode === "otp" && (
+        <>
+          {step === "enterEmail" ? (
             <button
               type="button"
-              className="text-sm opacity-80 hover:opacity-100 underline underline-offset-4"
-              onClick={resetPassword}
-              disabled={loading}
-            >
-              Forgot password?
-            </button>
-
-            <button
-              className="rounded-xl border px-4 py-2 text-sm font-medium hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
-              disabled={!email.trim() || !password || loading}
-              onClick={signInPassword}
-            >
-              {loading ? "Signing in..." : "Sign in"}
-            </button>
-          </div>
-        </>
-      ) : (
-        <>
-          {!codeSent ? (
-            <button
               className="w-full rounded-xl border px-3 py-2 font-medium hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
               disabled={!email.trim() || loading}
-              onClick={sendCode}
+              onClick={sendOtpCode}
             >
               {loading ? "Sending..." : "Send code"}
             </button>
@@ -396,39 +355,81 @@ export default function LoginForm() {
               </label>
 
               <button
+                type="button"
                 className="w-full rounded-xl border px-3 py-2 font-medium hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
                 disabled={!code.trim() || loading}
-                onClick={verifyCode}
+                onClick={verifyOtpCode}
               >
                 {loading ? "Verifying..." : "Verify & sign in"}
               </button>
 
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  className="rounded-xl border px-3 py-2 text-sm hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
-                  disabled={loading}
-                  onClick={() => {
-                    setCodeSent(false);
-                    setCode("");
-                    setErr(null);
-                    setInfo(null);
-                  }}
-                >
-                  Change email
-                </button>
+              <button
+                type="button"
+                className="w-full rounded-xl border px-3 py-2 text-sm hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
+                disabled={loading}
+                onClick={() => {
+                  setStep("enterEmail");
+                  setCode("");
+                  setErr(null);
+                  setInfo(null);
+                }}
+              >
+                Use a different email
+              </button>
 
-                <button
-                  className="rounded-xl border px-3 py-2 text-sm hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
-                  disabled={loading}
-                  onClick={sendCode}
-                >
-                  Resend
-                </button>
-              </div>
+              <button
+                type="button"
+                className="w-full rounded-xl border px-3 py-2 text-sm hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition disabled:opacity-60"
+                disabled={loading}
+                onClick={sendOtpCode}
+              >
+                Resend code
+              </button>
             </>
           )}
         </>
       )}
+
+      {/* SSO (UI now, wire later) */}
+      <div className="pt-2">
+        <div className="flex items-center gap-3">
+          <div className="h-px flex-1 bg-black/10 dark:bg-white/10" />
+          <span className="text-xs opacity-70">or continue with</span>
+          <div className="h-px flex-1 bg-black/10 dark:bg-white/10" />
+        </div>
+
+        <div className="mt-3 grid grid-cols-1 gap-2">
+          <button
+            type="button"
+            onClick={() => oauth("google")}
+            className="w-full rounded-xl border px-3 py-2 text-sm hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center justify-center gap-2"
+            disabled={loading}
+          >
+            <GoogleLogo />
+            Google
+          </button>
+
+          <button
+            type="button"
+            onClick={() => oauth("azure")}
+            className="w-full rounded-xl border px-3 py-2 text-sm hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center justify-center gap-2"
+            disabled={loading}
+          >
+            <MicrosoftLogo />
+            Microsoft
+          </button>
+
+          <button
+            type="button"
+            onClick={() => oauth("github")}
+            className="w-full rounded-xl border px-3 py-2 text-sm hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition flex items-center justify-center gap-2"
+            disabled={loading}
+          >
+            <GitHubLogo />
+            GitHub
+          </button>
+        </div>
+      </div>
 
       {info && <p className="text-sm opacity-80">{info}</p>}
       {err && <p className="text-sm text-red-600">{err}</p>}
