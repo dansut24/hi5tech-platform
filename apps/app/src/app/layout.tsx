@@ -1,6 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import { supabaseServer } from "@/lib/supabase/server";
+import SystemTheme from "@/components/theme/SystemTheme"; // ✅ ADD THIS
 
 export const metadata: Metadata = {
   title: "Hi5Tech Platform",
@@ -117,8 +118,10 @@ export default async function RootLayout({
   const glow_2 = clamp01(tenantTheme?.glow_2, theme_mode === "dark" ? 0.18 : 0.14);
   const glow_3 = clamp01(tenantTheme?.glow_3, theme_mode === "dark" ? 0.14 : 0.10);
 
-  // Only force dark class when user explicitly chooses dark
-  // If "system", we rely on prefers-color-scheme in globals.css
+  // ✅ IMPORTANT:
+  // - if user explicitly chose "dark" => force .dark
+  // - if user explicitly chose "light" => force no .dark
+  // - if "system" => do NOT force either; SystemTheme toggles it client-side
   const htmlClass = theme_mode === "dark" ? "dark" : "";
 
   const cssVars = `
@@ -141,6 +144,10 @@ export default async function RootLayout({
     <html lang="en" suppressHydrationWarning className={htmlClass}>
       <body>
         <style dangerouslySetInnerHTML={{ __html: cssVars }} />
+
+        {/* ✅ Only applies when theme_mode === "system" */}
+        {theme_mode === "system" ? <SystemTheme /> : null}
+
         {children}
       </body>
     </html>
