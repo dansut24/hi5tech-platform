@@ -4,6 +4,12 @@ import { createServerClient } from "@supabase/ssr";
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "hi5tech.co.uk";
 
+type CookieToSet = {
+  name: string;
+  value: string;
+  options?: any;
+};
+
 // Paths we should never block/rewrite (and should not waste time refreshing)
 function isBypassPath(pathname: string) {
   if (pathname.startsWith("/_next")) return true;
@@ -91,17 +97,11 @@ export async function proxy(req: NextRequest) {
       getAll() {
         return req.cookies.getAll();
       },
-      type CookieToSet = {
-  name: string;
-  value: string;
-  options?: Parameters<typeof res.cookies.set>[2];
-};
-
-setAll(cookiesToSet: CookieToSet[]) {
-  cookiesToSet.forEach(({ name, value, options }) => {
-    res.cookies.set(name, value, options);
-  });
-},
+      setAll(cookiesToSet: CookieToSet[]) {
+        cookiesToSet.forEach(({ name, value, options }) => {
+          res.cookies.set(name, value, options);
+        });
+      },
     },
   });
 
