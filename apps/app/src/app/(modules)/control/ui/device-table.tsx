@@ -1,6 +1,6 @@
+// apps/app/src/app/(modules)/control/ui/device-table.tsx
 "use client";
 
-// apps/app/src/app/(modules)/control/ui/device-table.tsx
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { DeviceRow } from "./device-data";
@@ -41,9 +41,7 @@ export default function DeviceTable({
       <div className="p-4 sm:p-5 border-b hi5-divider flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between">
         <div>
           <div className="text-base font-semibold">Devices</div>
-          <div className="text-xs opacity-70 mt-1">
-            Search, filter, and launch remote tools instantly.
-          </div>
+          <div className="text-xs opacity-70 mt-1">Search, filter, and launch remote tools instantly.</div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -88,45 +86,28 @@ export default function DeviceTable({
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <span
-                        className={[
-                          "h-2.5 w-2.5 rounded-full",
-                          statusDot(d.status),
-                        ].join(" ")}
-                      />
-                      <span className="text-xs opacity-80 capitalize">
-                        {d.status}
-                      </span>
+                      <span className={["h-2.5 w-2.5 rounded-full", statusDot(d.status)].join(" ")} />
+                      <span className="text-xs opacity-80 capitalize">{d.status}</span>
                     </div>
                   </td>
 
                   <td className="px-4 py-3">
-                    <Link
-                      href={`/control/device/${encodeURIComponent(d.id)}`}
-                      className="font-semibold hover:underline"
-                    >
+                    <Link href={`/control/${encodeURIComponent(d.id)}`} className="font-semibold hover:underline">
                       {d.name}
                     </Link>
-                    {d.ip ? (
-                      <div className="text-xs opacity-70 mt-0.5">{d.ip}</div>
-                    ) : null}
+                    {d.ip ? <div className="text-xs opacity-70 mt-0.5">{d.ip}</div> : null}
                   </td>
 
                   <td className="px-4 py-3 opacity-90">{d.os}</td>
 
-                  <td className="px-4 py-3">
-                    {d.user ? d.user : <span className="opacity-60">—</span>}
-                  </td>
+                  <td className="px-4 py-3">{d.user ? d.user : <span className="opacity-60">—</span>}</td>
 
                   <td className="px-4 py-3 opacity-80">{d.lastSeen}</td>
 
                   <td className="px-4 py-3">
                     <div className="flex flex-wrap gap-1.5">
                       {d.tags.slice(0, 3).map((t) => (
-                        <span
-                          key={t}
-                          className="rounded-full border hi5-border px-2 py-1 text-xs opacity-90"
-                        >
+                        <span key={t} className="rounded-full border hi5-border px-2 py-1 text-xs opacity-90">
                           {t}
                         </span>
                       ))}
@@ -140,22 +121,13 @@ export default function DeviceTable({
 
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-2">
-                      <Link
-                        className="hi5-btn-ghost text-xs"
-                        href={`/control/device/${d.id}?tab=remote`}
-                      >
+                      <Link className="hi5-btn-ghost text-xs" href={`/control/${d.id}?tab=remote`}>
                         Remote
                       </Link>
-                      <Link
-                        className="hi5-btn-ghost text-xs"
-                        href={`/control/device/${d.id}?tab=terminal`}
-                      >
+                      <Link className="hi5-btn-ghost text-xs" href={`/control/${d.id}?tab=terminal`}>
                         Terminal
                       </Link>
-                      <Link
-                        className="hi5-btn-ghost text-xs"
-                        href={`/control/device/${d.id}?tab=files`}
-                      >
+                      <Link className="hi5-btn-ghost text-xs" href={`/control/${d.id}?tab=files`}>
                         Files
                       </Link>
                     </div>
