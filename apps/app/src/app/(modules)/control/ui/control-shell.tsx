@@ -18,6 +18,18 @@ function roleLabel(role: string) {
   return "User";
 }
 
+function NavSoon({ label }: { label: string }) {
+  return (
+    <div
+      className="rounded-2xl px-3 py-2 text-sm opacity-60 cursor-not-allowed select-none"
+      title="Coming soon"
+      aria-disabled="true"
+    >
+      {label}
+    </div>
+  );
+}
+
 export default function ControlShell({
   children,
   tenantSubdomain,
@@ -33,7 +45,6 @@ export default function ControlShell({
 }) {
   return (
     <div className="min-h-dvh">
-      {/* Page background helper (your globals paint it) */}
       <div className="hi5-bg">
         <div className="flex min-h-dvh">
           {/* Sidebar */}
@@ -43,9 +54,7 @@ export default function ControlShell({
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-xs opacity-70">Control</div>
-                  <div className="text-lg font-semibold leading-tight">
-                    {tenantName}
-                  </div>
+                  <div className="text-lg font-semibold leading-tight">{tenantName}</div>
                   <div className="text-xs opacity-70 mt-1">
                     {tenantSubdomain}.hi5tech.co.uk
                   </div>
@@ -68,24 +77,10 @@ export default function ControlShell({
                 >
                   Devices
                 </Link>
-                <Link
-                  href="/control/activity"
-                  className="rounded-2xl px-3 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/5 transition opacity-70"
-                  aria-disabled="true"
-                  onClick={(e) => e.preventDefault()}
-                  title="Coming soon"
-                >
-                  Activity (soon)
-                </Link>
-                <Link
-                  href="/control/policies"
-                  className="rounded-2xl px-3 py-2 text-sm hover:bg-black/5 dark:hover:bg-white/5 transition opacity-70"
-                  aria-disabled="true"
-                  onClick={(e) => e.preventDefault()}
-                  title="Coming soon"
-                >
-                  Policies (soon)
-                </Link>
+
+                {/* Non-clickable placeholders (no event handlers in Server Components) */}
+                <NavSoon label="Activity (soon)" />
+                <NavSoon label="Policies (soon)" />
               </nav>
 
               <div className="mt-auto pt-2 border-t hi5-divider">
@@ -100,16 +95,10 @@ export default function ControlShell({
                 </div>
 
                 <div className="mt-3 flex gap-2">
-                  <Link
-                    href="/apps"
-                    className="hi5-btn-ghost flex-1 text-center text-sm"
-                  >
+                  <Link href="/apps" className="hi5-btn-ghost flex-1 text-center text-sm">
                     Modules
                   </Link>
-                  <Link
-                    href="/auth/signout"
-                    className="hi5-btn-ghost flex-1 text-center text-sm"
-                  >
+                  <Link href="/auth/signout" className="hi5-btn-ghost flex-1 text-center text-sm">
                     Logout
                   </Link>
                 </div>
@@ -130,16 +119,10 @@ export default function ControlShell({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <Link
-                    href="/apps"
-                    className="hi5-btn-ghost text-sm"
-                  >
+                  <Link href="/apps" className="hi5-btn-ghost text-sm">
                     Modules
                   </Link>
-                  <Link
-                    href="/auth/signout"
-                    className="hi5-btn-ghost text-sm"
-                  >
+                  <Link href="/auth/signout" className="hi5-btn-ghost text-sm">
                     Logout
                   </Link>
                 </div>
