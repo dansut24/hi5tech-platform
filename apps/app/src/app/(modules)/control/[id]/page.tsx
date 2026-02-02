@@ -43,13 +43,13 @@ export default async function DevicePage({
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Link className="hi5-btn-primary text-sm" href={`/control/${encodeURIComponent(id)}?tab=remote`}>
+            <Link className="hi5-btn-primary text-sm" href={`/control/${id}?tab=remote`}>
               Remote
             </Link>
-            <Link className="hi5-btn-ghost text-sm" href={`/control/${encodeURIComponent(id)}?tab=terminal`}>
+            <Link className="hi5-btn-ghost text-sm" href={`/control/${id}?tab=terminal`}>
               Terminal
             </Link>
-            <Link className="hi5-btn-ghost text-sm" href={`/control/${encodeURIComponent(id)}?tab=files`}>
+            <Link className="hi5-btn-ghost text-sm" href={`/control/${id}?tab=files`}>
               Files
             </Link>
             <button className="hi5-btn-ghost text-sm" type="button" title="Coming soon">
@@ -62,17 +62,17 @@ export default async function DevicePage({
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <TabLink href={`/control/${encodeURIComponent(id)}?tab=overview`} active={tab === "overview"} label="Overview" />
-          <TabLink href={`/control/${encodeURIComponent(id)}?tab=remote`} active={tab === "remote"} label="Remote" />
-          <TabLink href={`/control/${encodeURIComponent(id)}?tab=terminal`} active={tab === "terminal"} label="Terminal" />
-          <TabLink href={`/control/${encodeURIComponent(id)}?tab=files`} active={tab === "files"} label="Files" />
-          <TabLink href={`/control/${encodeURIComponent(id)}?tab=services`} active={tab === "services"} label="Services" />
-          <TabLink href={`/control/${encodeURIComponent(id)}?tab=activity`} active={tab === "activity"} label="Activity" />
+          <TabLink href={`/control/${id}?tab=overview`} active={tab === "overview"} label="Overview" />
+          <TabLink href={`/control/${id}?tab=remote`} active={tab === "remote"} label="Remote" />
+          <TabLink href={`/control/${id}?tab=terminal`} active={tab === "terminal"} label="Terminal" />
+          <TabLink href={`/control/${id}?tab=files`} active={tab === "files"} label="Files" />
+          <TabLink href={`/control/${id}?tab=services`} active={tab === "services"} label="Services" />
+          <TabLink href={`/control/${id}?tab=activity`} active={tab === "activity"} label="Activity" />
         </div>
       </div>
 
       <div className="hi5-panel p-5">
-        {tab === "overview" ? (
+        {tab === "overview" && (
           <div className="space-y-4">
             <div className="text-lg font-semibold">Overview</div>
 
@@ -103,7 +103,9 @@ export default async function DevicePage({
               </ul>
             </div>
           </div>
-        ) : (
+        )}
+
+        {tab !== "overview" && (
           <div>
             <div className="text-lg font-semibold capitalize">{tab}</div>
             <p className="text-sm opacity-75 mt-2">
