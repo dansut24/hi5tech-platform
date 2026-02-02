@@ -3,6 +3,8 @@
 
 import type { DeviceRow } from "./device-data";
 
+type Filter = "all" | "online" | "offline" | "warning";
+
 function pillStyle(kind: "a" | "b" | "c") {
   if (kind === "a") return "bg-[rgba(var(--hi5-accent),0.10)] border-[rgba(var(--hi5-accent),0.25)]";
   if (kind === "b") return "bg-[rgba(var(--hi5-accent-2),0.10)] border-[rgba(var(--hi5-accent-2),0.25)]";
@@ -15,23 +17,19 @@ export default function StatCards({
   onFilter,
 }: {
   devices: DeviceRow[];
-  activeFilter: "all" | "online" | "offline" | "warning";
-  onFilter: (f: "all" | "online" | "offline" | "warning") => void;
+  activeFilter: Filter;
+  onFilter: (f: Filter) => void;
 }) {
   const total = devices.length;
   const online = devices.filter((d) => d.status === "online").length;
   const offline = devices.filter((d) => d.status === "offline").length;
   const warning = devices.filter((d) => d.status === "warning").length;
 
-  const card = (
-    label: string,
-    value: number,
-    key: "all" | "online" | "offline" | "warning",
-    kind: "a" | "b" | "c"
-  ) => {
+  const card = (label: string, value: number, key: Filter, kind: "a" | "b" | "c") => {
     const isActive = activeFilter === key;
     return (
       <button
+        key={key}
         type="button"
         onClick={() => onFilter(key)}
         className={[
