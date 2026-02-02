@@ -91,11 +91,17 @@ export async function proxy(req: NextRequest) {
       getAll() {
         return req.cookies.getAll();
       },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => {
-          res.cookies.set(name, value, options);
-        });
-      },
+      type CookieToSet = {
+  name: string;
+  value: string;
+  options?: Parameters<typeof res.cookies.set>[2];
+};
+
+setAll(cookiesToSet: CookieToSet[]) {
+  cookiesToSet.forEach(({ name, value, options }) => {
+    res.cookies.set(name, value, options);
+  });
+},
     },
   });
 
