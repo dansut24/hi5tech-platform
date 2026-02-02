@@ -1,4 +1,4 @@
-// apps/app/src/app/(modules)/control/device/[id]/page.tsx
+// apps/app/src/app/(modules)/control/[id]/page.tsx
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +9,9 @@ function TabLink({ href, active, label }: { href: string; active: boolean; label
       href={href}
       className={[
         "rounded-2xl px-3 py-2 text-sm border hi5-border transition",
-        active ? "bg-[rgba(var(--hi5-accent),0.10)] border-[rgba(var(--hi5-accent),0.28)]" : "hover:bg-black/5 dark:hover:bg-white/5",
+        active
+          ? "bg-[rgba(var(--hi5-accent),0.10)] border-[rgba(var(--hi5-accent),0.28)]"
+          : "hover:bg-black/5 dark:hover:bg-white/5",
       ].join(" ")}
     >
       {label}
@@ -41,26 +43,36 @@ export default async function DevicePage({
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Link className="hi5-btn-primary text-sm" href={`/control/device/${id}?tab=remote`}>Remote</Link>
-            <Link className="hi5-btn-ghost text-sm" href={`/control/device/${id}?tab=terminal`}>Terminal</Link>
-            <Link className="hi5-btn-ghost text-sm" href={`/control/device/${id}?tab=files`}>Files</Link>
-            <button className="hi5-btn-ghost text-sm" type="button" title="Coming soon">Reboot</button>
-            <button className="hi5-btn-ghost text-sm" type="button" title="Coming soon">Screenshot</button>
+            <Link className="hi5-btn-primary text-sm" href={`/control/${encodeURIComponent(id)}?tab=remote`}>
+              Remote
+            </Link>
+            <Link className="hi5-btn-ghost text-sm" href={`/control/${encodeURIComponent(id)}?tab=terminal`}>
+              Terminal
+            </Link>
+            <Link className="hi5-btn-ghost text-sm" href={`/control/${encodeURIComponent(id)}?tab=files`}>
+              Files
+            </Link>
+            <button className="hi5-btn-ghost text-sm" type="button" title="Coming soon">
+              Reboot
+            </button>
+            <button className="hi5-btn-ghost text-sm" type="button" title="Coming soon">
+              Screenshot
+            </button>
           </div>
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <TabLink href={`/control/device/${id}?tab=overview`} active={tab === "overview"} label="Overview" />
-          <TabLink href={`/control/device/${id}?tab=remote`} active={tab === "remote"} label="Remote" />
-          <TabLink href={`/control/device/${id}?tab=terminal`} active={tab === "terminal"} label="Terminal" />
-          <TabLink href={`/control/device/${id}?tab=files`} active={tab === "files"} label="Files" />
-          <TabLink href={`/control/device/${id}?tab=services`} active={tab === "services"} label="Services" />
-          <TabLink href={`/control/device/${id}?tab=activity`} active={tab === "activity"} label="Activity" />
+          <TabLink href={`/control/${encodeURIComponent(id)}?tab=overview`} active={tab === "overview"} label="Overview" />
+          <TabLink href={`/control/${encodeURIComponent(id)}?tab=remote`} active={tab === "remote"} label="Remote" />
+          <TabLink href={`/control/${encodeURIComponent(id)}?tab=terminal`} active={tab === "terminal"} label="Terminal" />
+          <TabLink href={`/control/${encodeURIComponent(id)}?tab=files`} active={tab === "files"} label="Files" />
+          <TabLink href={`/control/${encodeURIComponent(id)}?tab=services`} active={tab === "services"} label="Services" />
+          <TabLink href={`/control/${encodeURIComponent(id)}?tab=activity`} active={tab === "activity"} label="Activity" />
         </div>
       </div>
 
       <div className="hi5-panel p-5">
-        {tab === "overview" && (
+        {tab === "overview" ? (
           <div className="space-y-4">
             <div className="text-lg font-semibold">Overview</div>
 
@@ -91,9 +103,7 @@ export default async function DevicePage({
               </ul>
             </div>
           </div>
-        )}
-
-        {tab !== "overview" && (
+        ) : (
           <div>
             <div className="text-lg font-semibold capitalize">{tab}</div>
             <p className="text-sm opacity-75 mt-2">
