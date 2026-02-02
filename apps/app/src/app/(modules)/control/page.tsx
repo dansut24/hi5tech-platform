@@ -1,6 +1,7 @@
 // apps/app/src/app/(modules)/control/page.tsx
-import { redirect } from "next/navigation";
+import ControlHomeClient from "./ui/control-home-client";
 
-export default function ControlIndex() {
-  redirect("/control/devices");
+export default async function ControlHomePage() {
+  // server-safe only: fetch data here later if needed
+  return <ControlHomeClient />;
 }
