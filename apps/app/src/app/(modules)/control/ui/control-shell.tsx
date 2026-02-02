@@ -94,11 +94,16 @@ export default function ControlShell({
                 </div>
 
                 <div className="mt-3 flex gap-2">
-                  {/* ✅ FIXED */}
-                  <Link href="/apps" className="hi5-btn-ghost flex-1 text-center text-sm">
+                  <Link
+                    href="/apps"
+                    className="hi5-btn-ghost flex-1 text-center text-sm relative z-10"
+                  >
                     Modules
                   </Link>
-                  <Link href="/auth/signout" className="hi5-btn-ghost flex-1 text-center text-sm">
+                  <Link
+                    href="/auth/signout"
+                    className="hi5-btn-ghost flex-1 text-center text-sm relative z-10"
+                  >
                     Logout
                   </Link>
                 </div>
@@ -118,13 +123,18 @@ export default function ControlShell({
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  {/* ✅ FIXED: Modules now goes to /apps */}
-                  <Link href="/apps" className="hi5-btn-ghost text-sm">
+                {/* Harden tap targets (prevents “Modules” hitting Logout) */}
+                <div className="flex items-center gap-3 relative">
+                  <Link
+                    href="/apps"
+                    className="hi5-btn-ghost text-sm relative z-10 min-w-[96px] text-center"
+                  >
                     Modules
                   </Link>
-
-                  <Link href="/auth/signout" className="hi5-btn-ghost text-sm">
+                  <Link
+                    href="/auth/signout"
+                    className="hi5-btn-ghost text-sm relative z-10 min-w-[96px] text-center"
+                  >
                     Logout
                   </Link>
                 </div>
