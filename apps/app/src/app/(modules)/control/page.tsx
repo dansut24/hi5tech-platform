@@ -1,8 +1,6 @@
-export default function ControlHome() {
-  return (
-    <div className="space-y-3">
-      <h1 className="text-2xl font-semibold">Control</h1>
-      <p className="opacity-80">Device inventory, actions, monitoring, scripts.</p>
-    </div>
-  );
+// apps/app/src/app/(modules)/control/page.tsx
+import { redirect } from "next/navigation";
+
+export default function ControlIndex() {
+  redirect("/control/devices");
 }
