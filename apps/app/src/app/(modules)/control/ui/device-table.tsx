@@ -1,6 +1,6 @@
-// apps/app/src/app/(modules)/control/ui/device-table.tsx
 "use client";
 
+// apps/app/src/app/(modules)/control/ui/device-table.tsx
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { DeviceRow } from "./device-data";
@@ -82,19 +82,34 @@ export default function DeviceTable({
               </tr>
             ) : (
               filtered.map((d) => (
-                <tr key={d.id} className="border-b hi5-divider hover:bg-black/[0.02] dark:hover:bg-white/[0.03]">
+                <tr
+                  key={d.id}
+                  className="border-b hi5-divider hover:bg-black/[0.02] dark:hover:bg-white/[0.03]"
+                >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
-                      <span className={["h-2.5 w-2.5 rounded-full", statusDot(d.status)].join(" ")} />
-                      <span className="text-xs opacity-80 capitalize">{d.status}</span>
+                      <span
+                        className={[
+                          "h-2.5 w-2.5 rounded-full",
+                          statusDot(d.status),
+                        ].join(" ")}
+                      />
+                      <span className="text-xs opacity-80 capitalize">
+                        {d.status}
+                      </span>
                     </div>
                   </td>
 
                   <td className="px-4 py-3">
-                    <Link href={`/control/device/${encodeURIComponent(d.id)}`} className="font-semibold hover:underline">
+                    <Link
+                      href={`/control/device/${encodeURIComponent(d.id)}`}
+                      className="font-semibold hover:underline"
+                    >
                       {d.name}
                     </Link>
-                    {d.ip ? <div className="text-xs opacity-70 mt-0.5">{d.ip}</div> : null}
+                    {d.ip ? (
+                      <div className="text-xs opacity-70 mt-0.5">{d.ip}</div>
+                    ) : null}
                   </td>
 
                   <td className="px-4 py-3 opacity-90">{d.os}</td>
@@ -125,13 +140,22 @@ export default function DeviceTable({
 
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-2">
-                      <Link className="hi5-btn-ghost text-xs" href={`/control/device/${d.id}?tab=remote`}>
+                      <Link
+                        className="hi5-btn-ghost text-xs"
+                        href={`/control/device/${d.id}?tab=remote`}
+                      >
                         Remote
                       </Link>
-                      <Link className="hi5-btn-ghost text-xs" href={`/control/device/${d.id}?tab=terminal`}>
+                      <Link
+                        className="hi5-btn-ghost text-xs"
+                        href={`/control/device/${d.id}?tab=terminal`}
+                      >
                         Terminal
                       </Link>
-                      <Link className="hi5-btn-ghost text-xs" href={`/control/device/${d.id}?tab=files`}>
+                      <Link
+                        className="hi5-btn-ghost text-xs"
+                        href={`/control/device/${d.id}?tab=files`}
+                      >
                         Files
                       </Link>
                     </div>
