@@ -1,14 +1,10 @@
 // apps/app/src/app/(modules)/control/devices/page.tsx
-import StatCards from "../ui/stat-cards";
-import DeviceTable from "../ui/device-table";
 import { demoDevices } from "../ui/device-data";
+import DevicesClient from "./ui/devices-client";
 
 export const dynamic = "force-dynamic";
 
 export default function ControlDevicesPage() {
-  // For now: demo data (we’ll swap to real device inventory later)
-  // You can pull from your /devices API or Supabase table once ready.
-
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="flex items-start justify-between gap-4">
@@ -29,33 +25,7 @@ export default function ControlDevicesPage() {
         </div>
       </div>
 
-      {/* Filterable stats + table */}
-      <ControlDevicesInteractive />
-    </div>
-  );
-}
-
-// Split interactive part to client while keeping page server-rendered
-function ControlDevicesInteractive() {
-  // We can keep it simple: client component inside server page
-  // by rendering a client wrapper below.
-  return (
-    <DevicesClient />
-  );
-}
-
-// eslint-disable-next-line @next/next/no-async-client-component
-function DevicesClient() {
-  "use client";
-
-  const [filter, setFilter] = (require("react") as typeof import("react")).useState<
-    "all" | "online" | "offline" | "warning"
-  >("all");
-
-  return (
-    <div className="space-y-4 sm:space-y-6">
-      <StatCards devices={demoDevices} activeFilter={filter} onFilter={setFilter} />
-      <DeviceTable devices={demoDevices} filter={filter} />
+      <DevicesClient devices={demoDevices} />
     </div>
   );
 }
