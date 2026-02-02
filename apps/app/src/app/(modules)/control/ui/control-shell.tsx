@@ -78,7 +78,6 @@ export default function ControlShell({
                   Devices
                 </Link>
 
-                {/* Non-clickable placeholders (no event handlers in Server Components) */}
                 <NavSoon label="Activity (soon)" />
                 <NavSoon label="Policies (soon)" />
               </nav>
@@ -95,6 +94,7 @@ export default function ControlShell({
                 </div>
 
                 <div className="mt-3 flex gap-2">
+                  {/* ✅ FIXED */}
                   <Link href="/apps" className="hi5-btn-ghost flex-1 text-center text-sm">
                     Modules
                   </Link>
@@ -119,9 +119,11 @@ export default function ControlShell({
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {/* ✅ FIXED: Modules now goes to /apps */}
                   <Link href="/apps" className="hi5-btn-ghost text-sm">
                     Modules
                   </Link>
+
                   <Link href="/auth/signout" className="hi5-btn-ghost text-sm">
                     Logout
                   </Link>
