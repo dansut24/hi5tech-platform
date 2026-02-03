@@ -1,3 +1,4 @@
+// apps/app/src/app/auth/callback/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -6,8 +7,25 @@ import { createBrowserClient } from "@supabase/ssr";
 function getNextPath(url: URL) {
   const next = url.searchParams.get("next");
   // only allow internal redirects
-  if (!next || !next.startsWith("/")) return "/login";
+  if (!next || !next.startsWith("/")) return "/apps";
   return next;
+}
+
+async function ensureTenantMembership() {
+  // Calls server route which reads session from cookies
+  const res = await fetch("/api/auth/ensure-membership", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({}),
+  });
+
+  // If it fails, let the app handle it (your existing /api/auth/allowed checks will block)
+  // But we DO want the user to see a helpful message here.
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}));
+    throw new Error(j?.error || "Sign-in succeeded but tenant access failed.");
+  }
 }
 
 export default function AuthCallbackPage() {
@@ -51,26 +69,34 @@ export default function AuthCallbackPage() {
 
           // clean up URL (remove hash tokens)
           window.history.replaceState({}, "", url.pathname + url.search);
+
+          setMsg("Linking your account to this tenant…");
+          await ensureTenantMembership();
+
           window.location.assign(nextPath);
           return;
         }
 
-        // 2) If you're using PKCE flows elsewhere, support ?code= too (safe to keep)
+        // 2) OAuth/PKCE flows return ?code=
         const code = url.searchParams.get("code");
         if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (error) {
-            setMsg("Email link is invalid or has expired.");
+            setMsg("Sign-in link is invalid or has expired.");
             return;
           }
+
+          setMsg("Linking your account to this tenant…");
+          await ensureTenantMembership();
+
           window.location.assign(nextPath);
           return;
         }
 
         // Nothing to consume
-        setMsg("Email link is invalid or has expired.");
-      } catch {
-        setMsg("Email link is invalid or has expired.");
+        setMsg("Sign-in link is invalid or has expired.");
+      } catch (e: any) {
+        setMsg(e?.message || "Sign-in link is invalid or has expired.");
       }
     })();
   }, [supabase]);
