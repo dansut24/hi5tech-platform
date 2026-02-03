@@ -1,9 +1,12 @@
-// apps/app/src/app/admin/layout.tsx
+// apps/app/src/app/(modules)/admin/layout.tsx
 import { redirect, notFound } from "next/navigation";
 import { headers } from "next/headers";
 import { supabaseServer } from "@/lib/supabase/server";
 import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
 import AdminShell from "./ui/admin-shell";
+import AdminOnboardingGuard from "./ui/admin-onboarding-guard";
+
+export const dynamic = "force-dynamic";
 
 export default async function AdminLayout({
   children,
@@ -46,6 +49,15 @@ export default async function AdminLayout({
     redirect("/apps");
   }
 
+  // Read tenant onboarding status (best effort)
+  const { data: settings } = await supabase
+    .from("tenant_settings")
+    .select("onboarding_completed")
+    .eq("tenant_id", tenant.id)
+    .maybeSingle();
+
+  const onboardingCompleted = Boolean(settings?.onboarding_completed);
+
   // Profile (nice display in header)
   const { data: profile } = await supabase
     .from("profiles")
@@ -60,21 +72,26 @@ export default async function AdminLayout({
   const email = (profile?.email || user.email || "").toLowerCase();
 
   return (
-    <AdminShell
-      user={{
-        id: user.id,
-        name: displayName,
-        email,
-        role: myRole,
-      }}
-      tenant={{
-        id: tenant.id,
-        name: tenant.name ?? tenant.subdomain,
-        domain: tenant.domain,
-        subdomain: tenant.subdomain,
-      }}
-    >
-      {children}
-    </AdminShell>
+    <>
+      {/* Client guard: forces /admin/setup until complete */}
+      <AdminOnboardingGuard onboardingCompleted={onboardingCompleted} />
+
+      <AdminShell
+        user={{
+          id: user.id,
+          name: displayName,
+          email,
+          role: myRole,
+        }}
+        tenant={{
+          id: tenant.id,
+          name: tenant.name ?? tenant.subdomain,
+          domain: tenant.domain,
+          subdomain: tenant.subdomain,
+        }}
+      >
+        {children}
+      </AdminShell>
+    </>
   );
 }
