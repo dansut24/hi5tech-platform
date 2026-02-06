@@ -1,7 +1,12 @@
+// apps/app/src/app/apps/page.tsx
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { supabaseServer } from "@/lib/supabase/server";
+import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
 import { logoutAction } from "./actions";
+
+export const dynamic = "force-dynamic";
 
 type ModuleKey = "itsm" | "control" | "selfservice" | "admin";
 
@@ -17,15 +22,44 @@ const MODULE_PATH: Record<ModuleKey, string> = {
 export default async function AppsLandingPage() {
   const supabase = await supabaseServer();
 
+  // Must be logged in
   const { data: userRes } = await supabase.auth.getUser();
   const user = userRes.user;
   if (!user) redirect("/login");
 
-  // memberships -> module assignments
+  // Identify tenant from host
+  const host = getEffectiveHost(await headers());
+  const parsed = parseTenantHost(host);
+  if (!parsed.subdomain) redirect("/login");
+
+  const { data: tenant } = await supabase
+    .from("tenants")
+    .select("id, name, domain, subdomain, is_active")
+    .eq("domain", parsed.rootDomain)
+    .eq("subdomain", parsed.subdomain)
+    .maybeSingle();
+
+  if (!tenant || tenant.is_active === false) redirect("/login");
+
+  const tenantId = tenant.id;
+
+  // 🔒 HARD GATE: onboarding must be complete
+  const { data: settings } = await supabase
+    .from("tenant_settings")
+    .select("onboarding_completed")
+    .eq("tenant_id", tenantId)
+    .single();
+
+  if (!settings?.onboarding_completed) {
+    redirect("/admin/setup");
+  }
+
+  // memberships -> module assignments (scoped to THIS tenant)
   const { data: memberships, error: mErr } = await supabase
     .from("memberships")
     .select("id, tenant_id, role, created_at")
     .eq("user_id", user.id)
+    .eq("tenant_id", tenantId)
     .order("created_at", { ascending: false });
 
   if (mErr) {
@@ -89,8 +123,7 @@ export default async function AppsLandingPage() {
 
       {!modules.length ? (
         <div className="mt-6 text-sm opacity-70">
-          No module assignments found yet. Ask an admin to assign modules for your
-          membership.
+          No module assignments found yet. Ask an admin to assign modules for your membership.
         </div>
       ) : null}
     </div>
