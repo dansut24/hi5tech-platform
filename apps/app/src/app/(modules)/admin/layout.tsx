@@ -4,7 +4,6 @@ import { headers } from "next/headers";
 import { supabaseServer } from "@/lib/supabase/server";
 import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
 import AdminShell from "./ui/admin-shell";
-import AdminOnboardingGuard from "./ui/admin-onboarding-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +45,22 @@ export default async function AdminLayout({
   const isAdmin = myRole === "owner" || myRole === "admin";
   if (!isAdmin) redirect("/apps");
 
+  // Read onboarding status (authoritative)
+  const { data: settings } = await supabase
+    .from("tenant_settings")
+    .select("onboarding_completed")
+    .eq("tenant_id", tenant.id)
+    .maybeSingle();
+
+  const onboardingCompleted = Boolean(settings?.onboarding_completed);
+
+  // ✅ Authoritative rule:
+  // If onboarding isn't complete, the ONLY admin route allowed is /admin/setup.
+  // Everything else in admin redirects to setup until completion.
+  if (!onboardingCompleted) {
+    redirect("/admin/setup");
+  }
+
   // Profile (nice display in header)
   const { data: profile } = await supabase
     .from("profiles")
@@ -59,36 +74,22 @@ export default async function AdminLayout({
 
   const email = (profile?.email || user.email || "").toLowerCase();
 
-  // Onboarding status (best-effort)
-  const { data: settings } = await supabase
-    .from("tenant_settings")
-    .select("onboarding_completed")
-    .eq("tenant_id", tenant.id)
-    .maybeSingle();
-
-  const onboardingCompleted = Boolean(settings?.onboarding_completed);
-
   return (
-    <>
-      {/* Client guard: forces /admin/setup until complete */}
-      <AdminOnboardingGuard onboardingCompleted={onboardingCompleted} />
-
-      <AdminShell
-        user={{
-          id: user.id,
-          name: displayName,
-          email,
-          role: myRole,
-        }}
-        tenant={{
-          id: tenant.id,
-          name: tenant.name ?? tenant.subdomain,
-          domain: tenant.domain,
-          subdomain: tenant.subdomain,
-        }}
-      >
-        {children}
-      </AdminShell>
-    </>
+    <AdminShell
+      user={{
+        id: user.id,
+        name: displayName,
+        email,
+        role: myRole,
+      }}
+      tenant={{
+        id: tenant.id,
+        name: tenant.name ?? tenant.subdomain,
+        domain: tenant.domain,
+        subdomain: tenant.subdomain,
+      }}
+    >
+      {children}
+    </AdminShell>
   );
 }
