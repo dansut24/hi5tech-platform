@@ -44,19 +44,7 @@ export default async function AdminLayout({
 
   const myRole = String(myMembership?.role || "");
   const isAdmin = myRole === "owner" || myRole === "admin";
-  if (!isAdmin) {
-    // Entire admin section out-of-bounds for non-admin users
-    redirect("/apps");
-  }
-
-  // Read tenant onboarding status (best effort)
-  const { data: settings } = await supabase
-    .from("tenant_settings")
-    .select("onboarding_completed")
-    .eq("tenant_id", tenant.id)
-    .maybeSingle();
-
-  const onboardingCompleted = Boolean(settings?.onboarding_completed);
+  if (!isAdmin) redirect("/apps");
 
   // Profile (nice display in header)
   const { data: profile } = await supabase
@@ -70,6 +58,15 @@ export default async function AdminLayout({
     (user.email ? user.email.split("@")[0] : "User");
 
   const email = (profile?.email || user.email || "").toLowerCase();
+
+  // Onboarding status (best-effort)
+  const { data: settings } = await supabase
+    .from("tenant_settings")
+    .select("onboarding_completed")
+    .eq("tenant_id", tenant.id)
+    .maybeSingle();
+
+  const onboardingCompleted = Boolean(settings?.onboarding_completed);
 
   return (
     <>
