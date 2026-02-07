@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { supabaseServer } from "@/lib/supabase/server";
 import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
-import SetupWizard from "@/app/(modules)/admin/ui/setup-wizard";
+import SetupWizard from "@/app/(modules)/admin/setup/ui/setup-wizard";
 
 export const dynamic = "force-dynamic";
 
