@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { supabaseServer } from "@/lib/supabase/server";
 import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
-import MicrosoftIntegrationClient from "./ui/microsoft-integration-client";
+import MicrosoftIntegrationClient from "@/app/(modules)/admin/ui/microsoft-integration-client";
 
 export const dynamic = "force-dynamic";
 
