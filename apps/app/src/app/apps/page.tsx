@@ -22,8 +22,16 @@ const MODULE_PATH: Record<ModuleKey, string> = {
   admin: "/admin",
 };
 
+// 🔎 A unique marker so we can prove WHICH file rendered the page.
+const FILE_MARKER = "apps/app/src/app/apps/page.tsx :: DEBUG_MARKER :: 2026-02-08-01";
+
+function envStr(v: unknown) {
+  const s = String(v ?? "");
+  return s.length ? s : "∅";
+}
+
 export default async function AppsLandingPage() {
-  // 🔥 ensures Next never caches this render
+  // ensures Next never caches this render
   noStore();
 
   const supabase = await supabaseServer();
@@ -34,7 +42,8 @@ export default async function AppsLandingPage() {
   if (!user) redirect("/login");
 
   // Identify tenant from host
-  const host = getEffectiveHost(await headers());
+  const hdrs = await headers();
+  const host = getEffectiveHost(hdrs);
   const parsed = parseTenantHost(host);
   if (!parsed.subdomain) redirect("/login");
 
@@ -99,10 +108,34 @@ export default async function AppsLandingPage() {
     modules = Array.from(allowed);
   }
 
-  const buildStamp =
-    process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ||
-    process.env.VERCEL_DEPLOYMENT_ID ||
-    "local";
+  // 🔎 Build + git + deployment info (Vercel provides these in env on builds)
+  const debug = {
+    file: FILE_MARKER,
+
+    request: {
+      hostHeader: envStr(hdrs.get("host")),
+      effectiveHost: envStr(host),
+      urlHint_vercelUrl: envStr(process.env.VERCEL_URL), // usually: <project>.vercel.app or your domain
+    },
+
+    vercel: {
+      deploymentId: envStr(process.env.VERCEL_DEPLOYMENT_ID),
+      env: envStr(process.env.VERCEL_ENV), // production/preview/development
+      region: envStr(process.env.VERCEL_REGION),
+      project: envStr(process.env.VERCEL_PROJECT_NAME),
+    },
+
+    git: {
+      provider: envStr(process.env.VERCEL_GIT_PROVIDER),
+      repoOwner: envStr(process.env.VERCEL_GIT_REPO_OWNER),
+      repoSlug: envStr(process.env.VERCEL_GIT_REPO_SLUG),
+      commitRef: envStr(process.env.VERCEL_GIT_COMMIT_REF),
+      commitSha: envStr(process.env.VERCEL_GIT_COMMIT_SHA),
+      commitMessage: envStr(process.env.VERCEL_GIT_COMMIT_MESSAGE),
+    },
+  };
+
+  const shortSha = (process.env.VERCEL_GIT_COMMIT_SHA || "").slice(0, 7) || "∅";
 
   return (
     <div className="min-h-dvh p-4 sm:p-8">
@@ -111,8 +144,10 @@ export default async function AppsLandingPage() {
           <h1 className="text-2xl font-semibold">Hi5Tech</h1>
           <p className="mt-1 text-sm opacity-80">Choose a module</p>
 
-          {/* ✅ TEMP DEBUG STAMP */}
-          <p className="mt-2 text-xs opacity-60">Build: {buildStamp}</p>
+          {/* quick visible stamp */}
+          <p className="mt-2 text-xs opacity-70">
+            Commit: {shortSha} • Project: {debug.vercel.project} • Env: {debug.vercel.env}
+          </p>
         </div>
 
         <form action={logoutAction}>
@@ -121,6 +156,14 @@ export default async function AppsLandingPage() {
           </button>
         </form>
       </div>
+
+      {/* ✅ DEBUG PANEL (temporary) */}
+      <details className="mt-4 hi5-card p-4 rounded-2xl border hi5-border">
+        <summary className="cursor-pointer text-sm font-semibold">Debug (temporary)</summary>
+        <pre className="mt-3 text-xs whitespace-pre-wrap break-words opacity-80">
+          {JSON.stringify(debug, null, 2)}
+        </pre>
+      </details>
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {(modules.length ? modules : ALL).map((m) => (
