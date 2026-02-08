@@ -119,44 +119,44 @@ const PRESETS: Preset[] = [
     glow3: 0.10,
   },
   {
-    key: "neutral-light",
-    label: "Neutral (Light) — White / Grey / Blue",
-    accent: "#2563EB",
-    accent2: "#2563EB",
-    accent3: "#2563EB",
-    bg: "#FFFFFF",
-    card: "#F3F4F6",
-    topbar: "#FFFFFF",
-    glow1: 0,
-    glow2: 0,
-    glow3: 0,
-  },
-  {
-    key: "neutral-dark",
-    label: "Neutral (Dark) — Charcoal / Slate / Blue",
-    accent: "#3B82F6",
-    accent2: "#3B82F6",
-    accent3: "#3B82F6",
-    bg: "#0B0D12",
-    card: "#111827",
-    topbar: "#0B0D12",
-    glow1: 0,
-    glow2: 0,
-    glow3: 0,
-  },
-  {
-    key: "minimal-grey",
-    label: "Minimal Grey — Soft UI",
-    accent: "#1D4ED8",
-    accent2: "#1D4ED8",
-    accent3: "#1D4ED8",
-    bg: "#F8FAFC",
-    card: "#E5E7EB",
-    topbar: "#F8FAFC",
-    glow1: 0,
-    glow2: 0,
-    glow3: 0,
-  },
+  key: "neutral-light",
+  label: "Neutral (Light) — White / Grey / Blue",
+  accent: "#2563EB",     // blue
+  accent2: "#2563EB",    // same so gradients become “solid-ish”
+  accent3: "#2563EB",
+  bg: "#FFFFFF",
+  card: "#F3F4F6",       // light grey
+  topbar: "#FFFFFF",
+  glow1: 0,              // no blobs intensity
+  glow2: 0,
+  glow3: 0,
+},
+{
+  key: "neutral-dark",
+  label: "Neutral (Dark) — Charcoal / Slate / Blue",
+  accent: "#3B82F6",
+  accent2: "#3B82F6",
+  accent3: "#3B82F6",
+  bg: "#0B0D12",
+  card: "#111827",
+  topbar: "#0B0D12",
+  glow1: 0,
+  glow2: 0,
+  glow3: 0,
+},
+{
+  key: "minimal-grey",
+  label: "Minimal Grey — Soft UI",
+  accent: "#1D4ED8",
+  accent2: "#1D4ED8",
+  accent3: "#1D4ED8",
+  bg: "#F8FAFC",
+  card: "#E5E7EB",
+  topbar: "#F8FAFC",
+  glow1: 0,
+  glow2: 0,
+  glow3: 0,
+},
 ];
 
 function StepPill({ active, label }: { active: boolean; label: string }) {
@@ -280,25 +280,8 @@ function safeFileExt(name: string) {
   const base = (name || "").toLowerCase();
   const dot = base.lastIndexOf(".");
   const ext = dot >= 0 ? base.slice(dot + 1) : "";
-  if (["png", "jpg", "jpeg", "webp", "svg"].includes(ext))
-    return ext === "jpeg" ? "jpg" : ext;
+  if (["png", "jpg", "jpeg", "webp", "svg"].includes(ext)) return ext === "jpeg" ? "jpg" : ext;
   return "png";
-}
-
-// Ensure we never send null/empty for NOT NULL columns
-function ensureHex(v: string, fallback: string) {
-  const s = (v || "").trim();
-  return s ? s : fallback;
-}
-function ensureTopbar(topbar: string, card: string, fallbackCard = "#ffffff") {
-  const t = (topbar || "").trim();
-  if (t) return t;
-  const c = (card || "").trim();
-  return c ? c : fallbackCard;
-}
-function ensureNum(v: any, fallback: number) {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : fallback;
 }
 
 export default function SetupWizard({
@@ -384,11 +367,6 @@ export default function SetupWizard({
     setOk(null);
 
     try {
-      // ✅ NEVER send null for NOT NULL cols
-      const safeBg = ensureHex(bg, "#f8fafc");
-      const safeCard = ensureHex(card, "#ffffff");
-      const safeTopbar = ensureTopbar(topbar, safeCard, "#ffffff");
-
       const payload: InitialSettings = {
         company_name: companyName.trim() || null,
         support_email: supportEmail.trim() || null,
@@ -396,17 +374,20 @@ export default function SetupWizard({
 
         logo_url: logoUrl.trim() || null,
 
-        accent_hex: ensureHex(accent, "#00c1ff"),
-        accent_2_hex: ensureHex(accent2, "#ff4fe1"),
-        accent_3_hex: ensureHex(accent3, "#ffc42d"),
+        accent_hex: accent.trim() || null,
+        accent_2_hex: accent2.trim() || null,
+        accent_3_hex: accent3.trim() || null,
 
-        bg_hex: safeBg,
-        card_hex: safeCard,
-        topbar_hex: safeTopbar,
+        bg_hex: bg.trim() || null,
+        card_hex: card.trim() || null,
 
-        glow_1: ensureNum(glow1, 0.18),
-        glow_2: ensureNum(glow2, 0.14),
-        glow_3: ensureNum(glow3, 0.1),
+        // IMPORTANT: if you keep topbar NOT NULL in DB, setTopbar should never be empty.
+        // Recommended DB fix: drop NOT NULL. If you can't, we still send a value:
+        topbar_hex: (topbar && topbar.trim()) ? topbar.trim() : (card.trim() || "#ffffff"),
+
+        glow_1: Number.isFinite(glow1) ? glow1 : null,
+        glow_2: Number.isFinite(glow2) ? glow2 : null,
+        glow_3: Number.isFinite(glow3) ? glow3 : null,
 
         allowed_domains: allowedDomains
           .split(",")
@@ -418,11 +399,6 @@ export default function SetupWizard({
 
         ...partial,
       };
-
-      // Ensure partial can't null-out required fields
-      if (partial?.bg_hex === null) payload.bg_hex = safeBg;
-      if (partial?.card_hex === null) payload.card_hex = safeCard;
-      if (partial?.topbar_hex === null) payload.topbar_hex = safeTopbar;
 
       const res = await fetch("/api/admin/setup/save", {
         method: "POST",
@@ -452,20 +428,20 @@ export default function SetupWizard({
     try {
       const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
       const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-      if (!url || !anon) {
-        throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY");
-      }
+      if (!url || !anon) throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY");
 
       const supabase = createBrowserClient(url, anon);
 
       const ext = safeFileExt(file.name);
       const path = `tenants/${tenant.id}/logo.${ext}`;
 
-      const { error: upErr } = await supabase.storage.from("tenant-assets").upload(path, file, {
-        upsert: true,
-        contentType: file.type || undefined,
-        cacheControl: "3600",
-      });
+      const { error: upErr } = await supabase.storage
+        .from("tenant-assets")
+        .upload(path, file, {
+          upsert: true,
+          contentType: file.type || undefined,
+          cacheControl: "3600",
+        });
 
       if (upErr) throw upErr;
 
@@ -678,11 +654,6 @@ export default function SetupWizard({
                   <RangeField label="Glow 1" value={glow1} onChange={setGlow1} hint="Sphere strength" />
                   <RangeField label="Glow 2" value={glow2} onChange={setGlow2} hint="Sphere strength" />
                   <RangeField label="Glow 3" value={glow3} onChange={setGlow3} hint="Sphere strength" />
-                </div>
-
-                <div className="text-[11px] opacity-60">
-                  Neutral presets set glow to 0 (no blobs). If you want truly “no gradient”, keep glow at 0 and set
-                  Accent2/Accent3 equal to Accent.
                 </div>
               </div>
 
