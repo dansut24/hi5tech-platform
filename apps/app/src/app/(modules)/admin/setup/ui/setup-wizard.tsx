@@ -461,19 +461,30 @@ export default function SetupWizard({
   }
 
   async function finish() {
-    setSaving(true);
-    setErr(null);
+  setSaving(true);
+  setErr(null);
 
-    try {
-      await save();
-      await fetch("/api/admin/onboarding/complete", { method: "POST" });
-      window.location.assign("/apps");
-    } catch (e: any) {
-      setErr(e?.message || "Failed to complete onboarding");
-      setSaving(false);
+  try {
+    const res = await fetch("/api/admin/onboarding/complete", {
+      method: "POST",
+    });
+
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      throw new Error(txt || `Failed to complete onboarding (${res.status})`);
     }
-  }
 
+    const data = await res.json().catch(() => null);
+    if (!data?.ok || !data?.onboarding_completed) {
+      throw new Error("Onboarding did not persist as completed. Please try again.");
+    }
+
+    window.location.assign("/apps");
+  } catch (e: any) {
+    setErr(e?.message || "Failed to complete onboarding");
+    setSaving(false);
+  }
+}
   return (
     <div className="space-y-4">
       <div className="hi5-panel p-6">
