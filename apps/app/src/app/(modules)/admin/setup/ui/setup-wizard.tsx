@@ -2,6 +2,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { createBrowserClient } from "@supabase/ssr";
 
 type TenantInfo = {
   id: string;
@@ -14,14 +15,27 @@ export type InitialSettings = {
   company_name?: string | null;
   support_email?: string | null;
   timezone?: string | null;
+
   logo_url?: string | null;
+
   accent_hex?: string | null;
   accent_2_hex?: string | null;
   accent_3_hex?: string | null;
+
+  // NEW: theme tokens that your layouts + globals.css already support
+  bg_hex?: string | null;
+  card_hex?: string | null;
+  topbar_hex?: string | null;
+  glow_1?: number | null;
+  glow_2?: number | null;
+  glow_3?: number | null;
+
   allowed_domains?: string[] | null;
+
   ms_enabled?: boolean | null;
   ms_tenant_id?: string | null;
   ms_connected_at?: string | null;
+
   onboarding_completed?: boolean | null;
 };
 
@@ -30,7 +44,9 @@ function StepPill({ active, label }: { active: boolean; label: string }) {
     <div
       className={[
         "px-3 py-1.5 rounded-2xl text-xs border hi5-border",
-        active ? "bg-[rgba(var(--hi5-accent),0.10)] border-[rgba(var(--hi5-accent),0.28)]" : "opacity-70",
+        active
+          ? "bg-[rgba(var(--hi5-accent),0.10)] border-[rgba(var(--hi5-accent),0.28)]"
+          : "opacity-70",
       ].join(" ")}
     >
       {label}
@@ -69,14 +85,19 @@ function ColorField({
   label,
   value,
   onChange,
+  hint,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
+  hint?: string;
 }) {
   return (
     <label className="block">
-      <div className="text-xs opacity-70 mb-1">{label}</div>
+      <div className="flex items-center justify-between gap-3 mb-1">
+        <div className="text-xs opacity-70">{label}</div>
+        {hint ? <div className="text-[11px] opacity-60">{hint}</div> : null}
+      </div>
       <div className="flex items-center gap-3">
         <input
           className="h-11 w-14 rounded-2xl border hi5-border hi5-card px-2"
@@ -96,6 +117,53 @@ function ColorField({
   );
 }
 
+function RangeField({
+  label,
+  value,
+  onChange,
+  min = 0,
+  max = 1,
+  step = 0.01,
+  hint,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  hint?: string;
+}) {
+  return (
+    <label className="block">
+      <div className="flex items-center justify-between gap-3 mb-1">
+        <div className="text-xs opacity-70">{label}</div>
+        <div className="text-[11px] opacity-60">
+          {hint ? `${hint} • ` : ""}
+          {value.toFixed(2)}
+        </div>
+      </div>
+      <input
+        className="w-full"
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+      />
+    </label>
+  );
+}
+
+function safeFileExt(name: string) {
+  const base = (name || "").toLowerCase();
+  const dot = base.lastIndexOf(".");
+  const ext = dot >= 0 ? base.slice(dot + 1) : "";
+  if (["png", "jpg", "jpeg", "webp", "svg"].includes(ext)) return ext === "jpeg" ? "jpg" : ext;
+  return "png";
+}
+
 export default function SetupWizard({
   tenant,
   me,
@@ -107,15 +175,28 @@ export default function SetupWizard({
 }) {
   const init = useMemo(() => {
     const allowed = initial?.allowed_domains?.join(", ") ?? "";
+
     return {
       companyName: initial?.company_name ?? tenant.name ?? "",
       supportEmail: initial?.support_email ?? me.email ?? "",
       timezone: initial?.timezone ?? "Europe/London",
+
       logoUrl: initial?.logo_url ?? "",
+
       accent: initial?.accent_hex ?? "#00c1ff",
       accent2: initial?.accent_2_hex ?? "#ff4fe1",
       accent3: initial?.accent_3_hex ?? "#ffc42d",
+
+      // NEW defaults that match your globals.css + layouts
+      bg: initial?.bg_hex ?? "#f8fafc",
+      card: initial?.card_hex ?? "#ffffff",
+      topbar: initial?.topbar_hex ?? "", // optional (fallback = card)
+      glow1: typeof initial?.glow_1 === "number" ? initial!.glow_1! : 0.18,
+      glow2: typeof initial?.glow_2 === "number" ? initial!.glow_2! : 0.14,
+      glow3: typeof initial?.glow_3 === "number" ? initial!.glow_3! : 0.10,
+
       allowedDomains: allowed,
+
       msEnabled: Boolean(initial?.ms_enabled),
       msTenantId: initial?.ms_tenant_id ?? "",
     };
@@ -131,9 +212,19 @@ export default function SetupWizard({
   const [timezone, setTimezone] = useState(init.timezone);
 
   const [logoUrl, setLogoUrl] = useState(init.logoUrl);
+  const [logoUploading, setLogoUploading] = useState(false);
+
   const [accent, setAccent] = useState(init.accent);
   const [accent2, setAccent2] = useState(init.accent2);
   const [accent3, setAccent3] = useState(init.accent3);
+
+  const [bg, setBg] = useState(init.bg);
+  const [card, setCard] = useState(init.card);
+  const [topbar, setTopbar] = useState(init.topbar);
+
+  const [glow1, setGlow1] = useState(init.glow1);
+  const [glow2, setGlow2] = useState(init.glow2);
+  const [glow3, setGlow3] = useState(init.glow3);
 
   const [allowedDomains, setAllowedDomains] = useState(init.allowedDomains);
 
@@ -144,21 +235,35 @@ export default function SetupWizard({
     setSaving(true);
     setErr(null);
     setOk(null);
+
     try {
       const payload: InitialSettings = {
         company_name: companyName.trim() || null,
         support_email: supportEmail.trim() || null,
         timezone: timezone.trim() || null,
+
         logo_url: logoUrl.trim() || null,
+
         accent_hex: accent.trim() || null,
         accent_2_hex: accent2.trim() || null,
         accent_3_hex: accent3.trim() || null,
+
+        bg_hex: bg.trim() || null,
+        card_hex: card.trim() || null,
+        topbar_hex: topbar.trim() || null,
+
+        glow_1: Number.isFinite(glow1) ? glow1 : null,
+        glow_2: Number.isFinite(glow2) ? glow2 : null,
+        glow_3: Number.isFinite(glow3) ? glow3 : null,
+
         allowed_domains: allowedDomains
           .split(",")
           .map((s) => s.trim().toLowerCase())
           .filter(Boolean),
+
         ms_enabled: msEnabled,
         ms_tenant_id: msTenantId.trim() || null,
+
         ...partial,
       };
 
@@ -182,10 +287,57 @@ export default function SetupWizard({
     }
   }
 
+  async function uploadLogo(file: File) {
+    setLogoUploading(true);
+    setErr(null);
+    setOk(null);
+
+    try {
+      const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+      if (!url || !anon) throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY");
+
+      const supabase = createBrowserClient(url, anon);
+
+      const ext = safeFileExt(file.name);
+      const path = `tenants/${tenant.id}/logo.${ext}`;
+
+      // upload (overwrite)
+      const { error: upErr } = await supabase.storage
+        .from("tenant-assets")
+        .upload(path, file, {
+          upsert: true,
+          contentType: file.type || undefined,
+          cacheControl: "3600",
+        });
+
+      if (upErr) throw upErr;
+
+      const { data } = supabase.storage.from("tenant-assets").getPublicUrl(path);
+      const publicUrl = data?.publicUrl;
+      if (!publicUrl) throw new Error("Could not get public URL for uploaded logo");
+
+      setLogoUrl(publicUrl);
+
+      // persist immediately so refreshes keep the logo
+      await save({ logo_url: publicUrl });
+      setOk("Logo uploaded");
+    } catch (e: any) {
+      setErr(e?.message || "Logo upload failed");
+    } finally {
+      setLogoUploading(false);
+      setTimeout(() => setOk(null), 1200);
+    }
+  }
+
   async function finish() {
     setSaving(true);
     setErr(null);
+
     try {
+      // Ensure latest values are saved
+      await save();
+
       // ✅ COMPLETE onboarding (hard gate uses this)
       await fetch("/api/admin/onboarding/complete", { method: "POST" });
 
@@ -205,7 +357,7 @@ export default function SetupWizard({
             <div className="text-xs opacity-70">Admin setup</div>
             <h1 className="text-2xl font-extrabold mt-1">{tenant.name}</h1>
             <p className="text-sm opacity-75 mt-2">
-              Complete setup to unlock the platform. You can edit these settings later in Admin → Settings.
+              Vital setup only. Everything can be edited later in Admin → Settings.
             </p>
           </div>
 
@@ -221,18 +373,12 @@ export default function SetupWizard({
         {ok ? <div className="mt-4 text-sm text-emerald-500">{ok}</div> : null}
       </div>
 
-      {/* Step content */}
       <div className="hi5-panel p-6">
         {step === 0 && (
           <div className="space-y-4">
             <div className="text-lg font-semibold">Company details</div>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field
-                label="Company name"
-                value={companyName}
-                onChange={setCompanyName}
-                placeholder="Hi5Tech"
-              />
+              <Field label="Company name" value={companyName} onChange={setCompanyName} placeholder="Hi5Tech" />
               <Field
                 label="Support email"
                 value={supportEmail}
@@ -254,33 +400,118 @@ export default function SetupWizard({
         {step === 1 && (
           <div className="space-y-4">
             <div className="text-lg font-semibold">Branding</div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field
-                label="Logo URL (optional)"
-                value={logoUrl}
-                onChange={setLogoUrl}
-                placeholder="https://..."
-              />
-              <div className="hi5-card rounded-2xl border hi5-border p-4">
-                <div className="text-xs opacity-70">Preview</div>
-                <div className="mt-3 flex items-center gap-3">
-                  <div
-                    className="h-12 w-12 rounded-2xl border hi5-border"
-                    style={{
-                      background:
-                        "radial-gradient(circle at 30% 30%, rgba(var(--hi5-accent-2),.55), rgba(var(--hi5-accent),.55) 60%, rgba(var(--hi5-accent-3),.55))",
-                    }}
-                  />
-                  <div>
-                    <div className="text-sm font-semibold">{companyName || tenant.name}</div>
-                    <div className="text-xs opacity-70">{tenant.subdomain}.{tenant.domain}</div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div className="space-y-4">
+                <div className="hi5-card rounded-2xl border hi5-border p-4">
+                  <div className="text-xs opacity-70">Logo</div>
+
+                  <div className="mt-3 flex items-center gap-3">
+                    <div className="h-12 w-12 rounded-2xl border hi5-border overflow-hidden bg-white/50 dark:bg-black/30 flex items-center justify-center">
+                      {logoUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={logoUrl} alt="Logo" className="h-full w-full object-cover" />
+                      ) : (
+                        <div
+                          className="h-full w-full"
+                          style={{
+                            background:
+                              "radial-gradient(circle at 30% 30%, rgba(var(--hi5-accent-2),.55), rgba(var(--hi5-accent),.55) 60%, rgba(var(--hi5-accent-3),.55))",
+                          }}
+                        />
+                      )}
+                    </div>
+
+                    <div className="min-w-0">
+                      <div className="text-sm font-semibold truncate">{companyName || tenant.name}</div>
+                      <div className="text-xs opacity-70 truncate">
+                        {tenant.subdomain}.{tenant.domain}
+                      </div>
+                    </div>
                   </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <label className="hi5-btn-ghost text-sm w-auto cursor-pointer">
+                      <input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) uploadLogo(f);
+                          e.currentTarget.value = "";
+                        }}
+                        disabled={logoUploading || saving}
+                      />
+                      {logoUploading ? "Uploading…" : "Upload logo"}
+                    </label>
+
+                    {logoUrl ? (
+                      <button
+                        type="button"
+                        className="hi5-btn-ghost text-sm w-auto"
+                        disabled={logoUploading || saving}
+                        onClick={() => {
+                          setLogoUrl("");
+                          save({ logo_url: null });
+                        }}
+                      >
+                        Remove
+                      </button>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-3 text-[11px] opacity-60">
+                    Stored in Supabase Storage: <span className="font-mono">tenant-assets/tenants/{tenant.id}/logo.*</span>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <ColorField label="Accent" value={accent} onChange={setAccent} hint="Buttons + highlights" />
+                  <ColorField label="Accent 2" value={accent2} onChange={setAccent2} hint="Gradients" />
+                  <ColorField label="Accent 3" value={accent3} onChange={setAccent3} hint="Highlights" />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <ColorField label="Background" value={bg} onChange={setBg} hint="Base bg token" />
+                  <ColorField label="Card" value={card} onChange={setCard} hint="Surfaces" />
+                  <ColorField label="Topbar" value={topbar || card} onChange={setTopbar} hint="Empty = card" />
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <RangeField label="Glow 1" value={glow1} onChange={setGlow1} hint="Sphere strength" />
+                  <RangeField label="Glow 2" value={glow2} onChange={setGlow2} hint="Sphere strength" />
+                  <RangeField label="Glow 3" value={glow3} onChange={setGlow3} hint="Sphere strength" />
                 </div>
               </div>
 
-              <ColorField label="Accent" value={accent} onChange={setAccent} />
-              <ColorField label="Accent 2" value={accent2} onChange={setAccent2} />
-              <ColorField label="Accent 3" value={accent3} onChange={setAccent3} />
+              <div className="hi5-card rounded-2xl border hi5-border p-5">
+                <div className="text-xs opacity-70">Live preview</div>
+                <div className="mt-4 space-y-3">
+                  <div className="rounded-2xl border hi5-border p-4 hi5-card">
+                    <div className="text-sm font-semibold">Card example</div>
+                    <div className="text-sm opacity-80 mt-1">
+                      Your cards/panels/buttons will shift based on these tokens.
+                    </div>
+                    <button type="button" className="hi5-btn-primary text-sm mt-3">
+                      Primary Button
+                    </button>
+                  </div>
+
+                  <div className="rounded-2xl border hi5-border p-4 hi5-panel">
+                    <div className="text-sm font-semibold">Panel example</div>
+                    <div className="text-sm opacity-80 mt-1">Panels are stronger surfaces.</div>
+                    <button type="button" className="hi5-btn-ghost text-sm mt-3 w-auto">
+                      Ghost button
+                    </button>
+                  </div>
+
+                  <div className="text-[11px] opacity-60">
+                    Note: full “live preview” of the entire site happens automatically after save — your layouts read these
+                    values and apply CSS variables server-side.
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -292,18 +523,14 @@ export default function SetupWizard({
             <div className="hi5-card rounded-2xl border hi5-border p-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <div className="text-sm font-semibold">Enable Microsoft SSO + imports</div>
+                  <div className="text-sm font-semibold">Enable Microsoft</div>
                   <div className="text-sm opacity-75 mt-1">
-                    You’ll add the app registration details here (tenant id now; client/secret later when we wire Graph).
+                    Keep this optional in onboarding. We’ll wire Graph + import later in Admin → Integrations.
                   </div>
                 </div>
 
                 <label className="inline-flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={msEnabled}
-                    onChange={(e) => setMsEnabled(e.target.checked)}
-                  />
+                  <input type="checkbox" checked={msEnabled} onChange={(e) => setMsEnabled(e.target.checked)} />
                   Enabled
                 </label>
               </div>
@@ -316,12 +543,14 @@ export default function SetupWizard({
                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                 />
                 <div className="rounded-2xl border hi5-border hi5-card p-4">
-                  <div className="text-xs opacity-70">Imports</div>
+                  <div className="text-xs opacity-70">Next</div>
                   <div className="text-sm mt-2 opacity-80">
-                    Next step: connect Graph + allow the Owner to import users/devices.
-                  </div>
-                  <div className="text-xs opacity-70 mt-2">
-                    (This is UI-ready; we’ll wire real auth later.)
+                    After onboarding we’ll add:
+                    <ul className="list-disc pl-5 mt-2 space-y-1">
+                      <li>OAuth connection flow</li>
+                      <li>Import users</li>
+                      <li>Invite users from Microsoft</li>
+                    </ul>
                   </div>
                 </div>
               </div>
@@ -333,7 +562,7 @@ export default function SetupWizard({
           <div className="space-y-3">
             <div className="text-lg font-semibold">Finish</div>
             <p className="text-sm opacity-80">
-              When you finish, onboarding is marked complete and you’ll be redirected to Modules.
+              Finishing marks onboarding complete and unlocks the platform. You’ll be redirected to Modules.
             </p>
 
             <div className="hi5-card rounded-2xl border hi5-border p-4 text-sm">
@@ -345,6 +574,9 @@ export default function SetupWizard({
                   <span className="opacity-70">Support:</span> {supportEmail || "—"}
                 </div>
                 <div className="rounded-2xl border hi5-border px-3 py-2">
+                  <span className="opacity-70">Logo:</span> {logoUrl ? "Set" : "None"}
+                </div>
+                <div className="rounded-2xl border hi5-border px-3 py-2">
                   <span className="opacity-70">MS:</span> {msEnabled ? "Enabled" : "Disabled"}
                 </div>
               </div>
@@ -353,12 +585,11 @@ export default function SetupWizard({
         )}
       </div>
 
-      {/* Footer actions */}
       <div className="flex items-center justify-between gap-3">
         <button
           type="button"
-          className="hi5-btn-ghost text-sm"
-          disabled={saving || step === 0}
+          className="hi5-btn-ghost text-sm w-auto"
+          disabled={saving || step === 0 || logoUploading}
           onClick={() => setStep((s) => (s > 0 ? ((s - 1) as any) : s))}
         >
           Back
@@ -367,8 +598,8 @@ export default function SetupWizard({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            className="hi5-btn-ghost text-sm"
-            disabled={saving}
+            className="hi5-btn-ghost text-sm w-auto"
+            disabled={saving || logoUploading}
             onClick={() => save()}
             title="Save progress"
           >
@@ -378,8 +609,8 @@ export default function SetupWizard({
           {step < 3 ? (
             <button
               type="button"
-              className="hi5-btn-primary text-sm"
-              disabled={saving}
+              className="hi5-btn-primary text-sm w-auto"
+              disabled={saving || logoUploading}
               onClick={async () => {
                 await save();
                 setStep((s) => ((s + 1) as any));
@@ -390,8 +621,8 @@ export default function SetupWizard({
           ) : (
             <button
               type="button"
-              className="hi5-btn-primary text-sm"
-              disabled={saving}
+              className="hi5-btn-primary text-sm w-auto"
+              disabled={saving || logoUploading}
               onClick={finish}
             >
               {saving ? "Finishing…" : "Finish setup"}
