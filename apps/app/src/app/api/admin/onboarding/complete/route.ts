@@ -1,3 +1,4 @@
+// apps/app/src/app/api/admin/onboarding/complete/route.ts
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -6,7 +7,7 @@ import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host
 export const dynamic = "force-dynamic";
 
 function json(ok: boolean, status: number, payload: any) {
-  return NextResponse.json({ ok, ...payload }, { status });
+  return NextResponse.json({ ok, ...payload }, { status, headers: { "cache-control": "no-store" } });
 }
 
 export async function POST() {
@@ -53,50 +54,47 @@ export async function POST() {
 
     /**
      * IMPORTANT:
-     * - We UPSERT so this works even if tenant_settings row doesn't exist yet
-     * - We only include columns that ACTUALLY EXIST
-     * - We satisfy NOT NULL constraints with safe defaults
+     * DO NOT overwrite theme settings here.
+     * Only mark onboarding as complete.
+     *
+     * Also: if you have an old column `onboarding_complete`, we set it too
+     * but we do it in a safe way that won’t crash if it doesn’t exist.
      */
-    const upsertPayload = {
+    const base = {
       tenant_id: tenant.id,
       onboarding_completed: true,
-
-      company_name: tenant.name ?? tenant.subdomain ?? "Company",
-      support_email: user.email ?? "support@example.com",
-      timezone: "Europe/London",
-
-      accent_hex: "#00c1ff",
-      accent_2_hex: "#ff4fe1",
-      accent_3_hex: "#ffc42d",
-      bg_hex: "#f8fafc",
-      card_hex: "#ffffff",
-      topbar_hex: "#ffffff",
-
-      glow_1: 0.18,
-      glow_2: 0.14,
-      glow_3: 0.10,
-
-      allowed_domains: [],
     };
 
-    const { error: upsertErr } = await supabase
+    // Try to upsert with both flags (new + legacy)
+    const tryWithLegacy = await supabase
       .from("tenant_settings")
-      .upsert(upsertPayload, { onConflict: "tenant_id" });
+      .upsert({ ...base, onboarding_complete: true } as any, { onConflict: "tenant_id" });
 
-    if (upsertErr) {
-      return json(false, 400, { error: upsertErr.message });
+    if (tryWithLegacy.error) {
+      // If legacy column doesn't exist, retry without it
+      const retry = await supabase
+        .from("tenant_settings")
+        .upsert(base, { onConflict: "tenant_id" });
+
+      if (retry.error) {
+        return json(false, 400, { error: retry.error.message });
+      }
     }
 
-    // Confirm write (hard guarantee for redirect logic)
-    const { data: settings } = await supabase
+    // Confirm
+    const { data: settings, error: readErr } = await supabase
       .from("tenant_settings")
-      .select("onboarding_completed")
+      .select("onboarding_completed, onboarding_complete, updated_at")
       .eq("tenant_id", tenant.id)
       .maybeSingle();
 
-    return json(true, 200, {
-      onboarding_completed: Boolean(settings?.onboarding_completed),
-    });
+    if (readErr) {
+      return json(true, 200, { onboarding_completed: true });
+    }
+
+    const done = Boolean((settings as any)?.onboarding_completed ?? (settings as any)?.onboarding_complete);
+
+    return json(true, 200, { onboarding_completed: done, tenant_settings: settings });
   } catch (e: any) {
     return json(false, 500, { error: e?.message || "Server error" });
   }
