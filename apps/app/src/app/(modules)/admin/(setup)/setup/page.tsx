@@ -5,7 +5,7 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
 
 // ✅ IMPORTANT: correct path (admin/setup/ui) not (admin/(setup)/ui)
-import SetupWizard from "../../setup/ui/setup-wizard";
+import SetupWizard, { type InitialSettings } from "../../setup/ui/setup-wizard";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +40,8 @@ export default async function AdminSetupPage() {
   const isAdmin = role === "owner" || role === "admin";
   if (!isAdmin) redirect("/apps");
 
-  const { data: settings } = await supabase
+  // ✅ Type the select result explicitly to match SetupWizard InitialSettings
+  const { data: settingsRow } = await supabase
     .from("tenant_settings")
     .select(
       [
@@ -61,6 +62,11 @@ export default async function AdminSetupPage() {
     .eq("tenant_id", tenant.id)
     .maybeSingle();
 
+  // ✅ Narrow to the type SetupWizard expects
+  const initial = (settingsRow ? (settingsRow as unknown as InitialSettings) : null) as
+    | InitialSettings
+    | null;
+
   return (
     <div className="p-4 sm:p-8">
       <div className="max-w-3xl mx-auto">
@@ -72,7 +78,7 @@ export default async function AdminSetupPage() {
             domain: tenant.domain,
           }}
           me={{ email: me.email ?? "" }}
-          initial={settings ?? null}
+          initial={initial}
         />
       </div>
     </div>
