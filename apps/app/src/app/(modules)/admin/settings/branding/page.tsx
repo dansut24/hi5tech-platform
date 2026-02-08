@@ -8,6 +8,22 @@ import BrandingEditorClient from "./ui/branding-editor-client";
 
 export const dynamic = "force-dynamic";
 
+type TenantSettingsRow = {
+  logo_url: string | null;
+
+  accent_hex: string | null;
+  accent_2_hex: string | null;
+  accent_3_hex: string | null;
+
+  bg_hex: string | null;
+  card_hex: string | null;
+  topbar_hex: string | null;
+
+  glow_1: number | null;
+  glow_2: number | null;
+  glow_3: number | null;
+};
+
 export default async function AdminSettingsBrandingPage() {
   const supabase = await supabaseServer();
 
@@ -38,7 +54,10 @@ export default async function AdminSettingsBrandingPage() {
   const role = String(membership?.role || "");
   if (role !== "owner" && role !== "admin") redirect("/apps");
 
-  const { data: settings } = await supabase
+  // IMPORTANT:
+  // Some of your supabase wrapper types return a union with GenericStringError.
+  // So we read it, then cast the row to the shape we need.
+  const { data: rawSettings } = await supabase
     .from("tenant_settings")
     .select(
       [
@@ -56,6 +75,8 @@ export default async function AdminSettingsBrandingPage() {
     )
     .eq("tenant_id", tenant.id)
     .maybeSingle();
+
+  const settings = (rawSettings as unknown as TenantSettingsRow | null) ?? null;
 
   return (
     <div className="min-h-dvh p-4 sm:p-8 space-y-4">
@@ -82,15 +103,18 @@ export default async function AdminSettingsBrandingPage() {
         }}
         initial={{
           logo_url: settings?.logo_url ?? "",
+
           accent_hex: settings?.accent_hex ?? "#00c1ff",
           accent_2_hex: settings?.accent_2_hex ?? "#ff4fe1",
           accent_3_hex: settings?.accent_3_hex ?? "#ffc42d",
+
           bg_hex: settings?.bg_hex ?? "#f8fafc",
           card_hex: settings?.card_hex ?? "#ffffff",
           topbar_hex: settings?.topbar_hex ?? "",
-          glow_1: typeof (settings as any)?.glow_1 === "number" ? (settings as any).glow_1 : 0.18,
-          glow_2: typeof (settings as any)?.glow_2 === "number" ? (settings as any).glow_2 : 0.14,
-          glow_3: typeof (settings as any)?.glow_3 === "number" ? (settings as any).glow_3 : 0.1,
+
+          glow_1: typeof settings?.glow_1 === "number" ? settings!.glow_1 : 0.18,
+          glow_2: typeof settings?.glow_2 === "number" ? settings!.glow_2 : 0.14,
+          glow_3: typeof settings?.glow_3 === "number" ? settings!.glow_3 : 0.1,
         }}
       />
     </div>
