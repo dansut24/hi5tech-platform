@@ -10,83 +10,123 @@ type Payload = {
   company_name?: string | null;
   support_email?: string | null;
   timezone?: string | null;
+
   logo_url?: string | null;
+
   accent_hex?: string | null;
   accent_2_hex?: string | null;
   accent_3_hex?: string | null;
+
+  bg_hex?: string | null;
+  card_hex?: string | null;
+  topbar_hex?: string | null;
+
+  glow_1?: number | null;
+  glow_2?: number | null;
+  glow_3?: number | null;
+
   allowed_domains?: string[] | null;
+
   ms_enabled?: boolean | null;
   ms_tenant_id?: string | null;
 };
 
-function jsonError(message: string, status = 400) {
-  return NextResponse.json({ ok: false, error: message }, { status });
+function json(ok: boolean, status: number, body: any) {
+  return new NextResponse(JSON.stringify({ ok, ...body }), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+function clamp01(v: any): number | null {
+  if (v === null || v === undefined) return null;
+  const n = Number(v);
+  if (!Number.isFinite(n)) return null;
+  return Math.max(0, Math.min(1, n));
 }
 
 export async function POST(req: Request) {
-  const supabase = await supabaseServer();
+  try {
+    const supabase = await supabaseServer();
 
-  // Must be logged in
-  const { data: userRes, error: userErr } = await supabase.auth.getUser();
-  if (userErr) return jsonError(userErr.message, 401);
-  const user = userRes.user;
-  if (!user) return jsonError("Unauthorized", 401);
+    // Auth
+    const { data: userRes } = await supabase.auth.getUser();
+    const user = userRes.user;
+    if (!user) return json(false, 401, { error: "Not authenticated" });
 
-  // Tenant from host
-  const host = getEffectiveHost(await headers());
-  const parsed = parseTenantHost(host);
-  if (!parsed.subdomain) return jsonError("Tenant subdomain required", 400);
+    // Tenant from host
+    const host = getEffectiveHost(await headers());
+    const parsed = parseTenantHost(host);
+    if (!parsed.subdomain) return json(false, 400, { error: "No tenant subdomain" });
 
-  const { data: tenant, error: tErr } = await supabase
-    .from("tenants")
-    .select("id, domain, subdomain")
-    .eq("domain", parsed.rootDomain)
-    .eq("subdomain", parsed.subdomain)
-    .maybeSingle();
+    const { data: tenant, error: tErr } = await supabase
+      .from("tenants")
+      .select("id, domain, subdomain, is_active")
+      .eq("domain", parsed.rootDomain)
+      .eq("subdomain", parsed.subdomain)
+      .maybeSingle();
 
-  if (tErr) return jsonError(tErr.message, 400);
-  if (!tenant) return jsonError("Tenant not found", 404);
+    if (tErr) return json(false, 400, { error: tErr.message });
+    if (!tenant || tenant.is_active === false) return json(false, 404, { error: "Tenant not found" });
 
-  // Must be owner/admin
-  const { data: membership, error: mErr } = await supabase
-    .from("memberships")
-    .select("role")
-    .eq("tenant_id", tenant.id)
-    .eq("user_id", user.id)
-    .maybeSingle();
+    // Must be owner/admin in this tenant
+    const { data: membership, error: mErr } = await supabase
+      .from("memberships")
+      .select("role")
+      .eq("tenant_id", tenant.id)
+      .eq("user_id", user.id)
+      .maybeSingle();
 
-  if (mErr) return jsonError(mErr.message, 400);
+    if (mErr) return json(false, 400, { error: mErr.message });
 
-  const role = String(membership?.role || "");
-  const isAdmin = role === "owner" || role === "admin";
-  if (!isAdmin) return jsonError("Forbidden", 403);
+    const role = String(membership?.role || "");
+    const isAdmin = role === "owner" || role === "admin";
+    if (!isAdmin) return json(false, 403, { error: "Forbidden" });
 
-  // Body
-  const body = (await req.json().catch(() => ({}))) as Payload;
+    // Body
+    let payload: Payload;
+    try {
+      payload = (await req.json()) as Payload;
+    } catch {
+      return json(false, 400, { error: "Invalid JSON body" });
+    }
 
-  // Save draft settings (upsert by tenant_id)
-  const update = {
-    tenant_id: tenant.id,
-    company_name: body.company_name ?? null,
-    support_email: body.support_email ?? null,
-    timezone: body.timezone ?? null,
-    logo_url: body.logo_url ?? null,
-    accent_hex: body.accent_hex ?? null,
-    accent_2_hex: body.accent_2_hex ?? null,
-    accent_3_hex: body.accent_3_hex ?? null,
-    allowed_domains: body.allowed_domains ?? null,
-    ms_enabled: body.ms_enabled ?? null,
-    ms_tenant_id: body.ms_tenant_id ?? null,
-    // IMPORTANT: this route is “save”, not “complete”
-    onboarding_completed: false,
-    updated_at: new Date().toISOString(),
-  };
+    // Upsert tenant_settings
+    const row = {
+      tenant_id: tenant.id,
 
-  const { error: upErr } = await supabase
-    .from("tenant_settings")
-    .upsert(update, { onConflict: "tenant_id" });
+      company_name: payload.company_name ?? null,
+      support_email: payload.support_email ?? null,
+      timezone: payload.timezone ?? null,
 
-  if (upErr) return jsonError(upErr.message, 400);
+      logo_url: payload.logo_url ?? null,
 
-  return NextResponse.json({ ok: true });
+      accent_hex: payload.accent_hex ?? null,
+      accent_2_hex: payload.accent_2_hex ?? null,
+      accent_3_hex: payload.accent_3_hex ?? null,
+
+      bg_hex: payload.bg_hex ?? null,
+      card_hex: payload.card_hex ?? null,
+      topbar_hex: payload.topbar_hex ?? null,
+
+      glow_1: clamp01(payload.glow_1),
+      glow_2: clamp01(payload.glow_2),
+      glow_3: clamp01(payload.glow_3),
+
+      allowed_domains: payload.allowed_domains ?? null,
+
+      ms_enabled: payload.ms_enabled ?? null,
+      ms_tenant_id: payload.ms_tenant_id ?? null,
+    };
+
+    const { error: upErr } = await supabase
+      .from("tenant_settings")
+      .upsert(row, { onConflict: "tenant_id" });
+
+    if (upErr) return json(false, 400, { error: upErr.message });
+
+    return json(true, 200, {});
+  } catch (e: any) {
+    return json(false, 500, { error: e?.message || "Server error" });
+  }
 }
