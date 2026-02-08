@@ -6,70 +6,98 @@ import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host
 
 export const dynamic = "force-dynamic";
 
+function json(ok: boolean, status: number, payload: any) {
+  return NextResponse.json({ ok, ...payload }, { status });
+}
+
 export async function POST() {
-  const supabase = await supabaseServer();
+  try {
+    const supabase = await supabaseServer();
 
-  // Must be logged in
-  const { data: userRes } = await supabase.auth.getUser();
-  const user = userRes.user;
-  if (!user) {
-    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-  }
+    // Must be logged in
+    const { data: userRes, error: uErr } = await supabase.auth.getUser();
+    if (uErr) return json(false, 401, { error: uErr.message });
+    const user = userRes.user;
+    if (!user) return json(false, 401, { error: "Not authenticated" });
 
-  // Tenant from host
-  const host = getEffectiveHost(await headers());
-  const parsed = parseTenantHost(host);
-  if (!parsed.subdomain) {
-    return NextResponse.json({ ok: false, error: "Tenant subdomain required" }, { status: 400 });
-  }
+    // Resolve tenant from host
+    const host = getEffectiveHost(await headers());
+    const parsed = parseTenantHost(host);
+    if (!parsed.subdomain) return json(false, 400, { error: "No tenant subdomain" });
 
-  const { data: tenant, error: tenantErr } = await supabase
-    .from("tenants")
-    .select("id, domain, subdomain")
-    .eq("domain", parsed.rootDomain)
-    .eq("subdomain", parsed.subdomain)
-    .maybeSingle();
+    const { data: tenant, error: tErr } = await supabase
+      .from("tenants")
+      .select("id, name, domain, subdomain, is_active")
+      .eq("domain", parsed.rootDomain)
+      .eq("subdomain", parsed.subdomain)
+      .maybeSingle();
 
-  if (tenantErr || !tenant) {
-    return NextResponse.json(
-      { ok: false, error: tenantErr?.message ?? "Tenant not found" },
-      { status: 404 }
-    );
-  }
+    if (tErr) return json(false, 400, { error: tErr.message });
+    if (!tenant || tenant.is_active === false) {
+      return json(false, 404, { error: "Tenant not found or inactive" });
+    }
 
-  // Must be owner/admin
-  const { data: membership, error: memErr } = await supabase
-    .from("memberships")
-    .select("role")
-    .eq("tenant_id", tenant.id)
-    .eq("user_id", user.id)
-    .maybeSingle();
+    // Must be owner/admin
+    const { data: membership, error: mErr } = await supabase
+      .from("memberships")
+      .select("role")
+      .eq("tenant_id", tenant.id)
+      .eq("user_id", user.id)
+      .maybeSingle();
 
-  if (memErr) {
-    return NextResponse.json({ ok: false, error: memErr.message }, { status: 400 });
-  }
+    if (mErr) return json(false, 400, { error: mErr.message });
 
-  const role = String(membership?.role || "");
-  const isAdmin = role === "owner" || role === "admin";
-  if (!isAdmin) {
-    return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
-  }
+    const role = String(membership?.role || "");
+    const isAdmin = role === "owner" || role === "admin";
+    if (!isAdmin) return json(false, 403, { error: "Forbidden" });
 
-  // Mark onboarding complete (idempotent)
-  const now = new Date().toISOString();
-  const { error: upsertErr } = await supabase.from("tenant_settings").upsert(
-    {
+    // We UPSERT so onboarding works even if tenant_settings row doesn't exist yet.
+    // IMPORTANT: if your table has NOT NULL columns, we provide safe defaults on insert.
+    const nowIso = new Date().toISOString();
+
+    const upsertPayload: Record<string, any> = {
       tenant_id: tenant.id,
       onboarding_completed: true,
-      onboarding_completed_at: now,
-      updated_at: now,
-    },
-    { onConflict: "tenant_id" }
-  );
+      onboarding_completed_at: nowIso,
 
-  if (upsertErr) {
-    return NextResponse.json({ ok: false, error: upsertErr.message }, { status: 400 });
+      // Safe defaults for common NOT NULL constraints (keep them aligned with your schema)
+      company_name: tenant.name ?? tenant.subdomain ?? "Company",
+      support_email: user.email ?? "support@example.com",
+      timezone: "Europe/London",
+
+      // Theme defaults (matches your existing theme tokens)
+      accent_hex: "#00c1ff",
+      accent_2_hex: "#ff4fe1",
+      accent_3_hex: "#ffc42d",
+      bg_hex: "#f8fafc",
+      card_hex: "#ffffff",
+      topbar_hex: "#ffffff",
+      glow_1: 0.18,
+      glow_2: 0.14,
+      glow_3: 0.10,
+
+      // If you use this in invites/SSO later
+      allowed_domains: [],
+      updated_at: nowIso,
+    };
+
+    const { error: sErr } = await supabase
+      .from("tenant_settings")
+      .upsert(upsertPayload, { onConflict: "tenant_id" });
+
+    if (sErr) return json(false, 400, { error: sErr.message });
+
+    // Optional: read back to confirm (helps debugging + stops “it said ok but didn’t save”)
+    const { data: settingsCheck, error: cErr } = await supabase
+      .from("tenant_settings")
+      .select("onboarding_completed")
+      .eq("tenant_id", tenant.id)
+      .maybeSingle();
+
+    if (cErr) return json(false, 400, { error: cErr.message });
+
+    return json(true, 200, { onboarding_completed: Boolean(settingsCheck?.onboarding_completed) });
+  } catch (e: any) {
+    return json(false, 500, { error: e?.message || "Server error" });
   }
-
-  return NextResponse.json({ ok: true });
 }
