@@ -118,6 +118,45 @@ const PRESETS: Preset[] = [
     glow2: 0.13,
     glow3: 0.10,
   },
+  {
+  key: "neutral-light",
+  label: "Neutral (Light) — White / Grey / Blue",
+  accent: "#2563EB",     // blue
+  accent2: "#2563EB",    // same so gradients become “solid-ish”
+  accent3: "#2563EB",
+  bg: "#FFFFFF",
+  card: "#F3F4F6",       // light grey
+  topbar: "#FFFFFF",
+  glow1: 0,              // no blobs intensity
+  glow2: 0,
+  glow3: 0,
+},
+{
+  key: "neutral-dark",
+  label: "Neutral (Dark) — Charcoal / Slate / Blue",
+  accent: "#3B82F6",
+  accent2: "#3B82F6",
+  accent3: "#3B82F6",
+  bg: "#0B0D12",
+  card: "#111827",
+  topbar: "#0B0D12",
+  glow1: 0,
+  glow2: 0,
+  glow3: 0,
+},
+{
+  key: "minimal-grey",
+  label: "Minimal Grey — Soft UI",
+  accent: "#1D4ED8",
+  accent2: "#1D4ED8",
+  accent3: "#1D4ED8",
+  bg: "#F8FAFC",
+  card: "#E5E7EB",
+  topbar: "#F8FAFC",
+  glow1: 0,
+  glow2: 0,
+  glow3: 0,
+},
 ];
 
 function StepPill({ active, label }: { active: boolean; label: string }) {
