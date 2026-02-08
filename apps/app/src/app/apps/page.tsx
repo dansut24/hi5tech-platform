@@ -2,11 +2,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
+import { unstable_noStore as noStore } from "next/cache";
 import { supabaseServer } from "@/lib/supabase/server";
 import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
 import { logoutAction } from "./actions";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
+export const fetchCache = "force-no-store";
 
 type ModuleKey = "itsm" | "control" | "selfservice" | "admin";
 
@@ -20,6 +23,9 @@ const MODULE_PATH: Record<ModuleKey, string> = {
 };
 
 export default async function AppsLandingPage() {
+  // 🔥 ensures Next never caches this render
+  noStore();
+
   const supabase = await supabaseServer();
 
   // Must be logged in
@@ -93,12 +99,20 @@ export default async function AppsLandingPage() {
     modules = Array.from(allowed);
   }
 
+  const buildStamp =
+    process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ||
+    process.env.VERCEL_DEPLOYMENT_ID ||
+    "local";
+
   return (
     <div className="min-h-dvh p-4 sm:p-8">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold">Hi5Tech</h1>
           <p className="mt-1 text-sm opacity-80">Choose a module</p>
+
+          {/* ✅ TEMP DEBUG STAMP */}
+          <p className="mt-2 text-xs opacity-60">Build: {buildStamp}</p>
         </div>
 
         <form action={logoutAction}>
