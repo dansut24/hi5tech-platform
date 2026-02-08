@@ -16,13 +16,22 @@ export type InitialSettings = {
   support_email?: string | null;
   timezone?: string | null;
   logo_url?: string | null;
+
   accent_hex?: string | null;
   accent_2_hex?: string | null;
   accent_3_hex?: string | null;
+
+  // ✅ add these because DB enforces NOT NULL
+  bg_hex?: string | null;
+  card_hex?: string | null;
+  topbar_hex?: string | null;
+
   allowed_domains?: string[] | null;
+
   ms_enabled?: boolean | null;
   ms_tenant_id?: string | null;
   ms_connected_at?: string | null;
+
   onboarding_completed?: boolean | null;
 };
 
@@ -115,14 +124,22 @@ export default function SetupWizard({
       supportEmail: initial?.support_email ?? me.email ?? "",
       timezone: initial?.timezone ?? "Europe/London",
       logoUrl: initial?.logo_url ?? "",
+
       accent: initial?.accent_hex ?? "#00c1ff",
       accent2: initial?.accent_2_hex ?? "#ff4fe1",
       accent3: initial?.accent_3_hex ?? "#ffc42d",
+
+      // ✅ critical defaults for NOT NULL DB cols
+      bg: initial?.bg_hex ?? "#f8fafc",
+      card: initial?.card_hex ?? "#ffffff",
+      topbar: initial?.topbar_hex ?? (initial?.card_hex ?? "#ffffff"),
+
       allowedDomains: allowed,
+
       msEnabled: Boolean(initial?.ms_enabled),
       msTenantId: initial?.ms_tenant_id ?? "",
     };
-  }, [initial, tenant.name, me.email]);
+  }, [initial, tenant.name, me.email, tenant.domain, tenant.subdomain]);
 
   const [step, setStep] = useState<0 | 1 | 2 | 3>(0);
   const [saving, setSaving] = useState(false);
@@ -134,9 +151,15 @@ export default function SetupWizard({
   const [timezone, setTimezone] = useState(init.timezone);
 
   const [logoUrl, setLogoUrl] = useState(init.logoUrl);
+
   const [accent, setAccent] = useState(init.accent);
   const [accent2, setAccent2] = useState(init.accent2);
   const [accent3, setAccent3] = useState(init.accent3);
+
+  // ✅ required theme surfaces
+  const [bg, setBg] = useState(init.bg);
+  const [card, setCard] = useState(init.card);
+  const [topbar, setTopbar] = useState(init.topbar);
 
   const [allowedDomains, setAllowedDomains] = useState(init.allowedDomains);
 
@@ -147,21 +170,31 @@ export default function SetupWizard({
     setSaving(true);
     setErr(null);
     setOk(null);
+
     try {
+      // ✅ never send null for NOT NULL cols
       const payload: InitialSettings = {
-        company_name: companyName.trim() || null,
-        support_email: supportEmail.trim() || null,
-        timezone: timezone.trim() || null,
+        company_name: companyName.trim() || tenant.name || "Tenant",
+        support_email: supportEmail.trim() || me.email || "support@hi5tech.co.uk",
+        timezone: timezone.trim() || "Europe/London",
         logo_url: logoUrl.trim() || null,
-        accent_hex: accent.trim() || null,
-        accent_2_hex: accent2.trim() || null,
-        accent_3_hex: accent3.trim() || null,
+
+        accent_hex: accent.trim() || "#00c1ff",
+        accent_2_hex: accent2.trim() || "#ff4fe1",
+        accent_3_hex: accent3.trim() || "#ffc42d",
+
+        bg_hex: bg.trim() || "#f8fafc",
+        card_hex: card.trim() || "#ffffff",
+        topbar_hex: topbar.trim() || (card.trim() || "#ffffff"),
+
         allowed_domains: allowedDomains
           .split(",")
           .map((s) => s.trim().toLowerCase())
           .filter(Boolean),
+
         ms_enabled: msEnabled,
         ms_tenant_id: msTenantId.trim() || null,
+
         ...partial,
       };
 
@@ -177,9 +210,7 @@ export default function SetupWizard({
       }
 
       setOk("Saved");
-
-      // ✅ IMPORTANT: refresh server components so layout CSS vars update immediately
-      router.refresh();
+      router.refresh(); // ✅ ensures theme vars update from server
     } catch (e: any) {
       setErr(e?.message || "Failed to save");
     } finally {
@@ -193,11 +224,7 @@ export default function SetupWizard({
     setErr(null);
     try {
       await fetch("/api/admin/onboarding/complete", { method: "POST" });
-
-      // ✅ refresh (so hard gate sees updated onboarding + theme)
       router.refresh();
-
-      // ✅ go to apps hub
       window.location.assign("/apps");
     } catch (e: any) {
       setErr(e?.message || "Failed to complete onboarding");
@@ -235,20 +262,9 @@ export default function SetupWizard({
             <div className="text-lg font-semibold">Company details</div>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Company name" value={companyName} onChange={setCompanyName} placeholder="Hi5Tech" />
-              <Field
-                label="Support email"
-                value={supportEmail}
-                onChange={setSupportEmail}
-                placeholder="support@company.com"
-                type="email"
-              />
+              <Field label="Support email" value={supportEmail} onChange={setSupportEmail} placeholder="support@company.com" type="email" />
               <Field label="Timezone" value={timezone} onChange={setTimezone} placeholder="Europe/London" />
-              <Field
-                label="Allowed domains (comma separated)"
-                value={allowedDomains}
-                onChange={setAllowedDomains}
-                placeholder="hi5tech.co.uk, yourclient.com"
-              />
+              <Field label="Allowed domains (comma separated)" value={allowedDomains} onChange={setAllowedDomains} placeholder="hi5tech.co.uk, yourclient.com" />
             </div>
           </div>
         )}
@@ -258,21 +274,14 @@ export default function SetupWizard({
             <div className="text-lg font-semibold">Branding</div>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Logo URL (optional)" value={logoUrl} onChange={setLogoUrl} placeholder="https://..." />
+
               <div className="hi5-card rounded-2xl border hi5-border p-4">
                 <div className="text-xs opacity-70">Preview</div>
                 <div className="mt-3 flex items-center gap-3">
-                  <div
-                    className="h-12 w-12 rounded-2xl border hi5-border"
-                    style={{
-                      background:
-                        "radial-gradient(circle at 30% 30%, rgba(var(--hi5-accent-2),.55), rgba(var(--hi5-accent),.55) 60%, rgba(var(--hi5-accent-3),.55))",
-                    }}
-                  />
+                  <div className="h-12 w-12 rounded-2xl border hi5-border" style={{ background: `linear-gradient(90deg, ${accent}, ${accent2})` }} />
                   <div>
                     <div className="text-sm font-semibold">{companyName || tenant.name}</div>
-                    <div className="text-xs opacity-70">
-                      {tenant.subdomain}.{tenant.domain}
-                    </div>
+                    <div className="text-xs opacity-70">{tenant.subdomain}.{tenant.domain}</div>
                   </div>
                 </div>
               </div>
@@ -280,6 +289,11 @@ export default function SetupWizard({
               <ColorField label="Accent" value={accent} onChange={setAccent} />
               <ColorField label="Accent 2" value={accent2} onChange={setAccent2} />
               <ColorField label="Accent 3" value={accent3} onChange={setAccent3} />
+
+              {/* ✅ surfaces (required by DB) */}
+              <ColorField label="Background" value={bg} onChange={setBg} />
+              <ColorField label="Card" value={card} onChange={setCard} />
+              <ColorField label="Topbar" value={topbar} onChange={setTopbar} />
             </div>
           </div>
         )}
@@ -304,17 +318,10 @@ export default function SetupWizard({
               </div>
 
               <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <Field
-                  label="Microsoft tenant ID (optional for now)"
-                  value={msTenantId}
-                  onChange={setMsTenantId}
-                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                />
+                <Field label="Microsoft tenant ID (optional for now)" value={msTenantId} onChange={setMsTenantId} placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
                 <div className="rounded-2xl border hi5-border hi5-card p-4">
                   <div className="text-xs opacity-70">Imports</div>
-                  <div className="text-sm mt-2 opacity-80">
-                    Next step: connect Graph + allow the Owner to import users/devices.
-                  </div>
+                  <div className="text-sm mt-2 opacity-80">Next step: connect Graph + allow the Owner to import users/devices.</div>
                   <div className="text-xs opacity-70 mt-2">(This is UI-ready; we’ll wire real auth later.)</div>
                 </div>
               </div>
@@ -325,9 +332,7 @@ export default function SetupWizard({
         {step === 3 && (
           <div className="space-y-3">
             <div className="text-lg font-semibold">Finish</div>
-            <p className="text-sm opacity-80">
-              When you finish, onboarding is marked complete and you’ll be redirected to Modules.
-            </p>
+            <p className="text-sm opacity-80">When you finish, onboarding is marked complete and you’ll be redirected to Modules.</p>
 
             <div className="hi5-card rounded-2xl border hi5-border p-4 text-sm">
               <div className="flex flex-wrap gap-2">
