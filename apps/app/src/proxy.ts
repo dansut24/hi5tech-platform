@@ -12,17 +12,26 @@ type CookieToSet = {
 
 // Paths we should never block/rewrite (and should not waste time refreshing)
 function isBypassPath(pathname: string) {
+  // next internals + static
   if (pathname.startsWith("/_next")) return true;
   if (pathname.startsWith("/favicon")) return true;
   if (pathname.startsWith("/robots.txt")) return true;
   if (pathname.startsWith("/sitemap")) return true;
-  if (pathname.startsWith("/api")) return true; // route handlers manage their own auth
-  if (pathname.startsWith("/tenant-available")) return true;
-
-  // Optional common static paths
   if (pathname.startsWith("/assets")) return true;
   if (pathname.startsWith("/images")) return true;
   if (pathname.startsWith("/fonts")) return true;
+
+  // auth + login flows must never be blocked
+  if (pathname.startsWith("/login")) return true;
+  if (pathname.startsWith("/auth")) return true;
+
+  // setup must always be reachable (avoid redirect loops)
+  if (pathname.startsWith("/admin/setup")) return true;
+
+  // api routes manage their own auth
+  if (pathname.startsWith("/api")) return true;
+
+  if (pathname.startsWith("/tenant-available")) return true;
 
   return false;
 }
@@ -106,7 +115,58 @@ export async function proxy(req: NextRequest) {
   });
 
   // refresh session if needed (writes cookies into `res`)
-  await supabase.auth.getUser();
+  const { data: userRes } = await supabase.auth.getUser();
+  const user = userRes.user;
+
+  // 4) ✅ Authoritative onboarding gate (central)
+  // If an owner/admin is logged in on a tenant subdomain and onboarding isn't complete,
+  // force them to /admin/setup regardless of where they landed after login.
+  if (subdomain && user) {
+    // Lookup tenant id (RLS should allow this read with anon key if your table is public readable;
+    // if not, ensure your policy allows select by domain/subdomain.)
+    const { data: tenant } = await supabase
+      .from("tenants")
+      .select("id, domain, subdomain, is_active")
+      .eq("domain", ROOT_DOMAIN)
+      .eq("subdomain", subdomain)
+      .eq("is_active", true)
+      .maybeSingle();
+
+    if (tenant?.id) {
+      const tenantId = tenant.id as string;
+
+      // Check membership role
+      const { data: membership } = await supabase
+        .from("memberships")
+        .select("role")
+        .eq("tenant_id", tenantId)
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      const role = String(membership?.role || "");
+      const isAdmin = role === "owner" || role === "admin";
+
+      if (isAdmin) {
+        const { data: settings } = await supabase
+          .from("tenant_settings")
+          .select("onboarding_completed")
+          .eq("tenant_id", tenantId)
+          .maybeSingle();
+
+        const done = Boolean(settings?.onboarding_completed);
+
+        if (!done) {
+          // Avoid loops (setup allowed via isBypassPath, but keep this safe anyway)
+          if (!pathname.startsWith("/admin/setup")) {
+            const to = req.nextUrl.clone();
+            to.pathname = "/admin/setup";
+            to.search = "";
+            return NextResponse.redirect(to);
+          }
+        }
+      }
+    }
+  }
 
   return res;
 }
