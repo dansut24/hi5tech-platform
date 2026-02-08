@@ -1,4 +1,3 @@
-// apps/app/src/app/auth/callback/page.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -7,26 +6,17 @@ import { createBrowserClient } from "@supabase/ssr";
 function getNextPath(url: URL) {
   const next = url.searchParams.get("next");
   // only allow internal redirects
-  if (!next || !next.startsWith("/")) return "/apps";
+  if (!next || !next.startsWith("/")) return "/login";
   return next;
 }
 
-async function ensureTenantMembership() {
-  // Calls server route which reads session from cookies
-  const res = await fetch("/api/auth/ensure-membership", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({}),
-  });
-
-  // If it fails, let the app handle it (your existing /api/auth/allowed checks will block)
-  // But we DO want the user to see a helpful message here.
-  if (!res.ok) {
-    const j = await res.json().catch(() => ({}));
-    throw new Error(j?.error || "Sign-in succeeded but tenant access failed.");
-  }
-}
+type OtpType =
+  | "signup"
+  | "invite"
+  | "magiclink"
+  | "recovery"
+  | "email_change"
+  | "phone_change";
 
 export default function AuthCallbackPage() {
   const supabase = useMemo(() => {
@@ -44,7 +34,39 @@ export default function AuthCallbackPage() {
         const url = new URL(window.location.href);
         const nextPath = getNextPath(url);
 
-        // 1) If we have tokens in the hash (invite/magic link), set session from them
+        // ------------------------------------------------------------------
+        // A) NEW Supabase email links often arrive as:
+        //    ?token_hash=...&type=invite|magiclink|recovery|signup...
+        //    These must be consumed with verifyOtp().
+        // ------------------------------------------------------------------
+        const token_hash = url.searchParams.get("token_hash");
+        const type = url.searchParams.get("type") as OtpType | null;
+
+        if (token_hash && type) {
+          const { error } = await supabase.auth.verifyOtp({
+            token_hash,
+            type,
+          });
+
+          if (error) {
+            setMsg("Your setup link is invalid or has expired. Please request a new invite.");
+            return;
+          }
+
+          // Clean URL (remove auth params but keep ?next= if present)
+          url.searchParams.delete("token_hash");
+          url.searchParams.delete("type");
+          url.searchParams.delete("redirect_to");
+          window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+
+          window.location.assign(nextPath);
+          return;
+        }
+
+        // ------------------------------------------------------------------
+        // B) Old implicit flow links (hash tokens):
+        //    #access_token=...&refresh_token=...
+        // ------------------------------------------------------------------
         if (window.location.hash && window.location.hash.includes("access_token=")) {
           const hash = window.location.hash.replace(/^#/, "");
           const params = new URLSearchParams(hash);
@@ -53,7 +75,7 @@ export default function AuthCallbackPage() {
           const refresh_token = params.get("refresh_token");
 
           if (!access_token || !refresh_token) {
-            setMsg("Email link is invalid or has expired.");
+            setMsg("Your setup link is invalid or has expired. Please request a new invite.");
             return;
           }
 
@@ -63,40 +85,39 @@ export default function AuthCallbackPage() {
           });
 
           if (error) {
-            setMsg("Email link is invalid or has expired.");
+            setMsg("Your setup link is invalid or has expired. Please request a new invite.");
             return;
           }
 
           // clean up URL (remove hash tokens)
           window.history.replaceState({}, "", url.pathname + url.search);
-
-          setMsg("Linking your account to this tenant…");
-          await ensureTenantMembership();
-
           window.location.assign(nextPath);
           return;
         }
 
-        // 2) OAuth/PKCE flows return ?code=
+        // ------------------------------------------------------------------
+        // C) PKCE flow:
+        //    ?code=...
+        // ------------------------------------------------------------------
         const code = url.searchParams.get("code");
         if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (error) {
-            setMsg("Sign-in link is invalid or has expired.");
+            setMsg("Your setup link is invalid or has expired. Please request a new invite.");
             return;
           }
 
-          setMsg("Linking your account to this tenant…");
-          await ensureTenantMembership();
+          // Clean URL (remove code but keep ?next=)
+          url.searchParams.delete("code");
+          window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
 
           window.location.assign(nextPath);
           return;
         }
 
-        // Nothing to consume
-        setMsg("Sign-in link is invalid or has expired.");
-      } catch (e: any) {
-        setMsg(e?.message || "Sign-in link is invalid or has expired.");
+        setMsg("Your setup link is invalid or has expired. Please request a new invite.");
+      } catch {
+        setMsg("Your setup link is invalid or has expired. Please request a new invite.");
       }
     })();
   }, [supabase]);
