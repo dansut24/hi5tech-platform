@@ -10,13 +10,13 @@ function getNextPath(url: URL) {
   return next;
 }
 
-type OtpType =
+// Keep this aligned with Supabase EmailOtpType (avoid phone-only types)
+type EmailOtpType =
   | "signup"
   | "invite"
   | "magiclink"
   | "recovery"
-  | "email_change"
-  | "phone_change";
+  | "email_change";
 
 export default function AuthCallbackPage() {
   const supabase = useMemo(() => {
@@ -34,13 +34,26 @@ export default function AuthCallbackPage() {
         const url = new URL(window.location.href);
         const nextPath = getNextPath(url);
 
-        // ------------------------------------------------------------------
-        // A) NEW Supabase email links often arrive as:
-        //    ?token_hash=...&type=invite|magiclink|recovery|signup...
-        //    These must be consumed with verifyOtp().
-        // ------------------------------------------------------------------
+        // ------------------------------------------------------------
+        // A) NEW Supabase email links:
+        //    /auth/invite?token_hash=...&type=invite&next=...
+        //    Consume with verifyOtp({ token_hash, type })
+        // ------------------------------------------------------------
         const token_hash = url.searchParams.get("token_hash");
-        const type = url.searchParams.get("type") as OtpType | null;
+        const typeParam = url.searchParams.get("type");
+
+        // Only accept known email OTP types (prevents TS + runtime weirdness)
+        const allowedTypes: EmailOtpType[] = [
+          "signup",
+          "invite",
+          "magiclink",
+          "recovery",
+          "email_change",
+        ];
+
+        const type = allowedTypes.includes(typeParam as EmailOtpType)
+          ? (typeParam as EmailOtpType)
+          : null;
 
         if (token_hash && type) {
           const { error } = await supabase.auth.verifyOtp({
@@ -49,7 +62,9 @@ export default function AuthCallbackPage() {
           });
 
           if (error) {
-            setMsg("Your setup link is invalid or has expired. Please request a new invite.");
+            setMsg(
+              "Your setup link is invalid or has expired. Please request a new invite."
+            );
             return;
           }
 
@@ -57,16 +72,20 @@ export default function AuthCallbackPage() {
           url.searchParams.delete("token_hash");
           url.searchParams.delete("type");
           url.searchParams.delete("redirect_to");
-          window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+          window.history.replaceState(
+            {},
+            "",
+            url.pathname + (url.search ? url.search : "")
+          );
 
           window.location.assign(nextPath);
           return;
         }
 
-        // ------------------------------------------------------------------
+        // ------------------------------------------------------------
         // B) Old implicit flow links (hash tokens):
         //    #access_token=...&refresh_token=...
-        // ------------------------------------------------------------------
+        // ------------------------------------------------------------
         if (window.location.hash && window.location.hash.includes("access_token=")) {
           const hash = window.location.hash.replace(/^#/, "");
           const params = new URLSearchParams(hash);
@@ -75,7 +94,9 @@ export default function AuthCallbackPage() {
           const refresh_token = params.get("refresh_token");
 
           if (!access_token || !refresh_token) {
-            setMsg("Your setup link is invalid or has expired. Please request a new invite.");
+            setMsg(
+              "Your setup link is invalid or has expired. Please request a new invite."
+            );
             return;
           }
 
@@ -85,7 +106,9 @@ export default function AuthCallbackPage() {
           });
 
           if (error) {
-            setMsg("Your setup link is invalid or has expired. Please request a new invite.");
+            setMsg(
+              "Your setup link is invalid or has expired. Please request a new invite."
+            );
             return;
           }
 
@@ -95,29 +118,39 @@ export default function AuthCallbackPage() {
           return;
         }
 
-        // ------------------------------------------------------------------
+        // ------------------------------------------------------------
         // C) PKCE flow:
         //    ?code=...
-        // ------------------------------------------------------------------
+        // ------------------------------------------------------------
         const code = url.searchParams.get("code");
         if (code) {
           const { error } = await supabase.auth.exchangeCodeForSession(code);
           if (error) {
-            setMsg("Your setup link is invalid or has expired. Please request a new invite.");
+            setMsg(
+              "Your setup link is invalid or has expired. Please request a new invite."
+            );
             return;
           }
 
           // Clean URL (remove code but keep ?next=)
           url.searchParams.delete("code");
-          window.history.replaceState({}, "", url.pathname + (url.search ? url.search : ""));
+          window.history.replaceState(
+            {},
+            "",
+            url.pathname + (url.search ? url.search : "")
+          );
 
           window.location.assign(nextPath);
           return;
         }
 
-        setMsg("Your setup link is invalid or has expired. Please request a new invite.");
+        setMsg(
+          "Your setup link is invalid or has expired. Please request a new invite."
+        );
       } catch {
-        setMsg("Your setup link is invalid or has expired. Please request a new invite.");
+        setMsg(
+          "Your setup link is invalid or has expired. Please request a new invite."
+        );
       }
     })();
   }, [supabase]);
