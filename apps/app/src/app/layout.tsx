@@ -6,6 +6,8 @@ import { supabaseServer } from "@/lib/supabase/server";
 import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
 import SystemTheme from "@/components/theme/SystemTheme";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Hi5Tech Platform",
   description: "ITSM + RMM platform",
@@ -18,8 +20,8 @@ function hexToRgbTriplet(hex?: string | null, fallback = "0 0 0") {
   if (!hex) return fallback;
 
   let h = String(hex).trim();
-
   if (/^\d+\s+\d+\s+\d+$/.test(h)) return h;
+
   if (h.startsWith("#")) h = h.slice(1);
   if (h.length === 3) h = h.split("").map((c) => c + c).join("");
   if (!/^[0-9a-fA-F]{6}$/.test(h)) return fallback;
@@ -27,6 +29,7 @@ function hexToRgbTriplet(hex?: string | null, fallback = "0 0 0") {
   const r = parseInt(h.slice(0, 2), 16);
   const g = parseInt(h.slice(2, 4), 16);
   const b = parseInt(h.slice(4, 6), 16);
+
   return `${r} ${g} ${b}`;
 }
 
@@ -38,24 +41,21 @@ function clamp01(n: any, fallback: number) {
 
 export default async function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: Readonly<{ children: React.ReactNode }>) {
   const supabase = await supabaseServer();
 
-  // Defaults (safe for logged out)
+  // Defaults (used when logged out)
   let theme_mode: ThemeMode = "system";
 
-  // Tenant theme (by host) + optional user overrides
   let tenantTheme: any = null;
   let userTheme: any = null;
 
+  // ✅ Resolve tenant from Host (so /apps gets the correct tenant theme)
+  let tenantId: string | null = null;
   try {
-    // Resolve tenant by host (for public pages too)
-    const host = getEffectiveHost(await headers());
+    const h = await headers();
+    const host = getEffectiveHost(h);
     const parsed = parseTenantHost(host);
-
-    let tenantId: string | null = null;
 
     if (parsed.subdomain) {
       const { data: tenant } = await supabase
@@ -65,40 +65,44 @@ export default async function RootLayout({
         .eq("subdomain", parsed.subdomain)
         .maybeSingle();
 
-      if (tenant && tenant.is_active !== false) {
+      if (tenant?.id && tenant.is_active !== false) {
         tenantId = tenant.id;
       }
     }
+  } catch {
+    // ignore
+  }
 
-    // Load tenant brand tokens if we have tenantId
-    if (tenantId) {
-      const { data } = await supabase
-        .from("tenant_settings")
-        .select(
-          [
-            "accent_hex",
-            "accent_2_hex",
-            "accent_3_hex",
-            "bg_hex",
-            "card_hex",
-            "topbar_hex",
-            "glow_1",
-            "glow_2",
-            "glow_3",
-            "logo_url",
-          ].join(",")
-        )
-        .eq("tenant_id", tenantId)
-        .maybeSingle();
-
-      tenantTheme = data ?? null;
-    }
-
-    // If logged in, allow user overrides (theme mode etc.)
+  // Safe for public routes (don’t crash when logged out)
+  try {
     const { data: userRes } = await supabase.auth.getUser();
     const user = userRes.user;
 
     if (user) {
+      // Tenant brand tokens
+      if (tenantId) {
+        const { data } = await supabase
+          .from("tenant_settings")
+          .select(
+            [
+              "accent_hex",
+              "accent_2_hex",
+              "accent_3_hex",
+              "bg_hex",
+              "card_hex",
+              "topbar_hex",
+              "glow_1",
+              "glow_2",
+              "glow_3",
+            ].join(",")
+          )
+          .eq("tenant_id", tenantId)
+          .maybeSingle();
+
+        tenantTheme = data ?? null;
+      }
+
+      // User overrides
       const { data: s } = await supabase
         .from("user_settings")
         .select("theme_mode, accent_hex, bg_hex, card_hex")
@@ -109,7 +113,7 @@ export default async function RootLayout({
       theme_mode = (userTheme?.theme_mode ?? "system") as ThemeMode;
     }
   } catch {
-    // keep defaults
+    // leave defaults
   }
 
   // Tenant defaults → user overrides
@@ -147,10 +151,7 @@ export default async function RootLayout({
     <html lang="en" suppressHydrationWarning className={htmlClass}>
       <body>
         <style dangerouslySetInnerHTML={{ __html: cssVars }} />
-
-        {/* Only applies when theme_mode === "system" */}
         {theme_mode === "system" ? <SystemTheme /> : null}
-
         {children}
       </body>
     </html>
