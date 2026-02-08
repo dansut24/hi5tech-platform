@@ -6,5 +6,6 @@ export default function AdminRootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // Route-groups (setup/protected) enforce rules.
   return children;
 }
