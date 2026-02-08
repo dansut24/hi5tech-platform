@@ -10,30 +10,6 @@ type ModuleKey = "itsm" | "control" | "selfservice" | "admin";
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "hi5tech.co.uk";
 
-/** HEX (#RRGGBB or #RGB) -> "r g b" */
-function hexToRgbTriplet(hex?: string | null, fallback = "0 0 0") {
-  if (!hex) return fallback;
-
-  let h = String(hex).trim();
-  if (/^\d+\s+\d+\s+\d+$/.test(h)) return h;
-
-  if (h.startsWith("#")) h = h.slice(1);
-  if (h.length === 3) h = h.split("").map((c) => c + c).join("");
-  if (!/^[0-9a-fA-F]{6}$/.test(h)) return fallback;
-
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
-
-  return `${r} ${g} ${b}`;
-}
-
-function clamp01(n: any, fallback: number) {
-  const v = Number(n);
-  if (!Number.isFinite(v)) return fallback;
-  return Math.max(0, Math.min(1, v));
-}
-
 function normalizeHost(rawHost: string) {
   return (rawHost || "").split(":")[0].trim().toLowerCase();
 }
@@ -71,10 +47,12 @@ export default async function ModulesLayout({ children }: { children: React.Reac
   const user = userRes.user;
   if (!user) redirect("/login");
 
+  // Tenant from host
   const h = await headers();
   const host = normalizeHost(h.get("host") || "");
   const tenantKey = tenantKeyFromHost(host);
 
+  // If not a tenant host, go to apps selector
   if (!tenantKey) redirect("/apps");
 
   // Resolve tenant
@@ -117,94 +95,28 @@ export default async function ModulesLayout({ children }: { children: React.Reac
   if (!activeMembershipId) redirect(`/login?error=tenant_access`);
 
   // Module assignments (kept here for later)
+  // Not currently used, but intentionally retained for future module shell / nav gating.
   const { data: mods } = await supabase
     .from("module_assignments")
     .select("module")
     .eq("membership_id", activeMembershipId);
 
   const allowedModules = Array.from(new Set((mods ?? []).map((m) => m.module))) as ModuleKey[];
+  void allowedModules; // avoid unused lint warnings while we keep it for later
 
   const tenantLabel =
     resolvedTenant.subdomain && resolvedTenant.domain
       ? `${resolvedTenant.subdomain}.${resolvedTenant.domain}`
       : resolvedTenant.domain || resolvedTenant.name || null;
+  void tenantLabel;
 
-  // -------------------------------
-  // Tenant theme tokens (brand)
-  // -------------------------------
-  let tenantTheme: any = null;
-
-  try {
-    const { data } = await supabase
-      .from("tenant_settings")
-      .select(
-        [
-          "accent_hex",
-          "accent_2_hex",
-          "accent_3_hex",
-          "bg_hex",
-          "card_hex",
-          "topbar_hex",
-          "glow_1",
-          "glow_2",
-          "glow_3",
-        ].join(",")
-      )
-      .eq("tenant_id", tenantId)
-      .maybeSingle();
-
-    tenantTheme = data ?? null;
-  } catch {
-    tenantTheme = null;
-  }
-
-  // -------------------------------
-  // User theme settings (mode only)
-  // -------------------------------
-  const { data: s } = await supabase
-    .from("user_settings")
-    .select("theme_mode")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  const theme_mode = (s?.theme_mode ?? "system") as "system" | "light" | "dark";
-  const forceDarkClass = theme_mode === "dark" ? "dark" : "";
-
-  // ✅ IMPORTANT: tenant brand colours WIN (user mode can still control dark/light)
-  const accent_hex = tenantTheme?.accent_hex ?? "#00c1ff";
-  const accent_2_hex = tenantTheme?.accent_2_hex ?? "#ff4fe1";
-  const accent_3_hex = tenantTheme?.accent_3_hex ?? "#ffc42d";
-
-  const bg_hex = tenantTheme?.bg_hex ?? "#f8fafc";
-  const card_hex = tenantTheme?.card_hex ?? "#ffffff";
-  const topbar_hex = tenantTheme?.topbar_hex ?? card_hex;
-
-  const glow_1 = clamp01(tenantTheme?.glow_1, forceDarkClass ? 0.22 : 0.18);
-  const glow_2 = clamp01(tenantTheme?.glow_2, forceDarkClass ? 0.18 : 0.14);
-  const glow_3 = clamp01(tenantTheme?.glow_3, forceDarkClass ? 0.14 : 0.1);
-
-  const cssVars = `
-:root{
-  --hi5-accent: ${hexToRgbTriplet(accent_hex, "0 193 255")};
-  --hi5-accent-2: ${hexToRgbTriplet(accent_2_hex, "255 79 225")};
-  --hi5-accent-3: ${hexToRgbTriplet(accent_3_hex, "255 196 45")};
-
-  --hi5-bg: ${hexToRgbTriplet(bg_hex, "248 250 252")};
-  --hi5-card: ${hexToRgbTriplet(card_hex, "255 255 255")};
-  --hi5-topbar: ${hexToRgbTriplet(topbar_hex, hexToRgbTriplet(card_hex, "255 255 255"))};
-
-  --hi5-glow-1: ${glow_1};
-  --hi5-glow-2: ${glow_2};
-  --hi5-glow-3: ${glow_3};
-}
-`;
+  // ✅ IMPORTANT CHANGE:
+  // Do NOT inject CSS vars here. Root layout is the single source of truth for theme tokens.
+  // This layout is only for auth + tenant/membership gating.
 
   return (
-    <div className={forceDarkClass}>
-      <style dangerouslySetInnerHTML={{ __html: cssVars }} />
-      <div className="hi5-bg min-h-dvh">
-        <main className="w-full">{children}</main>
-      </div>
+    <div className="hi5-bg min-h-dvh">
+      <main className="w-full">{children}</main>
     </div>
   );
 }
