@@ -1,12 +1,11 @@
 // apps/app/src/app/layout.tsx
 import "./globals.css";
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import { supabaseServer } from "@/lib/supabase/server";
-import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
 import SystemTheme from "@/components/theme/SystemTheme";
 
 export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export const metadata: Metadata = {
   title: "Hi5Tech Platform",
@@ -39,47 +38,27 @@ function clamp01(n: any, fallback: number) {
   return Math.max(0, Math.min(1, v));
 }
 
-export default async function RootLayout({
-  children,
-}: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const supabase = await supabaseServer();
 
-  // Defaults (used when logged out)
   let theme_mode: ThemeMode = "system";
-
   let tenantTheme: any = null;
-  let userTheme: any = null;
 
-  // ✅ Resolve tenant from Host (so /apps gets the correct tenant theme)
-  let tenantId: string | null = null;
-  try {
-    const h = await headers();
-    const host = getEffectiveHost(h);
-    const parsed = parseTenantHost(host);
-
-    if (parsed.subdomain) {
-      const { data: tenant } = await supabase
-        .from("tenants")
-        .select("id, is_active")
-        .eq("domain", parsed.rootDomain)
-        .eq("subdomain", parsed.subdomain)
-        .maybeSingle();
-
-      if (tenant?.id && tenant.is_active !== false) {
-        tenantId = tenant.id;
-      }
-    }
-  } catch {
-    // ignore
-  }
-
-  // Safe for public routes (don’t crash when logged out)
   try {
     const { data: userRes } = await supabase.auth.getUser();
     const user = userRes.user;
 
     if (user) {
-      // Tenant brand tokens
+      // Active tenant (newest membership) — ok for RootLayout
+      const { data: memberships } = await supabase
+        .from("memberships")
+        .select("tenant_id, created_at")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      const tenantId = memberships?.[0]?.tenant_id ?? null;
+
       if (tenantId) {
         const { data } = await supabase
           .from("tenant_settings")
@@ -102,32 +81,31 @@ export default async function RootLayout({
         tenantTheme = data ?? null;
       }
 
-      // User overrides
+      // user mode only
       const { data: s } = await supabase
         .from("user_settings")
-        .select("theme_mode, accent_hex, bg_hex, card_hex")
+        .select("theme_mode")
         .eq("user_id", user.id)
         .maybeSingle();
 
-      userTheme = s ?? null;
-      theme_mode = (userTheme?.theme_mode ?? "system") as ThemeMode;
+      theme_mode = (s?.theme_mode ?? "system") as ThemeMode;
     }
   } catch {
-    // leave defaults
+    // defaults
   }
 
-  // Tenant defaults → user overrides
-  const accent_hex = userTheme?.accent_hex ?? tenantTheme?.accent_hex ?? "#00c1ff";
+  // ✅ tenant brand colours WIN
+  const accent_hex = tenantTheme?.accent_hex ?? "#00c1ff";
   const accent_2_hex = tenantTheme?.accent_2_hex ?? "#ff4fe1";
   const accent_3_hex = tenantTheme?.accent_3_hex ?? "#ffc42d";
 
-  const bg_hex = userTheme?.bg_hex ?? tenantTheme?.bg_hex ?? "#f8fafc";
-  const card_hex = userTheme?.card_hex ?? tenantTheme?.card_hex ?? "#ffffff";
+  const bg_hex = tenantTheme?.bg_hex ?? "#f8fafc";
+  const card_hex = tenantTheme?.card_hex ?? "#ffffff";
   const topbar_hex = tenantTheme?.topbar_hex ?? card_hex;
 
   const glow_1 = clamp01(tenantTheme?.glow_1, theme_mode === "dark" ? 0.22 : 0.18);
   const glow_2 = clamp01(tenantTheme?.glow_2, theme_mode === "dark" ? 0.18 : 0.14);
-  const glow_3 = clamp01(tenantTheme?.glow_3, theme_mode === "dark" ? 0.14 : 0.10);
+  const glow_3 = clamp01(tenantTheme?.glow_3, theme_mode === "dark" ? 0.14 : 0.1);
 
   const htmlClass = theme_mode === "dark" ? "dark" : "";
 
