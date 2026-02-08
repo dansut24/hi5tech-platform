@@ -22,7 +22,6 @@ export type InitialSettings = {
   accent_2_hex?: string | null;
   accent_3_hex?: string | null;
 
-  // NEW: theme tokens that your layouts + globals.css already support
   bg_hex?: string | null;
   card_hex?: string | null;
   topbar_hex?: string | null;
@@ -38,6 +37,88 @@ export type InitialSettings = {
 
   onboarding_completed?: boolean | null;
 };
+
+type Preset = {
+  key: string;
+  label: string;
+  accent: string;
+  accent2: string;
+  accent3: string;
+  bg: string;
+  card: string;
+  topbar?: string; // optional -> "use card"
+  glow1: number;
+  glow2: number;
+  glow3: number;
+};
+
+const PRESETS: Preset[] = [
+  {
+    key: "hi5-default",
+    label: "Hi5Tech (Default)",
+    accent: "#00c1ff",
+    accent2: "#ff4fe1",
+    accent3: "#ffc42d",
+    bg: "#f8fafc",
+    card: "#ffffff",
+    topbar: "", // empty = use card
+    glow1: 0.18,
+    glow2: 0.14,
+    glow3: 0.10,
+  },
+  {
+    key: "midnight-neon",
+    label: "Midnight Neon",
+    accent: "#7C5CFF",
+    accent2: "#38BDF8",
+    accent3: "#FDE047",
+    bg: "#0B1020",
+    card: "#0F172A",
+    topbar: "#0B1224",
+    glow1: 0.22,
+    glow2: 0.18,
+    glow3: 0.14,
+  },
+  {
+    key: "emerald-glow",
+    label: "Emerald Glow",
+    accent: "#34D399",
+    accent2: "#22D3EE",
+    accent3: "#FBBF24",
+    bg: "#F8FAFC",
+    card: "#FFFFFF",
+    topbar: "",
+    glow1: 0.16,
+    glow2: 0.12,
+    glow3: 0.10,
+  },
+  {
+    key: "rose-graphite",
+    label: "Rose + Graphite",
+    accent: "#FB7185",
+    accent2: "#A78BFA",
+    accent3: "#FBBF24",
+    bg: "#0B0D12",
+    card: "#111827",
+    topbar: "#0B0D12",
+    glow1: 0.22,
+    glow2: 0.18,
+    glow3: 0.14,
+  },
+  {
+    key: "ocean-glass",
+    label: "Ocean Glass",
+    accent: "#0EA5E9",
+    accent2: "#22C55E",
+    accent3: "#F97316",
+    bg: "#F1F5F9",
+    card: "#FFFFFF",
+    topbar: "",
+    glow1: 0.17,
+    glow2: 0.13,
+    glow3: 0.10,
+  },
+];
 
 function StepPill({ active, label }: { active: boolean; label: string }) {
   return (
@@ -175,28 +256,24 @@ export default function SetupWizard({
 }) {
   const init = useMemo(() => {
     const allowed = initial?.allowed_domains?.join(", ") ?? "";
-
     return {
       companyName: initial?.company_name ?? tenant.name ?? "",
       supportEmail: initial?.support_email ?? me.email ?? "",
       timezone: initial?.timezone ?? "Europe/London",
-
       logoUrl: initial?.logo_url ?? "",
 
       accent: initial?.accent_hex ?? "#00c1ff",
       accent2: initial?.accent_2_hex ?? "#ff4fe1",
       accent3: initial?.accent_3_hex ?? "#ffc42d",
 
-      // NEW defaults that match your globals.css + layouts
       bg: initial?.bg_hex ?? "#f8fafc",
       card: initial?.card_hex ?? "#ffffff",
-      topbar: initial?.topbar_hex ?? "", // optional (fallback = card)
+      topbar: initial?.topbar_hex ?? "",
       glow1: typeof initial?.glow_1 === "number" ? initial!.glow_1! : 0.18,
       glow2: typeof initial?.glow_2 === "number" ? initial!.glow_2! : 0.14,
       glow3: typeof initial?.glow_3 === "number" ? initial!.glow_3! : 0.10,
 
       allowedDomains: allowed,
-
       msEnabled: Boolean(initial?.ms_enabled),
       msTenantId: initial?.ms_tenant_id ?? "",
     };
@@ -231,6 +308,20 @@ export default function SetupWizard({
   const [msEnabled, setMsEnabled] = useState(init.msEnabled);
   const [msTenantId, setMsTenantId] = useState(init.msTenantId);
 
+  const [presetKey, setPresetKey] = useState<string>("");
+
+  function applyPreset(p: Preset) {
+    setAccent(p.accent);
+    setAccent2(p.accent2);
+    setAccent3(p.accent3);
+    setBg(p.bg);
+    setCard(p.card);
+    setTopbar(p.topbar ?? "");
+    setGlow1(p.glow1);
+    setGlow2(p.glow2);
+    setGlow3(p.glow3);
+  }
+
   async function save(partial?: Partial<InitialSettings>) {
     setSaving(true);
     setErr(null);
@@ -250,7 +341,10 @@ export default function SetupWizard({
 
         bg_hex: bg.trim() || null,
         card_hex: card.trim() || null,
-        topbar_hex: topbar.trim() || null,
+
+        // IMPORTANT: if you keep topbar NOT NULL in DB, setTopbar should never be empty.
+        // Recommended DB fix: drop NOT NULL. If you can't, we still send a value:
+        topbar_hex: (topbar && topbar.trim()) ? topbar.trim() : (card.trim() || "#ffffff"),
 
         glow_1: Number.isFinite(glow1) ? glow1 : null,
         glow_2: Number.isFinite(glow2) ? glow2 : null,
@@ -302,7 +396,6 @@ export default function SetupWizard({
       const ext = safeFileExt(file.name);
       const path = `tenants/${tenant.id}/logo.${ext}`;
 
-      // upload (overwrite)
       const { error: upErr } = await supabase.storage
         .from("tenant-assets")
         .upload(path, file, {
@@ -318,8 +411,6 @@ export default function SetupWizard({
       if (!publicUrl) throw new Error("Could not get public URL for uploaded logo");
 
       setLogoUrl(publicUrl);
-
-      // persist immediately so refreshes keep the logo
       await save({ logo_url: publicUrl });
       setOk("Logo uploaded");
     } catch (e: any) {
@@ -335,13 +426,8 @@ export default function SetupWizard({
     setErr(null);
 
     try {
-      // Ensure latest values are saved
       await save();
-
-      // ✅ COMPLETE onboarding (hard gate uses this)
       await fetch("/api/admin/onboarding/complete", { method: "POST" });
-
-      // ✅ send them to modules
       window.location.assign("/apps");
     } catch (e: any) {
       setErr(e?.message || "Failed to complete onboarding");
@@ -400,6 +486,53 @@ export default function SetupWizard({
         {step === 1 && (
           <div className="space-y-4">
             <div className="text-lg font-semibold">Branding</div>
+
+            {/* Presets */}
+            <div className="hi5-card rounded-2xl border hi5-border p-4">
+              <div className="text-xs opacity-70">Preset themes</div>
+              <div className="mt-3 flex flex-col sm:flex-row gap-3 sm:items-center">
+                <select
+                  className="rounded-2xl border hi5-border hi5-card px-4 py-3 text-sm outline-none"
+                  value={presetKey}
+                  onChange={(e) => {
+                    const key = e.target.value;
+                    setPresetKey(key);
+                    const p = PRESETS.find((x) => x.key === key);
+                    if (p) applyPreset(p);
+                  }}
+                >
+                  <option value="">Choose a preset…</option>
+                  {PRESETS.map((p) => (
+                    <option key={p.key} value={p.key}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  className="hi5-btn-ghost text-sm w-auto"
+                  onClick={() => {
+                    setPresetKey("");
+                    applyPreset(PRESETS[0]);
+                  }}
+                >
+                  Reset to default
+                </button>
+
+                <button
+                  type="button"
+                  className="hi5-btn-primary text-sm w-auto"
+                  disabled={saving || logoUploading}
+                  onClick={() => save()}
+                >
+                  Save theme
+                </button>
+              </div>
+              <div className="mt-2 text-[11px] opacity-60">
+                Presets just fill the fields — you can tweak anything after selecting.
+              </div>
+            </div>
 
             <div className="grid gap-4 lg:grid-cols-2">
               <div className="space-y-4">
@@ -462,7 +595,7 @@ export default function SetupWizard({
                   </div>
 
                   <div className="mt-3 text-[11px] opacity-60">
-                    Stored in Supabase Storage: <span className="font-mono">tenant-assets/tenants/{tenant.id}/logo.*</span>
+                    Bucket: <span className="font-mono">tenant-assets</span> (public)
                   </div>
                 </div>
 
@@ -486,13 +619,11 @@ export default function SetupWizard({
               </div>
 
               <div className="hi5-card rounded-2xl border hi5-border p-5">
-                <div className="text-xs opacity-70">Live preview</div>
+                <div className="text-xs opacity-70">Preview</div>
                 <div className="mt-4 space-y-3">
                   <div className="rounded-2xl border hi5-border p-4 hi5-card">
                     <div className="text-sm font-semibold">Card example</div>
-                    <div className="text-sm opacity-80 mt-1">
-                      Your cards/panels/buttons will shift based on these tokens.
-                    </div>
+                    <div className="text-sm opacity-80 mt-1">Save then refresh any page to see full effect.</div>
                     <button type="button" className="hi5-btn-primary text-sm mt-3">
                       Primary Button
                     </button>
@@ -500,15 +631,10 @@ export default function SetupWizard({
 
                   <div className="rounded-2xl border hi5-border p-4 hi5-panel">
                     <div className="text-sm font-semibold">Panel example</div>
-                    <div className="text-sm opacity-80 mt-1">Panels are stronger surfaces.</div>
+                    <div className="text-sm opacity-80 mt-1">Panels remain readable on top of blobs.</div>
                     <button type="button" className="hi5-btn-ghost text-sm mt-3 w-auto">
                       Ghost button
                     </button>
-                  </div>
-
-                  <div className="text-[11px] opacity-60">
-                    Note: full “live preview” of the entire site happens automatically after save — your layouts read these
-                    values and apply CSS variables server-side.
                   </div>
                 </div>
               </div>
@@ -525,7 +651,7 @@ export default function SetupWizard({
                 <div>
                   <div className="text-sm font-semibold">Enable Microsoft</div>
                   <div className="text-sm opacity-75 mt-1">
-                    Keep this optional in onboarding. We’ll wire Graph + import later in Admin → Integrations.
+                    Optional in onboarding. Configure fully later in Admin → Integrations.
                   </div>
                 </div>
 
@@ -545,12 +671,7 @@ export default function SetupWizard({
                 <div className="rounded-2xl border hi5-border hi5-card p-4">
                   <div className="text-xs opacity-70">Next</div>
                   <div className="text-sm mt-2 opacity-80">
-                    After onboarding we’ll add:
-                    <ul className="list-disc pl-5 mt-2 space-y-1">
-                      <li>OAuth connection flow</li>
-                      <li>Import users</li>
-                      <li>Invite users from Microsoft</li>
-                    </ul>
+                    After onboarding we’ll add OAuth connection + imports.
                   </div>
                 </div>
               </div>
