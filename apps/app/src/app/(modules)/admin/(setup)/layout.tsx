@@ -25,25 +25,38 @@ export default async function AdminSetupLayout({
 
   const { data: tenant } = await supabase
     .from("tenants")
-    .select("id, domain, subdomain, is_active")
+    .select("id, domain, subdomain, name, is_active")
     .eq("domain", parsed.rootDomain)
     .eq("subdomain", parsed.subdomain)
     .maybeSingle();
 
   if (!tenant || tenant.is_active === false) notFound();
 
-  // Must be owner/admin to run setup
-  const { data: myMembership } = await supabase
+  // Must be owner/admin
+  const { data: membership } = await supabase
     .from("memberships")
     .select("role")
     .eq("tenant_id", tenant.id)
     .eq("user_id", user.id)
     .maybeSingle();
 
-  const myRole = String(myMembership?.role || "");
-  const isAdmin = myRole === "owner" || myRole === "admin";
+  const role = String(membership?.role || "");
+  const isAdmin = role === "owner" || role === "admin";
   if (!isAdmin) redirect("/apps");
 
-  // ✅ No onboarding redirect here.
-  return <>{children}</>;
+  // If already completed, never show setup again
+  const { data: settings } = await supabase
+    .from("tenant_settings")
+    .select("onboarding_completed")
+    .eq("tenant_id", tenant.id)
+    .maybeSingle();
+
+  if (settings?.onboarding_completed) redirect("/apps");
+
+  // Simple setup wrapper (no AdminShell during onboarding)
+  return (
+    <div className="min-h-dvh hi5-bg">
+      <div className="p-4 sm:p-8">{children}</div>
+    </div>
+  );
 }
