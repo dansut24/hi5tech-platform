@@ -33,7 +33,7 @@ export default async function AdminProtectedLayout({
 
   if (!tenant || tenant.is_active === false) notFound();
 
-  // Must be owner/admin in this tenant
+  // Must be owner/admin
   const { data: myMembership } = await supabase
     .from("memberships")
     .select("role")
@@ -45,7 +45,7 @@ export default async function AdminProtectedLayout({
   const isAdmin = myRole === "owner" || myRole === "admin";
   if (!isAdmin) redirect("/apps");
 
-  // Onboarding gate (authoritative)
+  // ✅ Authoritative hard gate (protected admin only)
   const { data: settings } = await supabase
     .from("tenant_settings")
     .select("onboarding_completed")
@@ -53,13 +53,9 @@ export default async function AdminProtectedLayout({
     .maybeSingle();
 
   const onboardingCompleted = Boolean(settings?.onboarding_completed);
-
-  // ✅ IMPORTANT:
-  // This layout does NOT wrap /admin/setup (setup has its own layout),
-  // so redirecting here will not loop.
   if (!onboardingCompleted) redirect("/admin/setup");
 
-  // Profile (for header)
+  // Profile for header
   const { data: profile } = await supabase
     .from("profiles")
     .select("full_name, email")
