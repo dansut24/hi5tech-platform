@@ -1,7 +1,10 @@
+// apps/app/src/app/layout.tsx
 import "./globals.css";
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { supabaseServer } from "@/lib/supabase/server";
-import SystemTheme from "@/components/theme/SystemTheme"; // ✅ ADD THIS
+import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
+import SystemTheme from "@/components/theme/SystemTheme";
 
 export const metadata: Metadata = {
   title: "Hi5Tech Platform",
@@ -16,18 +19,14 @@ function hexToRgbTriplet(hex?: string | null, fallback = "0 0 0") {
 
   let h = String(hex).trim();
 
-  // Already looks like "r g b"
   if (/^\d+\s+\d+\s+\d+$/.test(h)) return h;
-
   if (h.startsWith("#")) h = h.slice(1);
   if (h.length === 3) h = h.split("").map((c) => c + c).join("");
-
   if (!/^[0-9a-fA-F]{6}$/.test(h)) return fallback;
 
   const r = parseInt(h.slice(0, 2), 16);
   const g = parseInt(h.slice(2, 4), 16);
   const b = parseInt(h.slice(4, 6), 16);
-
   return `${r} ${g} ${b}`;
 }
 
@@ -44,53 +43,62 @@ export default async function RootLayout({
 }>) {
   const supabase = await supabaseServer();
 
-  // Defaults (used when logged out)
+  // Defaults (safe for logged out)
   let theme_mode: ThemeMode = "system";
-  let tenantId: string | null = null;
 
+  // Tenant theme (by host) + optional user overrides
   let tenantTheme: any = null;
   let userTheme: any = null;
 
-  // Safe for public routes (don’t crash when logged out)
   try {
+    // Resolve tenant by host (for public pages too)
+    const host = getEffectiveHost(await headers());
+    const parsed = parseTenantHost(host);
+
+    let tenantId: string | null = null;
+
+    if (parsed.subdomain) {
+      const { data: tenant } = await supabase
+        .from("tenants")
+        .select("id, is_active")
+        .eq("domain", parsed.rootDomain)
+        .eq("subdomain", parsed.subdomain)
+        .maybeSingle();
+
+      if (tenant && tenant.is_active !== false) {
+        tenantId = tenant.id;
+      }
+    }
+
+    // Load tenant brand tokens if we have tenantId
+    if (tenantId) {
+      const { data } = await supabase
+        .from("tenant_settings")
+        .select(
+          [
+            "accent_hex",
+            "accent_2_hex",
+            "accent_3_hex",
+            "bg_hex",
+            "card_hex",
+            "topbar_hex",
+            "glow_1",
+            "glow_2",
+            "glow_3",
+            "logo_url",
+          ].join(",")
+        )
+        .eq("tenant_id", tenantId)
+        .maybeSingle();
+
+      tenantTheme = data ?? null;
+    }
+
+    // If logged in, allow user overrides (theme mode etc.)
     const { data: userRes } = await supabase.auth.getUser();
     const user = userRes.user;
 
     if (user) {
-      // Active tenant (newest membership)
-      const { data: memberships } = await supabase
-        .from("memberships")
-        .select("tenant_id, created_at")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false })
-        .limit(1);
-
-      tenantId = memberships?.[0]?.tenant_id ?? null;
-
-      // Tenant brand tokens
-      if (tenantId) {
-        const { data } = await supabase
-          .from("tenant_settings")
-          .select(
-            [
-              "accent_hex",
-              "accent_2_hex",
-              "accent_3_hex",
-              "bg_hex",
-              "card_hex",
-              "topbar_hex",
-              "glow_1",
-              "glow_2",
-              "glow_3",
-            ].join(",")
-          )
-          .eq("tenant_id", tenantId)
-          .maybeSingle();
-
-        tenantTheme = data ?? null;
-      }
-
-      // User overrides
       const { data: s } = await supabase
         .from("user_settings")
         .select("theme_mode, accent_hex, bg_hex, card_hex")
@@ -101,7 +109,7 @@ export default async function RootLayout({
       theme_mode = (userTheme?.theme_mode ?? "system") as ThemeMode;
     }
   } catch {
-    // leave defaults
+    // keep defaults
   }
 
   // Tenant defaults → user overrides
@@ -113,15 +121,10 @@ export default async function RootLayout({
   const card_hex = userTheme?.card_hex ?? tenantTheme?.card_hex ?? "#ffffff";
   const topbar_hex = tenantTheme?.topbar_hex ?? card_hex;
 
-  // Intensities (only used by globals.css to build gradients)
   const glow_1 = clamp01(tenantTheme?.glow_1, theme_mode === "dark" ? 0.22 : 0.18);
   const glow_2 = clamp01(tenantTheme?.glow_2, theme_mode === "dark" ? 0.18 : 0.14);
   const glow_3 = clamp01(tenantTheme?.glow_3, theme_mode === "dark" ? 0.14 : 0.10);
 
-  // ✅ IMPORTANT:
-  // - if user explicitly chose "dark" => force .dark
-  // - if user explicitly chose "light" => force no .dark
-  // - if "system" => do NOT force either; SystemTheme toggles it client-side
   const htmlClass = theme_mode === "dark" ? "dark" : "";
 
   const cssVars = `
@@ -145,7 +148,7 @@ export default async function RootLayout({
       <body>
         <style dangerouslySetInnerHTML={{ __html: cssVars }} />
 
-        {/* ✅ Only applies when theme_mode === "system" */}
+        {/* Only applies when theme_mode === "system" */}
         {theme_mode === "system" ? <SystemTheme /> : null}
 
         {children}
