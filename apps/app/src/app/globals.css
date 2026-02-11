@@ -1,3 +1,4 @@
+/* apps/app/src/app/globals.css */
 @import "tailwindcss";
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -88,6 +89,9 @@
     rgb(var(--hi5-accent-3) / 1),
     rgb(var(--hi5-accent-2) / 1)
   );
+
+  /* ✅ Solid mode toggle (0 = gradient buttons, 1 = solid buttons) */
+  --hi5-btn-solid: 0;
 
   /* Grain */
   --hi5-grain-opacity: 0.05;
@@ -305,7 +309,7 @@ body::after {
 }
 
 /* ----------------------------------------------------------
-   Buttons (vibrant + 3D)
+   Buttons (vibrant + 3D) — supports solid mode
 ---------------------------------------------------------- */
 
 .hi5-btn-primary,
@@ -319,7 +323,14 @@ body::after {
   /* Strong contrast label */
   color: #0b0d12;
 
-  background: var(--hi5-btn-grad);
+  /* ✅ Solid-first layer (enabled when --hi5-btn-solid: 1), falls back to gradient */
+  background:
+    linear-gradient(
+      0deg,
+      rgb(var(--hi5-accent) / var(--hi5-btn-solid)),
+      rgb(var(--hi5-accent) / var(--hi5-btn-solid))
+    ),
+    var(--hi5-btn-grad);
 
   border: 1px solid rgb(255 255 255 / 0.34);
 
