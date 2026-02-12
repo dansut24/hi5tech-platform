@@ -20,7 +20,7 @@ export type ThemePreviewInput = {
 const PREVIEW_STYLE_ID = "hi5-theme-preview-vars";
 
 /** "#RRGGBB" / "#RGB" / "r g b" -> "r g b" */
-function toRgbTriplet(input?: string | null, fallback: string) {
+function toRgbTriplet(input: string | null | undefined, fallback = "0 0 0") {
   if (!input) return fallback;
 
   let h = String(input).trim();
