@@ -17,7 +17,22 @@ export type ThemePreviewInput = {
   btn_solid?: 0 | 1;
 };
 
-const PREVIEW_STYLE_ID = "hi5-theme-preview-vars";
+const STORE_KEY = "__hi5_preview_prev__";
+const APPLIED_FLAG = "__hi5_preview_on__";
+
+// Vars we control during preview
+const VARS = [
+  "--hi5-accent",
+  "--hi5-accent-2",
+  "--hi5-accent-3",
+  "--hi5-bg",
+  "--hi5-card",
+  "--hi5-topbar",
+  "--hi5-spheres-opacity",
+  "--hi5-spheres-blur",
+] as const;
+
+type VarName = (typeof VARS)[number];
 
 /** "#RRGGBB" / "#RGB" / "r g b" -> "r g b" */
 function toRgbTriplet(input: string | null | undefined, fallback = "0 0 0") {
@@ -25,7 +40,7 @@ function toRgbTriplet(input: string | null | undefined, fallback = "0 0 0") {
 
   let h = String(input).trim();
 
-  // already in "r g b"
+  // already "r g b"
   if (/^\d+\s+\d+\s+\d+$/.test(h)) return h;
 
   // strip #
@@ -58,19 +73,50 @@ function clamp01(v: any, fallback: number) {
 function computeSpheresOpacity(glow1?: number | null, glow2?: number | null, glow3?: number | null) {
   const g1 = clamp01(glow1, 0.18);
   const g2 = clamp01(glow2, 0.14);
-  const g3 = clamp01(glow3, 0.10);
+  const g3 = clamp01(glow3, 0.1);
 
   // If all zeros (neutral presets), kill blobs
   if (g1 === 0 && g2 === 0 && g3 === 0) return 0;
 
   // Average + scale to feel similar to your current defaults
   const avg = (g1 + g2 + g3) / 3;
-  // default avg ~0.14 -> target opacity ~0.55 (light) / ~0.78 (dark handled by .dark)
   return Math.max(0, Math.min(1, avg * 4));
 }
 
+function getRoot(): HTMLElement | null {
+  if (typeof document === "undefined") return null;
+  return document.documentElement;
+}
+
+function readCurrentInlineVars(root: HTMLElement) {
+  const prev: Partial<Record<VarName, string>> = {};
+  for (const v of VARS) {
+    const cur = root.style.getPropertyValue(v);
+    // store empty string too (means "not set inline")
+    prev[v] = cur;
+  }
+  return prev;
+}
+
+function writeInlineVars(root: HTMLElement, vars: Partial<Record<VarName, string>>) {
+  for (const v of VARS) {
+    const val = vars[v];
+    if (val === undefined) continue;
+    // Inline vars win vs layout-injected <style> every time
+    root.style.setProperty(v, val);
+  }
+}
+
 export function applyThemePreview(input: ThemePreviewInput) {
-  if (typeof document === "undefined") return;
+  const root = getRoot();
+  if (!root) return;
+
+  // Store previous inline values only once per preview session
+  if (!root.dataset[APPLIED_FLAG]) {
+    const prev = readCurrentInlineVars(root);
+    root.dataset[STORE_KEY] = JSON.stringify(prev);
+    root.dataset[APPLIED_FLAG] = "1";
+  }
 
   const accent = toRgbTriplet(input.accent_hex, "0 193 255");
   const accent2 = toRgbTriplet(input.accent_2_hex, "255 79 225");
@@ -82,35 +128,39 @@ export function applyThemePreview(input: ThemePreviewInput) {
 
   const spheresOpacity = computeSpheresOpacity(input.glow_1, input.glow_2, input.glow_3);
 
-  const css = `
-:root{
-  --hi5-accent: ${accent};
-  --hi5-accent-2: ${accent2};
-  --hi5-accent-3: ${accent3};
-
-  --hi5-bg: ${bg};
-  --hi5-card: ${card};
-  --hi5-topbar: ${topbar};
-
-  /* make glow sliders actually do something with current globals.css */
-  --hi5-spheres-opacity: ${spheresOpacity};
-
-  /* optional: if you want blur to soften when glow is low */
-  --hi5-spheres-blur: ${spheresOpacity === 0 ? "0px" : "64px"};
-}
-`.trim();
-
-  let style = document.getElementById(PREVIEW_STYLE_ID) as HTMLStyleElement | null;
-  if (!style) {
-    style = document.createElement("style");
-    style.id = PREVIEW_STYLE_ID;
-    document.head.appendChild(style);
-  }
-  style.textContent = css;
+  writeInlineVars(root, {
+    "--hi5-accent": accent,
+    "--hi5-accent-2": accent2,
+    "--hi5-accent-3": accent3,
+    "--hi5-bg": bg,
+    "--hi5-card": card,
+    "--hi5-topbar": topbar,
+    "--hi5-spheres-opacity": String(spheresOpacity),
+    "--hi5-spheres-blur": spheresOpacity === 0 ? "0px" : "64px",
+  });
 }
 
 export function clearThemePreview() {
-  if (typeof document === "undefined") return;
-  const el = document.getElementById(PREVIEW_STYLE_ID);
-  if (el && el.parentNode) el.parentNode.removeChild(el);
+  const root = getRoot();
+  if (!root) return;
+
+  const raw = root.dataset[STORE_KEY];
+  if (raw) {
+    try {
+      const prev = JSON.parse(raw) as Partial<Record<VarName, string>>;
+      for (const v of VARS) {
+        const oldVal = prev?.[v] ?? "";
+        if (oldVal) root.style.setProperty(v, oldVal);
+        else root.style.removeProperty(v);
+      }
+    } catch {
+      // fallback: just remove our vars
+      for (const v of VARS) root.style.removeProperty(v);
+    }
+  } else {
+    for (const v of VARS) root.style.removeProperty(v);
+  }
+
+  delete root.dataset[STORE_KEY];
+  delete root.dataset[APPLIED_FLAG];
 }
