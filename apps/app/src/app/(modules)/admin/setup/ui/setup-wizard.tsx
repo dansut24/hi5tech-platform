@@ -1,6 +1,8 @@
 // apps/app/src/app/(modules)/admin/setup/ui/setup-wizard.tsx
 "use client";
 
+
+import { applyThemePreview, clearThemePreview } from "@/components/theme/applyThemePreview";
 import { useMemo, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 
@@ -504,7 +506,23 @@ export default function SetupWizard({
     setGlow2(p.glow2);
     setGlow3(p.glow3);
   }
-
+  
+ const initialSnapshot = useMemo(() => {
+  return {
+    accent_hex: init.accent,
+    accent_2_hex: init.accent2,
+    accent_3_hex: init.accent3,
+    bg_hex: init.bg,
+    card_hex: init.card,
+    topbar_hex: init.topbar || init.card,
+    glow_1: init.glow1,
+    glow_2: init.glow2,
+    glow_3: init.glow3,
+    btn_solid: 0 as 0 | 1,
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+  
   async function save(partial?: Partial<InitialSettings>) {
     setSaving(true);
     setErr(null);
