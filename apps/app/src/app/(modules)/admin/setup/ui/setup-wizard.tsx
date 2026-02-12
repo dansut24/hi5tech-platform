@@ -1,10 +1,9 @@
 // apps/app/src/app/(modules)/admin/setup/ui/setup-wizard.tsx
 "use client";
 
-
-import { applyThemePreview, clearThemePreview } from "@/components/theme/applyThemePreview";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
+import { applyThemePreview, clearThemePreview } from "@/components/theme/applyThemePreview";
 
 type TenantInfo = {
   id: string;
@@ -63,7 +62,7 @@ const PRESETS: Preset[] = [
     accent3: "#ffc42d",
     bg: "#f8fafc",
     card: "#ffffff",
-    topbar: "", // empty = use card
+    topbar: "",
     glow1: 0.18,
     glow2: 0.14,
     glow3: 0.10,
@@ -120,189 +119,192 @@ const PRESETS: Preset[] = [
     glow2: 0.13,
     glow3: 0.10,
   },
+
+  // Existing neutral ones you had
   {
-  key: "neutral-light",
-  label: "Neutral (Light) — White / Grey / Blue",
-  accent: "#2563EB",     // blue
-  accent2: "#2563EB",    // same so gradients become “solid-ish”
-  accent3: "#2563EB",
-  bg: "#FFFFFF",
-  card: "#F3F4F6",       // light grey
-  topbar: "#FFFFFF",
-  glow1: 0,              // no blobs intensity
-  glow2: 0,
-  glow3: 0,
-},
-{
-  key: "neutral-dark",
-  label: "Neutral (Dark) — Charcoal / Slate / Blue",
-  accent: "#3B82F6",
-  accent2: "#3B82F6",
-  accent3: "#3B82F6",
-  bg: "#0B0D12",
-  card: "#111827",
-  topbar: "#0B0D12",
-  glow1: 0,
-  glow2: 0,
-  glow3: 0,
-},
-{
-  key: "minimal-grey",
-  label: "Minimal Grey — Soft UI",
-  accent: "#1D4ED8",
-  accent2: "#1D4ED8",
-  accent3: "#1D4ED8",
-  bg: "#F8FAFC",
-  card: "#E5E7EB",
-  topbar: "#F8FAFC",
-  glow1: 0,
-  glow2: 0,
-  glow3: 0,
-},
-  // ADD THESE TO PRESETS (neutral / non-gradient)
-{
-  key: "neutral-light-blue",
-  label: "Neutral Light — White / Grey / Blue (No gradients)",
-  accent: "#2563EB",
-  accent2: "#2563EB",
-  accent3: "#2563EB",
-  bg: "#FFFFFF",
-  card: "#F3F4F6",
-  topbar: "#FFFFFF",
-  glow1: 0,
-  glow2: 0,
-  glow3: 0,
-},
-{
-  key: "neutral-light-teal",
-  label: "Neutral Light — White / Grey / Teal (No gradients)",
-  accent: "#0D9488",
-  accent2: "#0D9488",
-  accent3: "#0D9488",
-  bg: "#FFFFFF",
-  card: "#F3F4F6",
-  topbar: "#FFFFFF",
-  glow1: 0,
-  glow2: 0,
-  glow3: 0,
-},
-{
-  key: "neutral-light-purple",
-  label: "Neutral Light — White / Grey / Purple (No gradients)",
-  accent: "#7C3AED",
-  accent2: "#7C3AED",
-  accent3: "#7C3AED",
-  bg: "#FFFFFF",
-  card: "#F3F4F6",
-  topbar: "#FFFFFF",
-  glow1: 0,
-  glow2: 0,
-  glow3: 0,
-},
-{
-  key: "neutral-dark-blue",
-  label: "Neutral Dark — Black / Slate / Blue (No gradients)",
-  accent: "#3B82F6",
-  accent2: "#3B82F6",
-  accent3: "#3B82F6",
-  bg: "#000000",
-  card: "#111827",
-  topbar: "#000000",
-  glow1: 0,
-  glow2: 0,
-  glow3: 0,
-},
-{
-  key: "neutral-dark-emerald",
-  label: "Neutral Dark — Black / Slate / Emerald (No gradients)",
-  accent: "#10B981",
-  accent2: "#10B981",
-  accent3: "#10B981",
-  bg: "#000000",
-  card: "#111827",
-  topbar: "#000000",
-  glow1: 0,
-  glow2: 0,
-  glow3: 0,
-},
-{
-  key: "neutral-dark-amber",
-  label: "Neutral Dark — Black / Slate / Amber (No gradients)",
-  accent: "#F59E0B",
-  accent2: "#F59E0B",
-  accent3: "#F59E0B",
-  bg: "#000000",
-  card: "#111827",
-  topbar: "#000000",
-  glow1: 0,
-  glow2: 0,
-  glow3: 0,
-},
-{
-  key: "neutral-soft-grey",
-  label: "Neutral Soft — Off-white / Grey / Blue (No gradients)",
-  accent: "#1D4ED8",
-  accent2: "#1D4ED8",
-  accent3: "#1D4ED8",
-  bg: "#F8FAFC",
-  card: "#E5E7EB",
-  topbar: "#F8FAFC",
-  glow1: 0,
-  glow2: 0,
-  glow3: 0,
-},
+    key: "neutral-light",
+    label: "Neutral (Light) — White / Grey / Blue",
+    accent: "#2563EB",
+    accent2: "#2563EB",
+    accent3: "#2563EB",
+    bg: "#FFFFFF",
+    card: "#F3F4F6",
+    topbar: "#FFFFFF",
+    glow1: 0,
+    glow2: 0,
+    glow3: 0,
+  },
   {
-  key: "solid-light",
-  label: "Solid Light (Clean SaaS)",
-  accent: "#2563EB",
-  accent2: "#2563EB",
-  accent3: "#2563EB",
-  bg: "#FFFFFF",
-  card: "#F3F4F6",
-  topbar: "#FFFFFF",
-  glow1: 0,
-  glow2: 0,
-  glow3: 0,
-},
-{
-  key: "solid-dark",
-  label: "Solid Dark (Enterprise)",
-  accent: "#3B82F6",
-  accent2: "#3B82F6",
-  accent3: "#3B82F6",
-  bg: "#0B0D12",
-  card: "#111827",
-  topbar: "#0B0D12",
-  glow1: 0,
-  glow2: 0,
-  glow3: 0,
-},
-{
-  key: "slate-neutral",
-  label: "Slate Neutral",
-  accent: "#1D4ED8",
-  accent2: "#1D4ED8",
-  accent3: "#1D4ED8",
-  bg: "#F8FAFC",
-  card: "#E5E7EB",
-  topbar: "#F8FAFC",
-  glow1: 0,
-  glow2: 0,
-  glow3: 0,
-},
-{
-  key: "charcoal-pro",
-  label: "Charcoal Pro",
-  accent: "#2563EB",
-  accent2: "#2563EB",
-  accent3: "#2563EB",
-  bg: "#111827",
-  card: "#1F2937",
-  topbar: "#111827",
-  glow1: 0,
-  glow2: 0,
-  glow3: 0,
-},
+    key: "neutral-dark",
+    label: "Neutral (Dark) — Charcoal / Slate / Blue",
+    accent: "#3B82F6",
+    accent2: "#3B82F6",
+    accent3: "#3B82F6",
+    bg: "#0B0D12",
+    card: "#111827",
+    topbar: "#0B0D12",
+    glow1: 0,
+    glow2: 0,
+    glow3: 0,
+  },
+  {
+    key: "minimal-grey",
+    label: "Minimal Grey — Soft UI",
+    accent: "#1D4ED8",
+    accent2: "#1D4ED8",
+    accent3: "#1D4ED8",
+    bg: "#F8FAFC",
+    card: "#E5E7EB",
+    topbar: "#F8FAFC",
+    glow1: 0,
+    glow2: 0,
+    glow3: 0,
+  },
+
+  // Additional neutral / no-blobs options (your adds)
+  {
+    key: "neutral-light-blue",
+    label: "Neutral Light — White / Grey / Blue (No gradients)",
+    accent: "#2563EB",
+    accent2: "#2563EB",
+    accent3: "#2563EB",
+    bg: "#FFFFFF",
+    card: "#F3F4F6",
+    topbar: "#FFFFFF",
+    glow1: 0,
+    glow2: 0,
+    glow3: 0,
+  },
+  {
+    key: "neutral-light-teal",
+    label: "Neutral Light — White / Grey / Teal (No gradients)",
+    accent: "#0D9488",
+    accent2: "#0D9488",
+    accent3: "#0D9488",
+    bg: "#FFFFFF",
+    card: "#F3F4F6",
+    topbar: "#FFFFFF",
+    glow1: 0,
+    glow2: 0,
+    glow3: 0,
+  },
+  {
+    key: "neutral-light-purple",
+    label: "Neutral Light — White / Grey / Purple (No gradients)",
+    accent: "#7C3AED",
+    accent2: "#7C3AED",
+    accent3: "#7C3AED",
+    bg: "#FFFFFF",
+    card: "#F3F4F6",
+    topbar: "#FFFFFF",
+    glow1: 0,
+    glow2: 0,
+    glow3: 0,
+  },
+  {
+    key: "neutral-dark-blue",
+    label: "Neutral Dark — Black / Slate / Blue (No gradients)",
+    accent: "#3B82F6",
+    accent2: "#3B82F6",
+    accent3: "#3B82F6",
+    bg: "#000000",
+    card: "#111827",
+    topbar: "#000000",
+    glow1: 0,
+    glow2: 0,
+    glow3: 0,
+  },
+  {
+    key: "neutral-dark-emerald",
+    label: "Neutral Dark — Black / Slate / Emerald (No gradients)",
+    accent: "#10B981",
+    accent2: "#10B981",
+    accent3: "#10B981",
+    bg: "#000000",
+    card: "#111827",
+    topbar: "#000000",
+    glow1: 0,
+    glow2: 0,
+    glow3: 0,
+  },
+  {
+    key: "neutral-dark-amber",
+    label: "Neutral Dark — Black / Slate / Amber (No gradients)",
+    accent: "#F59E0B",
+    accent2: "#F59E0B",
+    accent3: "#F59E0B",
+    bg: "#000000",
+    card: "#111827",
+    topbar: "#000000",
+    glow1: 0,
+    glow2: 0,
+    glow3: 0,
+  },
+  {
+    key: "neutral-soft-grey",
+    label: "Neutral Soft — Off-white / Grey / Blue (No gradients)",
+    accent: "#1D4ED8",
+    accent2: "#1D4ED8",
+    accent3: "#1D4ED8",
+    bg: "#F8FAFC",
+    card: "#E5E7EB",
+    topbar: "#F8FAFC",
+    glow1: 0,
+    glow2: 0,
+    glow3: 0,
+  },
+  {
+    key: "solid-light",
+    label: "Solid Light (Clean SaaS)",
+    accent: "#2563EB",
+    accent2: "#2563EB",
+    accent3: "#2563EB",
+    bg: "#FFFFFF",
+    card: "#F3F4F6",
+    topbar: "#FFFFFF",
+    glow1: 0,
+    glow2: 0,
+    glow3: 0,
+  },
+  {
+    key: "solid-dark",
+    label: "Solid Dark (Enterprise)",
+    accent: "#3B82F6",
+    accent2: "#3B82F6",
+    accent3: "#3B82F6",
+    bg: "#0B0D12",
+    card: "#111827",
+    topbar: "#0B0D12",
+    glow1: 0,
+    glow2: 0,
+    glow3: 0,
+  },
+  {
+    key: "slate-neutral",
+    label: "Slate Neutral",
+    accent: "#1D4ED8",
+    accent2: "#1D4ED8",
+    accent3: "#1D4ED8",
+    bg: "#F8FAFC",
+    card: "#E5E7EB",
+    topbar: "#F8FAFC",
+    glow1: 0,
+    glow2: 0,
+    glow3: 0,
+  },
+  {
+    key: "charcoal-pro",
+    label: "Charcoal Pro",
+    accent: "#2563EB",
+    accent2: "#2563EB",
+    accent3: "#2563EB",
+    bg: "#111827",
+    card: "#1F2937",
+    topbar: "#111827",
+    glow1: 0,
+    glow2: 0,
+    glow3: 0,
+  },
 ];
 
 function StepPill({ active, label }: { active: boolean; label: string }) {
@@ -426,7 +428,8 @@ function safeFileExt(name: string) {
   const base = (name || "").toLowerCase();
   const dot = base.lastIndexOf(".");
   const ext = dot >= 0 ? base.slice(dot + 1) : "";
-  if (["png", "jpg", "jpeg", "webp", "svg"].includes(ext)) return ext === "jpeg" ? "jpg" : ext;
+  if (["png", "jpg", "jpeg", "webp", "svg"].includes(ext))
+    return ext === "jpeg" ? "jpg" : ext;
   return "png";
 }
 
@@ -463,6 +466,22 @@ export default function SetupWizard({
       msTenantId: initial?.ms_tenant_id ?? "",
     };
   }, [initial, tenant.name, me.email]);
+
+  // Snapshot for reset (server-loaded)
+  const initialSnapshot = useMemo(() => {
+    return {
+      accent: init.accent,
+      accent2: init.accent2,
+      accent3: init.accent3,
+      bg: init.bg,
+      card: init.card,
+      topbar: init.topbar || init.card,
+      glow1: init.glow1,
+      glow2: init.glow2,
+      glow3: init.glow3,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [step, setStep] = useState<0 | 1 | 2 | 3>(0);
   const [saving, setSaving] = useState(false);
@@ -506,23 +525,51 @@ export default function SetupWizard({
     setGlow2(p.glow2);
     setGlow3(p.glow3);
   }
-  
- const initialSnapshot = useMemo(() => {
-  return {
-    accent_hex: init.accent,
-    accent_2_hex: init.accent2,
-    accent_3_hex: init.accent3,
-    bg_hex: init.bg,
-    card_hex: init.card,
-    topbar_hex: init.topbar || init.card,
-    glow_1: init.glow1,
-    glow_2: init.glow2,
-    glow_3: init.glow3,
-    btn_solid: 0 as 0 | 1,
-  };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, []);
-  
+
+  function previewNow() {
+    setErr(null);
+    applyThemePreview({
+      accent_hex: accent,
+      accent_2_hex: accent2,
+      accent_3_hex: accent3,
+      bg_hex: bg,
+      card_hex: card,
+      topbar_hex: topbar && topbar.trim() ? topbar.trim() : card,
+      glow_1: glow1,
+      glow_2: glow2,
+      glow_3: glow3,
+    });
+    setOk("Preview applied (not saved)");
+    setTimeout(() => setOk(null), 1200);
+  }
+
+  function resetPreview() {
+    setErr(null);
+    clearThemePreview();
+
+    // restore inputs to server-loaded values
+    setAccent(initialSnapshot.accent);
+    setAccent2(initialSnapshot.accent2);
+    setAccent3(initialSnapshot.accent3);
+    setBg(initialSnapshot.bg);
+    setCard(initialSnapshot.card);
+    setTopbar(initialSnapshot.topbar === initialSnapshot.card ? "" : initialSnapshot.topbar);
+    setGlow1(initialSnapshot.glow1);
+    setGlow2(initialSnapshot.glow2);
+    setGlow3(initialSnapshot.glow3);
+    setPresetKey("");
+
+    setOk("Reset");
+    setTimeout(() => setOk(null), 1200);
+  }
+
+  useEffect(() => {
+    // cleanup on leave
+    return () => {
+      clearThemePreview();
+    };
+  }, []);
+
   async function save(partial?: Partial<InitialSettings>) {
     setSaving(true);
     setErr(null);
@@ -543,9 +590,8 @@ export default function SetupWizard({
         bg_hex: bg.trim() || null,
         card_hex: card.trim() || null,
 
-        // IMPORTANT: if you keep topbar NOT NULL in DB, setTopbar should never be empty.
-        // Recommended DB fix: drop NOT NULL. If you can't, we still send a value:
-        topbar_hex: (topbar && topbar.trim()) ? topbar.trim() : (card.trim() || "#ffffff"),
+        // keep non-null safe
+        topbar_hex: topbar && topbar.trim() ? topbar.trim() : card.trim() || "#ffffff",
 
         glow_1: Number.isFinite(glow1) ? glow1 : null,
         glow_2: Number.isFinite(glow2) ? glow2 : null,
@@ -597,13 +643,11 @@ export default function SetupWizard({
       const ext = safeFileExt(file.name);
       const path = `tenants/${tenant.id}/logo.${ext}`;
 
-      const { error: upErr } = await supabase.storage
-        .from("tenant-assets")
-        .upload(path, file, {
-          upsert: true,
-          contentType: file.type || undefined,
-          cacheControl: "3600",
-        });
+      const { error: upErr } = await supabase.storage.from("tenant-assets").upload(path, file, {
+        upsert: true,
+        contentType: file.type || undefined,
+        cacheControl: "3600",
+      });
 
       if (upErr) throw upErr;
 
@@ -688,7 +732,7 @@ export default function SetupWizard({
           <div className="space-y-4">
             <div className="text-lg font-semibold">Branding</div>
 
-            {/* Presets */}
+            {/* Presets + preview controls */}
             <div className="hi5-card rounded-2xl border hi5-border p-4">
               <div className="text-xs opacity-70">Preset themes</div>
               <div className="mt-3 flex flex-col sm:flex-row gap-3 sm:items-center">
@@ -699,7 +743,11 @@ export default function SetupWizard({
                     const key = e.target.value;
                     setPresetKey(key);
                     const p = PRESETS.find((x) => x.key === key);
-                    if (p) applyPreset(p);
+                    if (p) {
+                      applyPreset(p);
+                      // nice UX: instantly preview preset
+                      setTimeout(() => previewNow(), 0);
+                    }
                   }}
                 >
                   <option value="">Choose a preset…</option>
@@ -713,12 +761,21 @@ export default function SetupWizard({
                 <button
                   type="button"
                   className="hi5-btn-ghost text-sm w-auto"
-                  onClick={() => {
-                    setPresetKey("");
-                    applyPreset(PRESETS[0]);
-                  }}
+                  disabled={saving || logoUploading}
+                  onClick={previewNow}
+                  title="Apply instantly (not saved)"
                 >
-                  Reset to default
+                  Preview
+                </button>
+
+                <button
+                  type="button"
+                  className="hi5-btn-ghost text-sm w-auto"
+                  disabled={saving || logoUploading}
+                  onClick={resetPreview}
+                  title="Remove preview + restore original"
+                >
+                  Reset preview
                 </button>
 
                 <button
@@ -730,8 +787,9 @@ export default function SetupWizard({
                   Save theme
                 </button>
               </div>
+
               <div className="mt-2 text-[11px] opacity-60">
-                Presets just fill the fields — you can tweak anything after selecting.
+                Presets just fill the fields — Preview applies instantly, Save persists to the DB.
               </div>
             </div>
 
@@ -817,6 +875,25 @@ export default function SetupWizard({
                   <RangeField label="Glow 2" value={glow2} onChange={setGlow2} hint="Sphere strength" />
                   <RangeField label="Glow 3" value={glow3} onChange={setGlow3} hint="Sphere strength" />
                 </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="hi5-btn-ghost text-sm w-auto"
+                    disabled={saving || logoUploading}
+                    onClick={previewNow}
+                  >
+                    Preview now
+                  </button>
+                  <button
+                    type="button"
+                    className="hi5-btn-ghost text-sm w-auto"
+                    disabled={saving || logoUploading}
+                    onClick={resetPreview}
+                  >
+                    Reset preview
+                  </button>
+                </div>
               </div>
 
               <div className="hi5-card rounded-2xl border hi5-border p-5">
@@ -824,7 +901,7 @@ export default function SetupWizard({
                 <div className="mt-4 space-y-3">
                   <div className="rounded-2xl border hi5-border p-4 hi5-card">
                     <div className="text-sm font-semibold">Card example</div>
-                    <div className="text-sm opacity-80 mt-1">Save then refresh any page to see full effect.</div>
+                    <div className="text-sm opacity-80 mt-1">Preview applies instantly, Save persists to DB.</div>
                     <button type="button" className="hi5-btn-primary text-sm mt-3">
                       Primary Button
                     </button>
@@ -871,9 +948,7 @@ export default function SetupWizard({
                 />
                 <div className="rounded-2xl border hi5-border hi5-card p-4">
                   <div className="text-xs opacity-70">Next</div>
-                  <div className="text-sm mt-2 opacity-80">
-                    After onboarding we’ll add OAuth connection + imports.
-                  </div>
+                  <div className="text-sm mt-2 opacity-80">After onboarding we’ll add OAuth connection + imports.</div>
                 </div>
               </div>
             </div>
