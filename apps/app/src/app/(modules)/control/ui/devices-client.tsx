@@ -2,11 +2,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import StatCards from "../../ui/stat-cards";
-import DeviceTable from "../../ui/device-table";
-import DeviceDetailsPanel from "../../ui/device-details-panel";
-import { demoDevices, type DeviceRow } from "../../ui/device-data";
-import EnrollmentPackagesModal from "../../ui/enrollment-packages-modal";
+
+import StatCards from "../devices/ui/stat-cards";
+import DeviceTable from "../devices/ui/device-table";
+import DeviceDetailsPanel from "../devices/ui/device-details-panel";
+import { demoDevices, type DeviceRow } from "../devices/ui/device-data";
+import EnrollmentPackagesModal from "../devices/ui/enrollment-packages-modal";
 
 type Filter = "all" | "online" | "offline" | "warning";
 
