@@ -3,11 +3,11 @@
 
 import { useMemo, useState } from "react";
 
-import StatCards from "../devices/ui/stat-cards";
-import DeviceTable from "../devices/ui/device-table";
-import DeviceDetailsPanel from "../devices/ui/device-details-panel";
-import { demoDevices, type DeviceRow } from "../devices/ui/device-data";
-import EnrollmentPackagesModal from "../devices/ui/enrollment-packages-modal";
+import StatCards from "./stat-cards";
+import DeviceTable from "./device-table";
+import DeviceDetailsPanel from "./device-details-panel";
+import { demoDevices, type DeviceRow } from "./device-data";
+import EnrollmentPackagesModal from "./enrollment-packages-modal";
 
 type Filter = "all" | "online" | "offline" | "warning";
 
