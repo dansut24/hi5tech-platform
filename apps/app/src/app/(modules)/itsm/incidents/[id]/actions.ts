@@ -28,7 +28,7 @@ export async function addIncidentComment(formData: FormData) {
 
   const { data: incident } = await supabase
     .from("incidents")
-    .select("id,tenant_id")
+    .select("id,tenant_id,number")
     .eq("id", incident_id)
     .maybeSingle();
 
@@ -41,5 +41,7 @@ export async function addIncidentComment(formData: FormData) {
     message,
   });
 
-  revalidatePath(`/itsm/incidents/${incident_id}`);
+  // Revalidate both possible routes
+  revalidatePath(`/itsm/incidents/${incident.id}`);
+  if (incident.number) revalidatePath(`/itsm/incidents/${String(incident.number)}`);
 }
