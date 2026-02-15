@@ -1,4 +1,3 @@
-// apps/app/src/app/(modules)/admin/(protected)/settings/branding/page.tsx
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
@@ -9,10 +8,7 @@ import BrandingEditorClient from "./ui/branding-editor-client";
 export const dynamic = "force-dynamic";
 
 type TenantSettingsRow = {
-  // legacy
   logo_url: string | null;
-
-  // new
   logo_light_url: string | null;
   logo_dark_url: string | null;
 
@@ -97,7 +93,8 @@ export default async function AdminSettingsBrandingPage() {
         <div className="text-xs opacity-70">Admin Settings</div>
         <h1 className="text-2xl font-extrabold mt-1">Branding</h1>
         <p className="text-sm opacity-75 mt-2">
-          Upload logos (light/dark) and customize your theme. Changes apply across modules.
+          Two modules: <span className="font-medium">Logo</span> and{" "}
+          <span className="font-medium">Theme</span>. Preview updates live while you edit.
         </p>
       </div>
 
@@ -109,7 +106,6 @@ export default async function AdminSettingsBrandingPage() {
           subdomain: tenant.subdomain,
         }}
         initial={{
-          // logo variants with fallback to legacy
           logo_light_url: settings?.logo_light_url ?? settings?.logo_url ?? "",
           logo_dark_url: settings?.logo_dark_url ?? "",
 
