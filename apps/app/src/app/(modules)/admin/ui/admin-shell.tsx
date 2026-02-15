@@ -13,18 +13,12 @@ import {
   Menu,
   X,
   LogOut,
-  Shield,
 } from "lucide-react";
 
 type NavItem = {
   href: string;
   label: string;
   icon: React.ReactNode;
-};
-
-type NavGroup = {
-  title: string;
-  items: NavItem[];
 };
 
 function cn(...s: Array<string | false | null | undefined>) {
@@ -42,47 +36,6 @@ function initials(name: string) {
   return (a + b) || a;
 }
 
-function NavSection({
-  title,
-  items,
-  pathname,
-  onClickItem,
-}: {
-  title: string;
-  items: NavItem[];
-  pathname: string;
-  onClickItem?: () => void;
-}) {
-  return (
-    <div className="mt-2">
-      <div className="px-3 py-2 text-[11px] uppercase tracking-wider opacity-60">{title}</div>
-      <div className="space-y-1">
-        {items.map((item) => {
-          const active = pathname === item.href || pathname.startsWith(item.href + "/");
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={onClickItem}
-              className={cn(
-                "flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition",
-                active
-                  ? "bg-[rgba(var(--hi5-accent),0.14)] border border-[rgba(var(--hi5-accent),0.28)]"
-                  : "hover:bg-black/5 dark:hover:bg-white/5"
-              )}
-            >
-              <span className={cn(active ? "text-[rgb(var(--hi5-accent))]" : "opacity-90")}>
-                {item.icon}
-              </span>
-              <span className="truncate">{item.label}</span>
-            </Link>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 export default function AdminShell({
   children,
   user,
@@ -95,29 +48,13 @@ export default function AdminShell({
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  const groups: NavGroup[] = useMemo(
+  const nav: NavItem[] = useMemo(
     () => [
-      {
-        title: "Overview",
-        items: [{ href: "/admin", label: "Dashboard", icon: <LayoutDashboard size={18} /> }],
-      },
-      {
-        title: "Management",
-        items: [
-          { href: "/admin/users", label: "Users", icon: <Users size={18} /> },
-          { href: "/admin/tenant", label: "Tenant", icon: <Settings size={18} /> },
-          { href: "/admin/billing", label: "Billing", icon: <Receipt size={18} /> },
-          { href: "/admin/audit", label: "Audit log", icon: <ScrollText size={18} /> },
-        ],
-      },
-      {
-        title: "Access",
-        items: [
-          { href: "/admin/access/itsm", label: "ITSM", icon: <Shield size={18} /> },
-          { href: "/admin/access/control", label: "Control", icon: <Shield size={18} /> },
-          { href: "/admin/access/selfservice", label: "Self Service", icon: <Shield size={18} /> },
-        ],
-      },
+      { href: "/admin", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
+      { href: "/admin/users", label: "Users", icon: <Users size={18} /> },
+      { href: "/admin/tenant", label: "Tenant", icon: <Settings size={18} /> },
+      { href: "/admin/billing", label: "Billing", icon: <Receipt size={18} /> },
+      { href: "/admin/audit", label: "Audit log", icon: <ScrollText size={18} /> },
     ],
     []
   );
@@ -126,32 +63,37 @@ export default function AdminShell({
 
   return (
     <div className="min-h-dvh">
-      {/* Mobile topbar */}
+      {/* Mobile topbar (inset like ITSM) */}
       <div className="sticky top-0 z-30 sm:hidden">
-        <div className="hi5-topbar">
-          <div className="px-4 py-3 flex items-center justify-between gap-3">
-            <button
-              type="button"
-              onClick={() => setMobileOpen(true)}
-              className="rounded-xl border hi5-border p-2 hover:bg-black/5 dark:hover:bg-white/5 transition"
-              aria-label="Open menu"
-            >
-              <Menu size={18} />
-            </button>
+        <div className="px-3 pt-3">
+          <div className="hi5-panel">
+            <div className="h-14 px-3 flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => setMobileOpen(true)}
+                className="rounded-xl border hi5-border p-2 hover:bg-black/5 dark:hover:bg-white/5 transition"
+                aria-label="Open menu"
+              >
+                <Menu size={18} />
+              </button>
 
-            <div className="min-w-0">
-              <div className="text-sm font-semibold truncate">Admin</div>
-              <div className="text-xs opacity-70 truncate">{tenantHost}</div>
-            </div>
+              <div className="min-w-0">
+                <div className="text-sm font-semibold truncate">Admin</div>
+                <div className="text-xs opacity-70 truncate">{tenantHost}</div>
+              </div>
 
-            <div
-              className="h-9 w-9 rounded-xl border hi5-border grid place-items-center font-semibold text-xs"
-              title={user.name}
-            >
-              {initials(user.name)}
+              <div
+                className="h-9 w-9 rounded-xl border hi5-border grid place-items-center font-semibold text-xs"
+                title={user.name}
+              >
+                {initials(user.name)}
+              </div>
             </div>
           </div>
         </div>
+
+        {/* Adds breathing room under the inset topbar so content doesn't feel glued */}
+        <div className="h-3" />
       </div>
 
       {/* Mobile drawer */}
@@ -176,17 +118,29 @@ export default function AdminShell({
               </div>
 
               <nav className="p-2">
-                {groups.map((g) => (
-                  <NavSection
-                    key={g.title}
-                    title={g.title}
-                    items={g.items}
-                    pathname={pathname}
-                    onClickItem={() => setMobileOpen(false)}
-                  />
-                ))}
+                {nav.map((item) => {
+                  const active = pathname === item.href || pathname.startsWith(item.href + "/");
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setMobileOpen(false)}
+                      className={cn(
+                        "flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition",
+                        active
+                          ? "bg-[rgba(var(--hi5-accent),0.14)] border border-[rgba(var(--hi5-accent),0.28)]"
+                          : "hover:bg-black/5 dark:hover:bg-white/5"
+                      )}
+                    >
+                      <span className={cn(active ? "text-[rgb(var(--hi5-accent))]" : "opacity-90")}>
+                        {item.icon}
+                      </span>
+                      <span className="truncate">{item.label}</span>
+                    </Link>
+                  );
+                })}
 
-                <div className="mt-3 p-2">
+                <div className="mt-2 p-2">
                   <Link
                     href="/api/auth/logout"
                     className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition hover:bg-black/5 dark:hover:bg-white/5"
@@ -201,6 +155,7 @@ export default function AdminShell({
         </>
       )}
 
+      {/* Desktop layout */}
       <div className="sm:flex">
         {/* Desktop sidebar */}
         <aside className="hidden sm:block w-72 shrink-0 p-4">
@@ -210,10 +165,27 @@ export default function AdminShell({
               <div className="text-xs opacity-70 truncate">{tenantHost}</div>
             </div>
 
-            <nav className="mt-2">
-              {groups.map((g) => (
-                <NavSection key={g.title} title={g.title} items={g.items} pathname={pathname} />
-              ))}
+            <nav className="mt-2 space-y-1">
+              {nav.map((item) => {
+                const active = pathname === item.href || pathname.startsWith(item.href + "/");
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm transition",
+                      active
+                        ? "bg-[rgba(var(--hi5-accent),0.14)] border border-[rgba(var(--hi5-accent),0.28)]"
+                        : "hover:bg-black/5 dark:hover:bg-white/5"
+                    )}
+                  >
+                    <span className={cn(active ? "text-[rgb(var(--hi5-accent))]" : "opacity-90")}>
+                      {item.icon}
+                    </span>
+                    <span className="truncate">{item.label}</span>
+                  </Link>
+                );
+              })}
             </nav>
 
             <div className="mt-4 border-t hi5-divider pt-3 px-2">
@@ -246,7 +218,7 @@ export default function AdminShell({
         </aside>
 
         {/* Main */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8">
+        <main className="flex-1 px-3 pb-4 sm:px-6 sm:pb-6 lg:px-8 lg:pb-8">
           <div className="max-w-6xl mx-auto">{children}</div>
         </main>
       </div>
