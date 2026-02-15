@@ -11,7 +11,12 @@ type Payload = {
   support_email?: string | null;
   timezone?: string | null;
 
+  // legacy (keep)
   logo_url?: string | null;
+
+  // new variants
+  logo_light_url?: string | null;
+  logo_dark_url?: string | null;
 
   accent_hex?: string | null;
   accent_2_hex?: string | null;
@@ -36,7 +41,13 @@ type ExistingSettings = {
   company_name: string | null;
   support_email: string | null;
   timezone: string | null;
+
+  // legacy
   logo_url: string | null;
+
+  // new
+  logo_light_url: string | null;
+  logo_dark_url: string | null;
 
   accent_hex: string | null;
   accent_2_hex: string | null;
@@ -76,7 +87,6 @@ function clamp01(v: any): number | null {
 }
 
 function normalizeHex(v: any): string | null | undefined {
-  // undefined => not provided
   if (v === undefined) return undefined;
   if (v === null) return null;
 
@@ -86,7 +96,7 @@ function normalizeHex(v: any): string | null | undefined {
 }
 
 function normalizeAllowedDomains(v: any): string[] | null | undefined {
-  if (v === undefined) return undefined; // not provided
+  if (v === undefined) return undefined;
   if (v === null) return null;
 
   if (Array.isArray(v)) {
@@ -96,7 +106,6 @@ function normalizeAllowedDomains(v: any): string[] | null | undefined {
   if (typeof v === "string") {
     const s = v.trim();
     if (!s) return [];
-    // handle JSON string "[]"
     try {
       const parsed = JSON.parse(s);
       if (Array.isArray(parsed)) {
@@ -105,23 +114,27 @@ function normalizeAllowedDomains(v: any): string[] | null | undefined {
     } catch {
       // ignore
     }
-    // comma separated
     return s.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean);
   }
 
   return [];
 }
 
+function normalizeUrl(v: any): string | null | undefined {
+  if (v === undefined) return undefined;
+  if (v === null) return null;
+  const s = String(v).trim();
+  return s ? s : null;
+}
+
 export async function POST(req: Request) {
   try {
     const supabase = await supabaseServer();
 
-    // Auth
     const { data: userRes } = await supabase.auth.getUser();
     const user = userRes.user;
     if (!user) return json(false, 401, { error: "Not authenticated" });
 
-    // Tenant from host
     const host = getEffectiveHost(await headers());
     const parsed = parseTenantHost(host);
     if (!parsed.subdomain) return json(false, 400, { error: "No tenant subdomain" });
@@ -136,7 +149,6 @@ export async function POST(req: Request) {
     if (tErr) return json(false, 400, { error: tErr.message });
     if (!tenant || tenant.is_active === false) return json(false, 404, { error: "Tenant not found" });
 
-    // Role check
     const { data: membership, error: mErr } = await supabase
       .from("memberships")
       .select("role")
@@ -149,7 +161,6 @@ export async function POST(req: Request) {
     const role = String(membership?.role || "");
     if (role !== "owner" && role !== "admin") return json(false, 403, { error: "Forbidden" });
 
-    // Body
     let payload: Payload;
     try {
       payload = (await req.json()) as Payload;
@@ -157,7 +168,6 @@ export async function POST(req: Request) {
       return json(false, 400, { error: "Invalid JSON body" });
     }
 
-    // Read existing (typed defensively)
     const exRes = await supabase
       .from("tenant_settings")
       .select(
@@ -167,6 +177,8 @@ export async function POST(req: Request) {
           "support_email",
           "timezone",
           "logo_url",
+          "logo_light_url",
+          "logo_dark_url",
           "accent_hex",
           "accent_2_hex",
           "accent_3_hex",
@@ -189,7 +201,6 @@ export async function POST(req: Request) {
 
     const existing = (exRes.data as ExistingSettings | null) ?? null;
 
-    // Normalize inputs
     const accent_hex = normalizeHex(payload.accent_hex);
     const accent_2_hex = normalizeHex(payload.accent_2_hex);
     const accent_3_hex = normalizeHex(payload.accent_3_hex);
@@ -199,7 +210,11 @@ export async function POST(req: Request) {
 
     const allowed_domains = normalizeAllowedDomains(payload.allowed_domains);
 
-    // Merge (undefined means “not provided”)
+    // normalize urls
+    const logo_url = normalizeUrl(payload.logo_url);
+    const logo_light_url = normalizeUrl(payload.logo_light_url);
+    const logo_dark_url = normalizeUrl(payload.logo_dark_url);
+
     const merged: ExistingSettings = {
       tenant_id: tenant.id,
 
@@ -207,10 +222,21 @@ export async function POST(req: Request) {
         payload.company_name !== undefined ? payload.company_name : existing?.company_name ?? null,
       support_email:
         payload.support_email !== undefined ? payload.support_email : existing?.support_email ?? null,
-      timezone:
-        payload.timezone !== undefined ? payload.timezone : existing?.timezone ?? null,
+      timezone: payload.timezone !== undefined ? payload.timezone : existing?.timezone ?? null,
 
-      logo_url: payload.logo_url !== undefined ? payload.logo_url : existing?.logo_url ?? null,
+      // Keep legacy logo_url in sync with light logo (preferred)
+      logo_light_url:
+        logo_light_url !== undefined ? logo_light_url : existing?.logo_light_url ?? null,
+      logo_dark_url:
+        logo_dark_url !== undefined ? logo_dark_url : existing?.logo_dark_url ?? null,
+
+      // if explicit logo_url provided use it; else mirror light; else existing legacy
+      logo_url:
+        logo_url !== undefined
+          ? logo_url
+          : (logo_light_url !== undefined
+              ? logo_light_url
+              : existing?.logo_light_url ?? existing?.logo_url ?? null),
 
       accent_hex: accent_hex !== undefined ? accent_hex : existing?.accent_hex ?? null,
       accent_2_hex: accent_2_hex !== undefined ? accent_2_hex : existing?.accent_2_hex ?? null,
@@ -218,77 +244,35 @@ export async function POST(req: Request) {
 
       bg_hex: bg_hex !== undefined ? bg_hex : existing?.bg_hex ?? null,
       card_hex: card_hex !== undefined ? card_hex : existing?.card_hex ?? null,
-
       topbar_hex: topbar_hex !== undefined ? topbar_hex : existing?.topbar_hex ?? null,
 
-      glow_1: payload.glow_1 !== undefined ? clamp01(payload.glow_1) : existing?.glow_1 ?? null,
-      glow_2: payload.glow_2 !== undefined ? clamp01(payload.glow_2) : existing?.glow_2 ?? null,
-      glow_3: payload.glow_3 !== undefined ? clamp01(payload.glow_3) : existing?.glow_3 ?? null,
+      glow_1:
+        payload.glow_1 !== undefined ? clamp01(payload.glow_1) : existing?.glow_1 ?? null,
+      glow_2:
+        payload.glow_2 !== undefined ? clamp01(payload.glow_2) : existing?.glow_2 ?? null,
+      glow_3:
+        payload.glow_3 !== undefined ? clamp01(payload.glow_3) : existing?.glow_3 ?? null,
 
       allowed_domains:
         allowed_domains !== undefined ? allowed_domains : existing?.allowed_domains ?? null,
 
       ms_enabled: payload.ms_enabled !== undefined ? payload.ms_enabled : existing?.ms_enabled ?? null,
-      ms_tenant_id: payload.ms_tenant_id !== undefined ? payload.ms_tenant_id : existing?.ms_tenant_id ?? null,
+      ms_tenant_id:
+        payload.ms_tenant_id !== undefined ? payload.ms_tenant_id : existing?.ms_tenant_id ?? null,
 
-      // never change onboarding here
-      onboarding_completed: existing?.onboarding_completed ?? false,
+      onboarding_completed: existing?.onboarding_completed ?? null,
     };
 
-    // Satisfy NOT NULL constraints with safe defaults
-    const safeAccent = merged.accent_hex ?? "#00c1ff";
-    const safeAccent2 = merged.accent_2_hex ?? "#ff4fe1";
-    const safeAccent3 = merged.accent_3_hex ?? "#ffc42d";
-    const safeBg = merged.bg_hex ?? "#f8fafc";
-    const safeCard = merged.card_hex ?? "#ffffff";
-    const safeTopbar = (merged.topbar_hex && merged.topbar_hex.trim()) ? merged.topbar_hex : safeCard;
-
-    const row = {
-      ...merged,
-      accent_hex: safeAccent,
-      accent_2_hex: safeAccent2,
-      accent_3_hex: safeAccent3,
-      bg_hex: safeBg,
-      card_hex: safeCard,
-      topbar_hex: safeTopbar,
-      glow_1: merged.glow_1 ?? 0.18,
-      glow_2: merged.glow_2 ?? 0.14,
-      glow_3: merged.glow_3 ?? 0.1,
-      allowed_domains: merged.allowed_domains ?? [],
-    };
-
-    const upRes = await supabase
+    const up = await supabase
       .from("tenant_settings")
-      .upsert(row, { onConflict: "tenant_id" });
+      .upsert(merged, { onConflict: "tenant_id" })
+      .select("tenant_id")
+      .single();
 
-    if (upRes.error) return json(false, 400, { error: upRes.error.message });
+    if (up.error) return json(false, 400, { error: up.error.message });
 
-    // Return updated row for debugging
-    const afterRes = await supabase
-      .from("tenant_settings")
-      .select(
-        [
-          "tenant_id",
-          "accent_hex",
-          "accent_2_hex",
-          "accent_3_hex",
-          "bg_hex",
-          "card_hex",
-          "topbar_hex",
-          "glow_1",
-          "glow_2",
-          "glow_3",
-          "allowed_domains",
-          "onboarding_completed",
-          "updated_at",
-        ].join(",")
-      )
-      .eq("tenant_id", tenant.id)
-      .maybeSingle();
-
-    if (afterRes.error) return json(true, 200, { saved: true });
-    return json(true, 200, { saved: true, tenant_settings: afterRes.data });
+    return json(true, 200, { tenant_id: up.data.tenant_id });
   } catch (e: any) {
-    return json(false, 500, { error: e?.message || "Server error" });
+    return json(false, 500, { error: e?.message || "Unknown error" });
   }
 }
