@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createBrowserClient } from "@supabase/ssr";
 import { applyThemePreview, clearThemePreview } from "@/components/theme/applyThemePreview";
-import { Image as ImageIcon, Palette, Save } from "lucide-react";
+import { Image as ImageIcon, Palette, Eye, Save } from "lucide-react";
 
 type TenantInfo = {
   id: string;
@@ -44,6 +44,10 @@ const PRESETS: Preset[] = [
   { key: "neutral-soft-grey", label: "Neutral Soft — Off-white / Grey / Blue (No gradients)", accent: "#1D4ED8", accent2: "#1D4ED8", accent3: "#1D4ED8", bg: "#F8FAFC", card: "#E5E7EB", topbar: "#F8FAFC", glow1: 0, glow2: 0, glow3: 0 },
 ];
 
+function cn(...s: Array<string | false | null | undefined>) {
+  return s.filter(Boolean).join(" ");
+}
+
 function ColorField({ label, value, onChange, hint }: { label: string; value: string; onChange: (v: string) => void; hint?: string }) {
   return (
     <label className="block">
@@ -79,10 +83,20 @@ function safeFileExt(name: string) {
   return "png";
 }
 
-type CropResult = { blob: Blob; dataUrl: string };
+function requireSupabaseEnv() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anon) throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  return { url, anon };
+}
+
+type CropResult = { blob: Blob };
 
 function CropModal({
-  file, open, onClose, onConfirm,
+  file,
+  open,
+  onClose,
+  onConfirm,
 }: {
   file: File | null;
   open: boolean;
@@ -102,12 +116,22 @@ function CropModal({
 
   useEffect(() => {
     if (!open) return;
-    setErr(null); setBusy(false); setZoom(1.2); setDx(0); setDy(0);
+    setErr(null);
+    setBusy(false);
+    setZoom(1.2);
+    setDx(0);
+    setDy(0);
   }, [open, file]);
 
-  useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
+  useEffect(() => {
+    return () => {
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [url]);
 
-  function clamp(n: number, min: number, max: number) { return Math.max(min, Math.min(max, n)); }
+  function clamp(n: number, min: number, max: number) {
+    return Math.max(min, Math.min(max, n));
+  }
 
   async function exportCroppedPng(): Promise<CropResult> {
     const img = imgRef.current;
@@ -130,13 +154,15 @@ function CropModal({
 
     const out = 512;
     const outCanvas = document.createElement("canvas");
-    outCanvas.width = out; outCanvas.height = out;
+    outCanvas.width = out;
+    outCanvas.height = out;
     const ctx = outCanvas.getContext("2d");
     if (!ctx) throw new Error("Canvas unsupported");
-    const s = out / bw;
 
+    const s = out / bw;
     ctx.imageSmoothingEnabled = true;
     ctx.imageSmoothingQuality = "high";
+
     ctx.clearRect(0, 0, out, out);
     ctx.drawImage(img, drawX * s, drawY * s, drawW * s, drawH * s);
 
@@ -144,11 +170,16 @@ function CropModal({
       outCanvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Export failed"))), "image/png", 0.92);
     });
 
-    const dataUrl = outCanvas.toDataURL("image/png", 0.92);
-    return { blob, dataUrl };
+    return { blob };
   }
 
-  const drag = useRef<{ on: boolean; x: number; y: number; dx: number; dy: number }>({ on: false, x: 0, y: 0, dx: 0, dy: 0 });
+  const drag = useRef<{ on: boolean; x: number; y: number; dx: number; dy: number }>({
+    on: false,
+    x: 0,
+    y: 0,
+    dx: 0,
+    dy: 0,
+  });
 
   function onPointerDown(e: React.PointerEvent) {
     if (!open) return;
@@ -164,7 +195,9 @@ function CropModal({
   }
   function onPointerUp(e: React.PointerEvent) {
     drag.current.on = false;
-    try { (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId); } catch {}
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {}
   }
 
   if (!open || !file) return null;
@@ -179,7 +212,9 @@ function CropModal({
               <div className="text-sm font-semibold">Crop logo</div>
               <div className="text-xs opacity-70">Drag • Zoom • Exports 512×512 PNG</div>
             </div>
-            <button className="hi5-btn-ghost text-sm w-auto" onClick={onClose} disabled={busy}>Close</button>
+            <button className="hi5-btn-ghost text-sm w-auto" onClick={onClose} disabled={busy}>
+              Close
+            </button>
           </div>
 
           <div className="p-5 space-y-4">
@@ -198,7 +233,10 @@ function CropModal({
                 src={url}
                 alt="Crop"
                 className="w-full h-full object-cover"
-                style={{ transform: `translate(${dx}px, ${dy}px) scale(${zoom})`, transformOrigin: "center" }}
+                style={{
+                  transform: `translate(${dx}px, ${dy}px) scale(${zoom})`,
+                  transformOrigin: "center",
+                }}
                 draggable={false}
               />
             </div>
@@ -210,14 +248,23 @@ function CropModal({
               </label>
 
               <div className="flex gap-2 justify-end">
-                <button className="hi5-btn-ghost text-sm w-auto" onClick={() => { setZoom(1.2); setDx(0); setDy(0); }} disabled={busy}>
+                <button
+                  className="hi5-btn-ghost text-sm w-auto"
+                  onClick={() => {
+                    setZoom(1.2);
+                    setDx(0);
+                    setDy(0);
+                  }}
+                  disabled={busy}
+                >
                   Reset
                 </button>
                 <button
                   className="hi5-btn-primary text-sm w-auto"
                   disabled={busy}
                   onClick={async () => {
-                    setBusy(true); setErr(null);
+                    setBusy(true);
+                    setErr(null);
                     try {
                       const res = await exportCroppedPng();
                       await onConfirm(res);
@@ -239,6 +286,81 @@ function CropModal({
         </div>
       </div>
     </>
+  );
+}
+
+/**
+ * Auto-generate a dark variant from a light PNG:
+ * - invert RGB
+ * - boost contrast a touch
+ * Keeps alpha as-is.
+ */
+async function makeDarkVariantPng(lightPng: Blob): Promise<Blob> {
+  const bmp = await createImageBitmap(lightPng);
+  const c = document.createElement("canvas");
+  c.width = bmp.width;
+  c.height = bmp.height;
+  const ctx = c.getContext("2d");
+  if (!ctx) throw new Error("Canvas unsupported");
+
+  ctx.drawImage(bmp, 0, 0);
+  const img = ctx.getImageData(0, 0, c.width, c.height);
+  const d = img.data;
+
+  // simple contrast function around mid
+  const contrast = 1.08;
+  const adj = (x: number) => clampToByte((x - 128) * contrast + 128);
+
+  for (let i = 0; i < d.length; i += 4) {
+    const a = d[i + 3];
+    if (a === 0) continue;
+
+    // invert
+    let r = 255 - d[i];
+    let g = 255 - d[i + 1];
+    let b = 255 - d[i + 2];
+
+    // slight contrast boost
+    d[i] = adj(r);
+    d[i + 1] = adj(g);
+    d[i + 2] = adj(b);
+  }
+
+  ctx.putImageData(img, 0, 0);
+
+  const out: Blob = await new Promise((resolve, reject) => {
+    c.toBlob((b) => (b ? resolve(b) : reject(new Error("Failed to create dark variant"))), "image/png", 0.92);
+  });
+  return out;
+}
+
+function clampToByte(n: number) {
+  return Math.max(0, Math.min(255, Math.round(n)));
+}
+
+function Tabs({
+  value,
+  onChange,
+}: {
+  value: "logo" | "theme" | "preview";
+  onChange: (v: "logo" | "theme" | "preview") => void;
+}) {
+  const base = "flex-1 rounded-2xl px-3 py-2 text-sm border hi5-border transition";
+  const active = "hi5-card";
+  const idle = "opacity-80 hover:opacity-100";
+
+  return (
+    <div className="hi5-panel p-2 flex gap-2 lg:hidden">
+      <button className={cn(base, value === "logo" ? active : idle)} onClick={() => onChange("logo")} type="button">
+        <span className="inline-flex items-center gap-2"><ImageIcon size={16} /> Logo</span>
+      </button>
+      <button className={cn(base, value === "theme" ? active : idle)} onClick={() => onChange("theme")} type="button">
+        <span className="inline-flex items-center gap-2"><Palette size={16} /> Theme</span>
+      </button>
+      <button className={cn(base, value === "preview" ? active : idle)} onClick={() => onChange("preview")} type="button">
+        <span className="inline-flex items-center gap-2"><Eye size={16} /> Preview</span>
+      </button>
+    </div>
   );
 }
 
@@ -264,6 +386,8 @@ export default function BrandingEditorClient({
 }) {
   const init = useMemo(() => initial, [initial]);
 
+  const [tab, setTab] = useState<"logo" | "theme" | "preview">("logo");
+
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
@@ -274,9 +398,12 @@ export default function BrandingEditorClient({
   const [logoDarkUrl, setLogoDarkUrl] = useState(init.logo_dark_url || "");
   const [logoUploading, setLogoUploading] = useState(false);
 
+  // local preview urls (so you see the variants instantly even before save finishes)
+  const [logoLightPreview, setLogoLightPreview] = useState<string>("");
+  const [logoDarkPreview, setLogoDarkPreview] = useState<string>("");
+
   const [cropOpen, setCropOpen] = useState(false);
   const [cropFile, setCropFile] = useState<File | null>(null);
-  const [cropTarget, setCropTarget] = useState<"light" | "dark">("light");
 
   const [accent, setAccent] = useState(init.accent_hex);
   const [accent2, setAccent2] = useState(init.accent_2_hex);
@@ -290,6 +417,7 @@ export default function BrandingEditorClient({
   const [glow2, setGlow2] = useState(init.glow_2);
   const [glow3, setGlow3] = useState(init.glow_3);
 
+  // live theme preview while editing
   useEffect(() => {
     applyThemePreview({
       accent_hex: accent,
@@ -306,6 +434,13 @@ export default function BrandingEditorClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accent, accent2, accent3, bg, card, topbar, glow1, glow2, glow3]);
 
+  useEffect(() => {
+    return () => {
+      if (logoLightPreview) URL.revokeObjectURL(logoLightPreview);
+      if (logoDarkPreview) URL.revokeObjectURL(logoDarkPreview);
+    };
+  }, [logoLightPreview, logoDarkPreview]);
+
   function applyPreset(p: Preset) {
     setAccent(p.accent);
     setAccent2(p.accent2);
@@ -319,13 +454,19 @@ export default function BrandingEditorClient({
   }
 
   async function saveTheme(partial?: Record<string, any>) {
-    setSaving(true); setErr(null); setOk(null);
+    setSaving(true);
+    setErr(null);
+    setOk(null);
+
     try {
       const payload = {
+        // logo variants
         logo_light_url: logoLightUrl.trim() || null,
         logo_dark_url: logoDarkUrl.trim() || null,
-        logo_url: logoLightUrl.trim() || null, // legacy sync
+        // legacy sync
+        logo_url: logoLightUrl.trim() || null,
 
+        // theme
         accent_hex: accent.trim() || null,
         accent_2_hex: accent2.trim() || null,
         accent_3_hex: accent3.trim() || null,
@@ -335,14 +476,21 @@ export default function BrandingEditorClient({
         glow_1: glow1,
         glow_2: glow2,
         glow_3: glow3,
+
         ...partial,
       };
 
-      const res = await fetch("/api/admin/setup/save", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+      const res = await fetch("/api/admin/setup/save", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
       if (!res.ok) {
         const txt = await res.text().catch(() => "");
         throw new Error(txt || `Save failed (${res.status})`);
       }
+
       setOk("Saved");
     } catch (e: any) {
       setErr(e?.message || "Failed to save");
@@ -352,35 +500,53 @@ export default function BrandingEditorClient({
     }
   }
 
-  function requireSupabaseEnv() {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    if (!url || !anon) throw new Error("Missing NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY");
-    return { url, anon };
+  async function uploadToStorage(blobOrFile: Blob, path: string, contentType: string) {
+    const { url, anon } = requireSupabaseEnv();
+    const supabase = createBrowserClient(url, anon);
+
+    const { error: upErr } = await supabase.storage.from("tenant-assets").upload(path, blobOrFile, {
+      upsert: true,
+      contentType,
+      cacheControl: "3600",
+    });
+
+    if (upErr) throw upErr;
+
+    const { data } = supabase.storage.from("tenant-assets").getPublicUrl(path);
+    const publicUrl = data?.publicUrl;
+    if (!publicUrl) throw new Error("Could not get public URL for uploaded logo");
+
+    return publicUrl;
   }
 
-  async function uploadCroppedLogo(blob: Blob, variant: "light" | "dark") {
-    setLogoUploading(true); setErr(null); setOk(null);
+  async function uploadOneLogoAutoVariantsFromPng(png: Blob) {
+    setLogoUploading(true);
+    setErr(null);
+    setOk(null);
+
     try {
-      const { url, anon } = requireSupabaseEnv();
-      const supabase = createBrowserClient(url, anon);
+      // create dark variant blob
+      const darkPng = await makeDarkVariantPng(png);
 
-      const path = `tenants/${tenant.id}/${variant === "light" ? "logo-light.png" : "logo-dark.png"}`;
+      // instant previews while upload happens
+      if (logoLightPreview) URL.revokeObjectURL(logoLightPreview);
+      if (logoDarkPreview) URL.revokeObjectURL(logoDarkPreview);
+      setLogoLightPreview(URL.createObjectURL(png));
+      setLogoDarkPreview(URL.createObjectURL(darkPng));
 
-      const { error: upErr } = await supabase.storage.from("tenant-assets").upload(path, blob, {
-        upsert: true, contentType: "image/png", cacheControl: "3600",
-      });
-      if (upErr) throw upErr;
+      const lightPath = `tenants/${tenant.id}/logo-light.png`;
+      const darkPath = `tenants/${tenant.id}/logo-dark.png`;
 
-      const { data } = supabase.storage.from("tenant-assets").getPublicUrl(path);
-      const publicUrl = data?.publicUrl;
-      if (!publicUrl) throw new Error("Could not get public URL for uploaded logo");
+      const lightUrl = await uploadToStorage(png, lightPath, "image/png");
+      const darkUrl = await uploadToStorage(darkPng, darkPath, "image/png");
 
-      if (variant === "light") setLogoLightUrl(publicUrl);
-      else setLogoDarkUrl(publicUrl);
+      setLogoLightUrl(lightUrl);
+      setLogoDarkUrl(darkUrl);
 
-      await saveTheme(variant === "light" ? { logo_light_url: publicUrl, logo_url: publicUrl } : { logo_dark_url: publicUrl });
-      setOk(`${variant === "light" ? "Light" : "Dark"} logo saved`);
+      // save both urls + legacy sync
+      await saveTheme({ logo_light_url: lightUrl, logo_dark_url: darkUrl, logo_url: lightUrl });
+
+      setOk("Logo uploaded (auto light/dark)");
     } catch (e: any) {
       setErr(e?.message || "Logo upload failed");
     } finally {
@@ -389,31 +555,31 @@ export default function BrandingEditorClient({
     }
   }
 
-  async function onPickLogo(file: File, variant: "light" | "dark") {
+  async function onPickLogo(file: File) {
     const ext = safeFileExt(file.name);
 
+    // SVG: store the same file as both light & dark (no recolor)
     if (ext === "svg") {
-      setLogoUploading(true); setErr(null); setOk(null);
+      setLogoUploading(true);
+      setErr(null);
+      setOk(null);
+
       try {
-        const { url, anon } = requireSupabaseEnv();
-        const supabase = createBrowserClient(url, anon);
+        const lightPath = `tenants/${tenant.id}/logo-light.svg`;
+        const darkPath = `tenants/${tenant.id}/logo-dark.svg`;
 
-        const path = `tenants/${tenant.id}/${variant === "light" ? "logo-light.svg" : "logo-dark.svg"}`;
+        const lightUrl = await uploadToStorage(file, lightPath, file.type || "image/svg+xml");
+        const darkUrl = await uploadToStorage(file, darkPath, file.type || "image/svg+xml");
 
-        const { error: upErr } = await supabase.storage.from("tenant-assets").upload(path, file, {
-          upsert: true, contentType: file.type || "image/svg+xml", cacheControl: "3600",
-        });
-        if (upErr) throw upErr;
+        setLogoLightUrl(lightUrl);
+        setLogoDarkUrl(darkUrl);
 
-        const { data } = supabase.storage.from("tenant-assets").getPublicUrl(path);
-        const publicUrl = data?.publicUrl;
-        if (!publicUrl) throw new Error("Could not get public URL for uploaded logo");
+        // previews from URL
+        setLogoLightPreview("");
+        setLogoDarkPreview("");
 
-        if (variant === "light") setLogoLightUrl(publicUrl);
-        else setLogoDarkUrl(publicUrl);
-
-        await saveTheme(variant === "light" ? { logo_light_url: publicUrl, logo_url: publicUrl } : { logo_dark_url: publicUrl });
-        setOk(`${variant === "light" ? "Light" : "Dark"} logo saved`);
+        await saveTheme({ logo_light_url: lightUrl, logo_dark_url: darkUrl, logo_url: lightUrl });
+        setOk("SVG logo uploaded");
       } catch (e: any) {
         setErr(e?.message || "Logo upload failed");
       } finally {
@@ -423,276 +589,21 @@ export default function BrandingEditorClient({
       return;
     }
 
-    setCropTarget(variant);
+    // raster: crop first, then we auto-generate dark variant
     setCropFile(file);
     setCropOpen(true);
   }
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1fr,420px]">
-      {/* Left: two modules */}
-      <div className="space-y-4">
-        {/* Status */}
-        {err ? <div className="hi5-panel p-4 text-sm text-red-500">{err}</div> : null}
-        {ok ? <div className="hi5-panel p-4 text-sm text-emerald-500">{ok}</div> : null}
+    <div className="space-y-4">
+      {/* Mobile tabs */}
+      <Tabs value={tab} onChange={setTab} />
 
-        {/* Module: Logo */}
-        <div className="hi5-panel p-6">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <ImageIcon size={18} className="opacity-80" />
-              <div>
-                <div className="text-lg font-semibold">Logo</div>
-                <div className="text-xs opacity-70">Upload, crop, and set light/dark variants.</div>
-              </div>
-            </div>
-          </div>
+      {/* Messages */}
+      {err ? <div className="hi5-panel p-4 text-sm text-red-500">{err}</div> : null}
+      {ok ? <div className="hi5-panel p-4 text-sm text-emerald-500">{ok}</div> : null}
 
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            {/* Light */}
-            <div className="rounded-2xl border hi5-border p-4">
-              <div className="text-sm font-semibold">Light</div>
-              <div className="text-xs opacity-70 mt-1">Used on light surfaces</div>
-
-              <div className="mt-3 flex items-center gap-3">
-                <div className="h-12 w-12 rounded-2xl border hi5-border overflow-hidden bg-white flex items-center justify-center">
-                  {logoLightUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={logoLightUrl} alt="Light logo" className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="text-xs opacity-60">—</div>
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <div className="text-xs opacity-70 truncate">logo_light_url</div>
-                  <div className="text-[11px] opacity-60 truncate">{logoLightUrl ? "Set" : "Not set"}</div>
-                </div>
-              </div>
-
-              <div className="mt-3 flex flex-wrap gap-2">
-                <label className="hi5-btn-ghost text-sm w-auto cursor-pointer">
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                    className="hidden"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) onPickLogo(f, "light");
-                      e.currentTarget.value = "";
-                    }}
-                    disabled={logoUploading || saving}
-                  />
-                  {logoUploading ? "Uploading…" : "Upload + crop"}
-                </label>
-
-                {logoLightUrl ? (
-                  <button
-                    type="button"
-                    className="hi5-btn-ghost text-sm w-auto"
-                    disabled={logoUploading || saving}
-                    onClick={() => {
-                      setLogoLightUrl("");
-                      saveTheme({ logo_light_url: null, logo_url: null });
-                    }}
-                  >
-                    Remove
-                  </button>
-                ) : null}
-              </div>
-            </div>
-
-            {/* Dark */}
-            <div className="rounded-2xl border hi5-border p-4">
-              <div className="text-sm font-semibold">Dark</div>
-              <div className="text-xs opacity-70 mt-1">Used on dark surfaces</div>
-
-              <div className="mt-3 flex items-center gap-3">
-                <div className="h-12 w-12 rounded-2xl border hi5-border overflow-hidden bg-[#0b0d12] flex items-center justify-center">
-                  {logoDarkUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={logoDarkUrl} alt="Dark logo" className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="text-xs text-white/60">—</div>
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <div className="text-xs opacity-70 truncate">logo_dark_url</div>
-                  <div className="text-[11px] opacity-60 truncate">{logoDarkUrl ? "Set" : "Not set"}</div>
-                </div>
-              </div>
-
-              <div className="mt-3 flex flex-wrap gap-2">
-                <label className="hi5-btn-ghost text-sm w-auto cursor-pointer">
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                    className="hidden"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) onPickLogo(f, "dark");
-                      e.currentTarget.value = "";
-                    }}
-                    disabled={logoUploading || saving}
-                  />
-                  {logoUploading ? "Uploading…" : "Upload + crop"}
-                </label>
-
-                {logoDarkUrl ? (
-                  <button
-                    type="button"
-                    className="hi5-btn-ghost text-sm w-auto"
-                    disabled={logoUploading || saving}
-                    onClick={() => {
-                      setLogoDarkUrl("");
-                      saveTheme({ logo_dark_url: null });
-                    }}
-                  >
-                    Remove
-                  </button>
-                ) : null}
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-4 text-[11px] opacity-60">
-            Storage: <span className="font-mono">tenant-assets</span> •{" "}
-            <span className="font-mono">tenants/{tenant.id}/logo-light.png</span> &{" "}
-            <span className="font-mono">logo-dark.png</span>
-          </div>
-        </div>
-
-        {/* Module: Theme */}
-        <div className="hi5-panel p-6">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <Palette size={18} className="opacity-80" />
-              <div>
-                <div className="text-lg font-semibold">Theme</div>
-                <div className="text-xs opacity-70">Presets, colors, glow intensity. Live preview while editing.</div>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              className="hi5-btn-primary text-sm w-auto"
-              disabled={saving || logoUploading}
-              onClick={() => saveTheme()}
-            >
-              <span className="inline-flex items-center gap-2">
-                <Save size={16} />
-                {saving ? "Saving…" : "Save"}
-              </span>
-            </button>
-          </div>
-
-          {/* Presets */}
-          <div className="mt-4 rounded-2xl border hi5-border p-4">
-            <div className="text-xs opacity-70">Preset themes</div>
-            <div className="mt-3 flex flex-col sm:flex-row gap-3 sm:items-center">
-              <select
-                className="rounded-2xl border hi5-border hi5-card px-4 py-3 text-sm outline-none"
-                value={presetKey}
-                onChange={(e) => {
-                  const key = e.target.value;
-                  setPresetKey(key);
-                  const p = PRESETS.find((x) => x.key === key);
-                  if (p) applyPreset(p);
-                }}
-              >
-                <option value="">Choose a preset…</option>
-                {PRESETS.map((p) => (
-                  <option key={p.key} value={p.key}>
-                    {p.label}
-                  </option>
-                ))}
-              </select>
-
-              <button
-                type="button"
-                className="hi5-btn-ghost text-sm w-auto"
-                onClick={() => {
-                  setPresetKey("");
-                  applyPreset(PRESETS[0]);
-                }}
-                disabled={saving || logoUploading}
-              >
-                Reset to default
-              </button>
-            </div>
-            <div className="mt-2 text-[11px] opacity-60">Presets just fill the fields — tweak anything after.</div>
-          </div>
-
-          {/* Fields */}
-          <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <ColorField label="Accent" value={accent} onChange={setAccent} hint="Buttons + highlights" />
-            <ColorField label="Accent 2" value={accent2} onChange={setAccent2} hint="Gradients" />
-            <ColorField label="Accent 3" value={accent3} onChange={setAccent3} hint="Highlights" />
-          </div>
-
-          <div className="mt-4 grid gap-4 sm:grid-cols-3">
-            <ColorField label="Background" value={bg} onChange={setBg} hint="Base bg token" />
-            <ColorField label="Card" value={card} onChange={setCard} hint="Surfaces" />
-            <ColorField label="Topbar" value={topbar || card} onChange={setTopbar} hint="Empty = card" />
-          </div>
-
-          <div className="mt-4 grid gap-4 sm:grid-cols-3">
-            <RangeField label="Glow 1" value={glow1} onChange={setGlow1} hint="Sphere strength" />
-            <RangeField label="Glow 2" value={glow2} onChange={setGlow2} hint="Sphere strength" />
-            <RangeField label="Glow 3" value={glow3} onChange={setGlow3} hint="Sphere strength" />
-          </div>
-        </div>
-      </div>
-
-      {/* Right: Preview */}
-      <div className="space-y-4">
-        <CropModal
-          open={cropOpen}
-          file={cropFile}
-          onClose={() => {
-            setCropOpen(false);
-            setCropFile(null);
-          }}
-          onConfirm={async (res) => uploadCroppedLogo(res.blob, cropTarget)}
-        />
-
-        <div className="hi5-panel p-6">
-          <div className="text-xs opacity-70">Tenant</div>
-          <div className="text-xl font-extrabold mt-1">{tenant.name}</div>
-          <div className="text-xs opacity-70 mt-1">
-            {tenant.subdomain}.{tenant.domain}
-          </div>
-        </div>
-
-        <div className="hi5-card rounded-2xl border hi5-border p-5">
-          <div className="text-xs opacity-70">Live preview</div>
-          <div className="mt-4 space-y-3">
-            <div className="rounded-2xl border hi5-border p-4 hi5-card">
-              <div className="text-sm font-semibold">Card example</div>
-              <div className="text-sm opacity-80 mt-1">Updates as you edit (preview-only).</div>
-              <button type="button" className="hi5-btn-primary text-sm mt-3">
-                Primary Button
-              </button>
-            </div>
-
-            <div className="rounded-2xl border hi5-border p-4 hi5-panel">
-              <div className="text-sm font-semibold">Panel example</div>
-              <div className="text-sm opacity-80 mt-1">Readable surfaces.</div>
-              <button type="button" className="hi5-btn-ghost text-sm mt-3 w-auto">
-                Ghost button
-              </button>
-            </div>
-
-            <div className="rounded-2xl border hi5-border p-4 hi5-panel">
-              <div className="text-xs opacity-70">Logo usage</div>
-              <div className="text-sm mt-2">
-                Light logo syncs to legacy <span className="font-mono">logo_url</span>. Dark logo is used on dark UI.
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* crop modal lives here so it renders above everything */}
+      {/* Crop */}
       <CropModal
         open={cropOpen}
         file={cropFile}
@@ -700,8 +611,245 @@ export default function BrandingEditorClient({
           setCropOpen(false);
           setCropFile(null);
         }}
-        onConfirm={async (res) => uploadCroppedLogo(res.blob, cropTarget)}
+        onConfirm={async (res) => {
+          await uploadOneLogoAutoVariantsFromPng(res.blob);
+        }}
       />
+
+      <div className="grid gap-4 lg:grid-cols-[1fr,420px]">
+        {/* Left column: Logo + Theme (desktop) */}
+        <div className="space-y-4">
+          {/* Logo module */}
+          <div className={cn("hi5-panel p-6", tab !== "logo" && "lg:block hidden")}>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <ImageIcon size={18} className="opacity-80" />
+                <div>
+                  <div className="text-lg font-semibold">Logo</div>
+                  <div className="text-xs opacity-70">Upload once — auto light/dark variants generated.</div>
+                </div>
+              </div>
+
+              <label className="hi5-btn-primary text-sm w-auto cursor-pointer">
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) onPickLogo(f);
+                    e.currentTarget.value = "";
+                  }}
+                  disabled={logoUploading || saving}
+                />
+                {logoUploading ? "Uploading…" : "Upload logo"}
+              </label>
+            </div>
+
+            {/* Light/Dark preview strip */}
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border hi5-border p-4">
+                <div className="text-sm font-semibold">Light preview</div>
+                <div className="text-xs opacity-70 mt-1">Used on light surfaces</div>
+                <div className="mt-3 rounded-2xl border hi5-border bg-white p-4 flex items-center justify-center">
+                  {logoLightPreview || logoLightUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={logoLightPreview || logoLightUrl}
+                      alt="Light logo preview"
+                      className="h-16 w-auto object-contain"
+                    />
+                  ) : (
+                    <div className="text-xs opacity-60">No logo</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border hi5-border p-4">
+                <div className="text-sm font-semibold">Dark preview</div>
+                <div className="text-xs opacity-70 mt-1">Used on dark surfaces</div>
+                <div className="mt-3 rounded-2xl border hi5-border bg-[#0b0d12] p-4 flex items-center justify-center">
+                  {logoDarkPreview || logoDarkUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={logoDarkPreview || logoDarkUrl}
+                      alt="Dark logo preview"
+                      className="h-16 w-auto object-contain"
+                    />
+                  ) : (
+                    <div className="text-xs text-white/60">No logo</div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {(logoLightUrl || logoDarkUrl) ? (
+                <button
+                  type="button"
+                  className="hi5-btn-ghost text-sm w-auto"
+                  disabled={logoUploading || saving}
+                  onClick={() => {
+                    setLogoLightUrl("");
+                    setLogoDarkUrl("");
+                    setLogoLightPreview("");
+                    setLogoDarkPreview("");
+                    saveTheme({ logo_light_url: null, logo_dark_url: null, logo_url: null });
+                  }}
+                >
+                  Remove logo
+                </button>
+              ) : null}
+
+              <div className="text-[11px] opacity-60 flex items-center">
+                Stored in <span className="ml-1 font-mono">tenant-assets</span> • light syncs legacy{" "}
+                <span className="ml-1 font-mono">logo_url</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Theme module */}
+          <div className={cn("hi5-panel p-6", tab !== "theme" && "lg:block hidden")}>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Palette size={18} className="opacity-80" />
+                <div>
+                  <div className="text-lg font-semibold">Theme</div>
+                  <div className="text-xs opacity-70">Presets, colors and glow. Live preview while editing.</div>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="hi5-btn-primary text-sm w-auto"
+                disabled={saving || logoUploading}
+                onClick={() => saveTheme()}
+              >
+                <span className="inline-flex items-center gap-2">
+                  <Save size={16} />
+                  {saving ? "Saving…" : "Save"}
+                </span>
+              </button>
+            </div>
+
+            <div className="mt-4 rounded-2xl border hi5-border p-4">
+              <div className="text-xs opacity-70">Preset themes</div>
+              <div className="mt-3 flex flex-col sm:flex-row gap-3 sm:items-center">
+                <select
+                  className="rounded-2xl border hi5-border hi5-card px-4 py-3 text-sm outline-none"
+                  value={presetKey}
+                  onChange={(e) => {
+                    const key = e.target.value;
+                    setPresetKey(key);
+                    const p = PRESETS.find((x) => x.key === key);
+                    if (p) applyPreset(p);
+                  }}
+                >
+                  <option value="">Choose a preset…</option>
+                  {PRESETS.map((p) => (
+                    <option key={p.key} value={p.key}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  className="hi5-btn-ghost text-sm w-auto"
+                  onClick={() => {
+                    setPresetKey("");
+                    applyPreset(PRESETS[0]);
+                  }}
+                  disabled={saving || logoUploading}
+                >
+                  Reset to default
+                </button>
+              </div>
+              <div className="mt-2 text-[11px] opacity-60">Presets just fill the fields — tweak anything after.</div>
+            </div>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <ColorField label="Accent" value={accent} onChange={setAccent} hint="Buttons + highlights" />
+              <ColorField label="Accent 2" value={accent2} onChange={setAccent2} hint="Gradients" />
+              <ColorField label="Accent 3" value={accent3} onChange={setAccent3} hint="Highlights" />
+            </div>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+              <ColorField label="Background" value={bg} onChange={setBg} hint="Base bg token" />
+              <ColorField label="Card" value={card} onChange={setCard} hint="Surfaces" />
+              <ColorField label="Topbar" value={topbar || card} onChange={setTopbar} hint="Empty = card" />
+            </div>
+
+            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+              <RangeField label="Glow 1" value={glow1} onChange={setGlow1} hint="Sphere strength" />
+              <RangeField label="Glow 2" value={glow2} onChange={setGlow2} hint="Sphere strength" />
+              <RangeField label="Glow 3" value={glow3} onChange={setGlow3} hint="Sphere strength" />
+            </div>
+          </div>
+        </div>
+
+        {/* Right column: Preview (desktop) */}
+        <div className={cn("space-y-4", tab !== "preview" && "lg:block hidden")}>
+          <div className="hi5-panel p-6">
+            <div className="text-xs opacity-70">Tenant</div>
+            <div className="text-xl font-extrabold mt-1">{tenant.name}</div>
+            <div className="text-xs opacity-70 mt-1">
+              {tenant.subdomain}.{tenant.domain}
+            </div>
+          </div>
+
+          <div className="hi5-card rounded-2xl border hi5-border p-5">
+            <div className="flex items-center justify-between">
+              <div className="text-xs opacity-70">Live preview</div>
+              <div className="text-[11px] opacity-60">updates while editing</div>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              <div className="rounded-2xl border hi5-border p-4 hi5-card">
+                <div className="text-sm font-semibold">Card example</div>
+                <div className="text-sm opacity-80 mt-1">Theme preview updates live.</div>
+                <button type="button" className="hi5-btn-primary text-sm mt-3">
+                  Primary Button
+                </button>
+              </div>
+
+              <div className="rounded-2xl border hi5-border p-4 hi5-panel">
+                <div className="text-sm font-semibold">Panel example</div>
+                <div className="text-sm opacity-80 mt-1">Readable surfaces.</div>
+                <button type="button" className="hi5-btn-ghost text-sm mt-3 w-auto">
+                  Ghost button
+                </button>
+              </div>
+
+              <div className="rounded-2xl border hi5-border p-4 hi5-panel">
+                <div className="text-xs opacity-70">Logo preview</div>
+                <div className="mt-3 grid gap-2">
+                  <div className="rounded-2xl border hi5-border bg-white p-3 flex items-center justify-center">
+                    {(logoLightPreview || logoLightUrl) ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={logoLightPreview || logoLightUrl} alt="Light logo" className="h-12 w-auto object-contain" />
+                    ) : (
+                      <div className="text-xs opacity-60">No light logo</div>
+                    )}
+                  </div>
+                  <div className="rounded-2xl border hi5-border bg-[#0b0d12] p-3 flex items-center justify-center">
+                    {(logoDarkPreview || logoDarkUrl) ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={logoDarkPreview || logoDarkUrl} alt="Dark logo" className="h-12 w-auto object-contain" />
+                    ) : (
+                      <div className="text-xs text-white/60">No dark logo</div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-2 text-[11px] opacity-60">
+                  One upload generates both variants automatically.
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div> {/* grid */}
     </div>
   );
 }
