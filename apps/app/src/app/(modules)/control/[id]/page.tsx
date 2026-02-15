@@ -2,6 +2,7 @@
 import Link from "next/link";
 import TerminalPanel from "./ui/terminal-panel";
 import FileBrowserPanel from "./ui/file-browser-panel";
+import ServicesPanel from "./ui/services-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -53,6 +54,9 @@ export default async function DevicePage({
             </Link>
             <Link className="hi5-btn-ghost text-sm" href={`/control/${id}?tab=files`}>
               Files
+            </Link>
+            <Link className="hi5-btn-ghost text-sm" href={`/control/${id}?tab=services`}>
+              Services
             </Link>
             <button className="hi5-btn-ghost text-sm" type="button" title="Coming soon">
               Reboot
@@ -111,12 +115,14 @@ export default async function DevicePage({
 
         {tab === "files" && <FileBrowserPanel deviceId={id} />}
 
-        {tab !== "overview" && tab !== "terminal" && tab !== "files" && (
+        {tab === "services" && <ServicesPanel deviceId={id} />}
+
+        {tab !== "overview" && tab !== "terminal" && tab !== "files" && tab !== "services" && (
           <div>
             <div className="text-lg font-semibold capitalize">{tab}</div>
             <p className="text-sm opacity-75 mt-2">
-              This tab is next. Terminal and Files are now live UI panels; the others will be wired to your Go control
-              server APIs.
+              This tab is next. Terminal / Files / Services are now live UI panels; the others will be wired to your Go
+              control server APIs.
             </p>
           </div>
         )}
