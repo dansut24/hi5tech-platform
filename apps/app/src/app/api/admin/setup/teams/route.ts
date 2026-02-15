@@ -48,27 +48,33 @@ export async function POST(req: Request) {
     const parsed = parseTenantHost(host);
     if (!parsed.subdomain) return json(false, 400, { error: "No tenant subdomain" });
 
-    const { data: tenant, error: tErr } = await supabase
+    const tenantRes = await supabase
       .from("tenants")
-      .select("id, domain, subdomain, is_active")
+      .select("id, domain, subdomain, name, is_active")
       .eq("domain", parsed.rootDomain)
       .eq("subdomain", parsed.subdomain)
       .maybeSingle();
 
-    if (tErr) return json(false, 400, { error: tErr.message });
+    if (tenantRes.error) return json(false, 400, { error: tenantRes.error.message });
+
+    const tenant = tenantRes.data;
     if (!tenant || tenant.is_active === false) return json(false, 404, { error: "Tenant not found" });
 
-    const { data: membership, error: mErr } = await supabase
+    // Narrow to a stable primitive so TS never complains inside closures
+    const tenantId = tenant.id;
+
+    const membershipRes = await supabase
       .from("memberships")
       .select("id, role")
-      .eq("tenant_id", tenant.id)
+      .eq("tenant_id", tenantId)
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (mErr) return json(false, 400, { error: mErr.message });
+    if (membershipRes.error) return json(false, 400, { error: membershipRes.error.message });
 
-    const role = String(membership?.role || "");
-    if (role !== "owner" && role !== "admin") return json(false, 403, { error: "Forbidden" });
+    const membership = membershipRes.data;
+    const mRole = String(membership?.role || "");
+    if (mRole !== "owner" && mRole !== "admin") return json(false, 403, { error: "Forbidden" });
 
     let payload: Payload;
     try {
@@ -96,19 +102,22 @@ export async function POST(req: Request) {
       is_default_triage?: boolean;
       role_scopes?: Partial<Record<RoleKey, ScopeKey[]>>;
     }) {
-      const { data: existing } = await supabase
+      const existing = await supabase
         .from("teams")
         .select("id")
-        .eq("tenant_id", tenant.id)
+        .eq("tenant_id", tenantId)
         .eq("name", opts.name)
         .maybeSingle();
 
-      let teamId = existing?.id as string | undefined;
+      if (existing.error) throw new Error(existing.error.message);
+
+      let teamId = existing.data?.id as string | undefined;
+
       if (!teamId) {
         const ins = await supabase
           .from("teams")
           .insert({
-            tenant_id: tenant.id,
+            tenant_id: tenantId,
             key: opts.key,
             name: opts.name,
             modules: opts.modules,
@@ -138,14 +147,16 @@ export async function POST(req: Request) {
       };
 
       for (const roleKey of Object.keys(final) as RoleKey[]) {
-        const { data: roleExisting } = await supabase
+        const roleExisting = await supabase
           .from("team_roles")
           .select("id")
           .eq("team_id", teamId)
           .eq("role_key", roleKey)
           .maybeSingle();
 
-        if (!roleExisting?.id) {
+        if (roleExisting.error) throw new Error(roleExisting.error.message);
+
+        if (!roleExisting.data?.id) {
           const rIns = await supabase
             .from("team_roles")
             .insert({
@@ -156,33 +167,39 @@ export async function POST(req: Request) {
             })
             .select("id")
             .single();
+
           if (rIns.error) throw new Error(rIns.error.message);
         }
       }
 
       // Make current admin a Lead in Service Desk automatically
       if (opts.key === "service_desk" && membership?.id) {
-        const { data: leadRole } = await supabase
+        const leadRole = await supabase
           .from("team_roles")
           .select("id")
           .eq("team_id", teamId)
           .eq("role_key", "lead")
           .maybeSingle();
 
-        if (leadRole?.id) {
-          const { data: already } = await supabase
+        if (leadRole.error) throw new Error(leadRole.error.message);
+
+        if (leadRole.data?.id) {
+          const already = await supabase
             .from("team_members")
             .select("id")
             .eq("team_id", teamId)
             .eq("membership_id", membership.id)
             .maybeSingle();
 
-          if (!already?.id) {
-            await supabase.from("team_members").insert({
+          if (already.error) throw new Error(already.error.message);
+
+          if (!already.data?.id) {
+            const add = await supabase.from("team_members").insert({
               team_id: teamId,
               membership_id: membership.id,
-              team_role_id: leadRole.id,
+              team_role_id: leadRole.data.id,
             });
+            if (add.error) throw new Error(add.error.message);
           }
         }
       }
