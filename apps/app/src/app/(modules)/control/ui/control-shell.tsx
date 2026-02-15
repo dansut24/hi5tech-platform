@@ -1,4 +1,3 @@
-// apps/app/src/app/(modules)/control/ui/control-shell.tsx
 "use client";
 
 import Link from "next/link";
@@ -18,7 +17,6 @@ function roleLabel(role: string) {
   if (r === "owner") return "Owner";
   if (r === "admin") return "Admin";
   if (r === "viewer") return "Viewer";
-  if (r === "agent") return "Agent";
   return "User";
 }
 
@@ -84,6 +82,9 @@ export default function ControlShell({
     () => [
       { href: "/control", label: "Dashboard", icon: "🏠" },
       { href: "/control/devices", label: "Devices", icon: "🖥️" },
+      { href: "/control/jobs", label: "Jobs", icon: "⚡" },
+      { href: "/control/activity", label: "Activity", icon: "🧾" },
+
       { href: "/control/alerts", label: "Alerts", icon: "🚨", soon: true },
       { href: "/control/policies", label: "Policies", icon: "🧩", soon: true },
       { href: "/control/scripts", label: "Scripts", icon: "📜", soon: true },
@@ -102,7 +103,6 @@ export default function ControlShell({
   function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
     return (
       <div className="hi5-panel w-full p-4 flex flex-col gap-4">
-        {/* Brand */}
         <div className="flex items-center justify-between">
           <div>
             <div className="text-xs opacity-70">Control</div>
@@ -119,7 +119,6 @@ export default function ControlShell({
           />
         </div>
 
-        {/* Nav */}
         <nav className="flex flex-col gap-1">
           {nav.map((item) =>
             item.soon ? (
@@ -165,32 +164,23 @@ export default function ControlShell({
     <div className="min-h-dvh">
       <div className="hi5-bg">
         <div className="flex min-h-dvh">
-          {/* Desktop Sidebar */}
           <aside className="hidden lg:flex w-[280px] shrink-0 p-4">
             <Sidebar />
           </aside>
 
-          {/* Mobile Sidebar Overlay */}
           {mobileOpen ? (
             <div className="lg:hidden fixed inset-0 z-[60]">
-              <div
-                className="absolute inset-0 bg-black/55"
-                onClick={() => setMobileOpen(false)}
-                aria-hidden="true"
-              />
+              <div className="absolute inset-0 bg-black/55" onClick={() => setMobileOpen(false)} aria-hidden="true" />
               <div className="absolute left-0 top-0 h-full w-[min(320px,88vw)] p-4">
                 <Sidebar onNavigate={() => setMobileOpen(false)} />
               </div>
             </div>
           ) : null}
 
-          {/* Main */}
           <div className="flex-1 min-w-0">
-            {/* Top bar */}
             <header className="sticky top-0 z-30 px-4 sm:px-6 py-4">
               <div className="hi5-topbar rounded-3xl px-4 py-3 flex items-center justify-between gap-3">
                 <div className="min-w-0 flex items-center gap-3">
-                  {/* Mobile menu button */}
                   <button
                     type="button"
                     className="lg:hidden hi5-btn-ghost text-sm min-w-[44px] px-3"
@@ -208,18 +198,11 @@ export default function ControlShell({
                   </div>
                 </div>
 
-                {/* Harden tap targets */}
                 <div className="flex items-center gap-3 relative">
-                  <Link
-                    href="/apps"
-                    className="hi5-btn-ghost text-sm relative z-10 min-w-[96px] text-center"
-                  >
+                  <Link href="/apps" className="hi5-btn-ghost text-sm relative z-10 min-w-[96px] text-center">
                     Modules
                   </Link>
-                  <Link
-                    href="/auth/signout"
-                    className="hi5-btn-ghost text-sm relative z-10 min-w-[96px] text-center"
-                  >
+                  <Link href="/auth/signout" className="hi5-btn-ghost text-sm relative z-10 min-w-[96px] text-center">
                     Logout
                   </Link>
                 </div>
