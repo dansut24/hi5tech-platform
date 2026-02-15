@@ -1,5 +1,7 @@
 // apps/app/src/app/(modules)/control/[id]/page.tsx
 import Link from "next/link";
+import TerminalPanel from "./ui/terminal-panel";
+import FileBrowserPanel from "./ui/file-browser-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +40,7 @@ export default async function DevicePage({
             <div className="text-xs opacity-70">Device</div>
             <h1 className="text-2xl font-extrabold mt-1">{id}</h1>
             <p className="text-sm opacity-75 mt-2">
-              This is a stub details view. Next we’ll hook this to real device inventory + live tools.
+              Device tools live here. Remote screen will be handled by your deep-link viewer later.
             </p>
           </div>
 
@@ -79,37 +81,42 @@ export default async function DevicePage({
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="hi5-card p-4">
                 <div className="text-xs opacity-70">CPU</div>
-                <div className="text-2xl font-extrabold mt-1">23%</div>
-                <div className="text-xs opacity-70 mt-1">last 5 mins</div>
+                <div className="text-2xl font-extrabold mt-1">—</div>
+                <div className="text-xs opacity-70 mt-1">wire to metrics later</div>
               </div>
               <div className="hi5-card p-4">
                 <div className="text-xs opacity-70">Memory</div>
-                <div className="text-2xl font-extrabold mt-1">61%</div>
-                <div className="text-xs opacity-70 mt-1">12.2 GB / 20 GB</div>
+                <div className="text-2xl font-extrabold mt-1">—</div>
+                <div className="text-xs opacity-70 mt-1">wire to metrics later</div>
               </div>
               <div className="hi5-card p-4">
                 <div className="text-xs opacity-70">Disk</div>
-                <div className="text-2xl font-extrabold mt-1">74%</div>
-                <div className="text-xs opacity-70 mt-1">C: 186 GB free</div>
+                <div className="text-2xl font-extrabold mt-1">—</div>
+                <div className="text-xs opacity-70 mt-1">wire to metrics later</div>
               </div>
             </div>
 
             <div className="hi5-card p-4">
               <div className="text-sm font-semibold">Recent events</div>
               <ul className="mt-2 text-sm opacity-80 space-y-2">
-                <li>• Agent check-in successful</li>
-                <li>• Terminal session started (admin)</li>
-                <li>• Service restarted: “Spooler”</li>
+                <li>• Device checked-in</li>
+                <li>• Policy applied</li>
+                <li>• Service restarted</li>
               </ul>
             </div>
           </div>
         )}
 
-        {tab !== "overview" && (
+        {tab === "terminal" && <TerminalPanel deviceId={id} />}
+
+        {tab === "files" && <FileBrowserPanel deviceId={id} />}
+
+        {tab !== "overview" && tab !== "terminal" && tab !== "files" && (
           <div>
             <div className="text-lg font-semibold capitalize">{tab}</div>
             <p className="text-sm opacity-75 mt-2">
-              Coming next: wire this tab to your real RMM features (WebRTC remote, PTY terminal, file browser, services).
+              This tab is next. Terminal and Files are now live UI panels; the others will be wired to your Go control
+              server APIs.
             </p>
           </div>
         )}
