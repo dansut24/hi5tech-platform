@@ -3,6 +3,7 @@ import Link from "next/link";
 import TerminalPanel from "./ui/terminal-panel";
 import FileBrowserPanel from "./ui/file-browser-panel";
 import ServicesPanel from "./ui/services-panel";
+import ActivityPanel from "./ui/activity-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -116,6 +117,8 @@ export default async function DevicePage({
         {tab === "files" && <FileBrowserPanel deviceId={id} />}
 
         {tab === "services" && <ServicesPanel deviceId={id} />}
+
+        {tab === "activity" && <ActivityPanel deviceId={id} />}
 
         {tab !== "overview" && tab !== "terminal" && tab !== "files" && tab !== "services" && (
           <div>
