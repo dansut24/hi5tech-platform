@@ -1,4 +1,3 @@
-// apps/app/src/app/(modules)/control/devices/[id]/ui/terminal-panel.tsx
 "use client";
 
 import { useEffect, useRef, useState } from "react";
@@ -12,16 +11,16 @@ export default function TerminalPanel({ deviceId }: { deviceId: string }) {
   const wsRef = useRef<WebSocket | null>(null);
 
   function append(text: string) {
-    setBuffer((b) => (b + text).slice(-200_000)); // cap
+    setBuffer((b) => (b + text).slice(-200_000));
   }
 
-  async function connect() {
+  function connect() {
     setErr(null);
 
-    // This is a SAME-ORIGIN websocket URL you’ll implement on the server later.
-    // For now it will fail gracefully unless you wire the backend.
-    const proto = window.location.protocol === "https:" ? "wss" : "ws";
-    const url = `${proto}://${window.location.host}/api/control/terminal?device_id=${encodeURIComponent(deviceId)}`;
+    // Recommended future endpoint on your Go control server:
+    // wss://rmm.hi5tech.co.uk/ws/terminal?device_id=...
+    // (You can change this later once the backend is ready.)
+    const url = `wss://rmm.hi5tech.co.uk/ws/terminal?device_id=${encodeURIComponent(deviceId)}`;
 
     try {
       const ws = new WebSocket(url);
@@ -29,7 +28,7 @@ export default function TerminalPanel({ deviceId }: { deviceId: string }) {
 
       ws.onopen = () => {
         setConnected(true);
-        append(`\n[connected]\n`);
+        append("\n[connected]\n");
       };
 
       ws.onmessage = (ev) => {
@@ -37,12 +36,12 @@ export default function TerminalPanel({ deviceId }: { deviceId: string }) {
       };
 
       ws.onerror = () => {
-        setErr("WebSocket error (terminal backend not wired yet).");
+        setErr("Terminal WS not available yet (wire Go WS endpoint).");
       };
 
       ws.onclose = () => {
         setConnected(false);
-        append(`\n[disconnected]\n`);
+        append("\n[disconnected]\n");
       };
     } catch (e: any) {
       setErr(e?.message ?? "Failed to connect");
@@ -59,8 +58,6 @@ export default function TerminalPanel({ deviceId }: { deviceId: string }) {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     if (!input.trim()) return;
-
-    // simple line send; later you’ll send raw keystrokes for interactive PTY
     ws.send(input + "\n");
     setInput("");
   }
@@ -73,22 +70,21 @@ export default function TerminalPanel({ deviceId }: { deviceId: string }) {
   }, []);
 
   return (
-    <div className="hi5-panel p-4 space-y-3">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+    <div className="space-y-3">
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold">Terminal</div>
-          <div className="text-xs opacity-70 mt-1">
-            UI is ready. Next step is wiring the control server WS endpoint for PTY streaming.
-          </div>
+          <div className="text-lg font-semibold">Terminal</div>
+          <p className="text-sm opacity-75 mt-1">
+            This is the Control UI terminal panel. Next step: wire your Go control server WebSocket PTY stream.
+          </p>
         </div>
-
         <div className="flex gap-2">
           {!connected ? (
-            <button className="hi5-btn-primary text-sm" onClick={connect} type="button">
+            <button className="hi5-btn-primary text-sm" type="button" onClick={connect}>
               Connect
             </button>
           ) : (
-            <button className="hi5-btn-ghost text-sm" onClick={disconnect} type="button">
+            <button className="hi5-btn-ghost text-sm" type="button" onClick={disconnect}>
               Disconnect
             </button>
           )}
@@ -99,7 +95,7 @@ export default function TerminalPanel({ deviceId }: { deviceId: string }) {
 
       <div className="hi5-panel p-3">
         <pre className="whitespace-pre-wrap font-mono text-[12px] leading-5 max-h-[420px] overflow-auto">
-          {buffer || "Terminal output will appear here."}
+          {buffer || "Terminal output will appear here once the WS endpoint is wired."}
         </pre>
       </div>
 
