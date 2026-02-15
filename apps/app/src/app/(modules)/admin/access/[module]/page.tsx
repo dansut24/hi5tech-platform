@@ -1,4 +1,3 @@
-// apps/app/src/app/(modules)/admin/access/[module]/page.tsx
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -16,7 +15,7 @@ export default async function AdminAccessModulePage({
 }) {
   const { module } = await params;
   const mod = module as ModuleKey;
-  if (!mod || !["itsm", "control", "selfservice"].includes(mod)) redirect("/admin");
+  if (!["itsm", "control", "selfservice"].includes(mod)) redirect("/admin");
 
   const supabase = await supabaseServer();
 
@@ -39,14 +38,13 @@ export default async function AdminAccessModulePage({
 
   const { data: membership } = await supabase
     .from("memberships")
-    .select("role")
+    .select("id, role")
     .eq("tenant_id", tenant.id)
     .eq("user_id", me.id)
     .maybeSingle();
 
   const role = String(membership?.role || "");
-  const isAdmin = role === "owner" || role === "admin";
-  if (!isAdmin) redirect("/apps");
+  if (!(role === "owner" || role === "admin")) redirect("/apps");
 
   const { data: teams } = await supabase
     .from("teams")
@@ -54,25 +52,21 @@ export default async function AdminAccessModulePage({
     .eq("tenant_id", tenant.id)
     .order("name", { ascending: true });
 
-  const teamIds = (teams ?? []).map((t) => (t as any).id as string);
-  const { data: roles } = teamIds.length
-    ? await supabase
-        .from("team_roles")
-        .select("id, team_id, role_key, role_name, scopes")
-        .in("team_id", teamIds)
-        .order("role_key", { ascending: true })
-    : { data: [] as any[] };
+  const teamIds = (teams ?? []).map((t: any) => t.id);
+  const { data: rolesData } =
+    teamIds.length > 0
+      ? await supabase
+          .from("team_roles")
+          .select("id, team_id, role_key, role_name, scopes")
+          .in("team_id", teamIds)
+          .order("role_key", { ascending: true })
+      : { data: [] as any[] };
 
   return (
     <AccessTeamsClient
       moduleKey={mod}
-      tenant={{
-        id: tenant.id,
-        name: tenant.name ?? tenant.subdomain,
-        domain: tenant.domain,
-        subdomain: tenant.subdomain,
-      }}
-      initial={{ teams: (teams as any[]) ?? [], roles: (roles as any[]) ?? [] }}
+      tenant={{ id: tenant.id, name: tenant.name ?? tenant.subdomain }}
+      initial={{ teams: (teams as any[]) ?? [], roles: (rolesData as any[]) ?? [] }}
     />
   );
 }
