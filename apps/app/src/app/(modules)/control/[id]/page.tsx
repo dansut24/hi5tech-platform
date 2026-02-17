@@ -1,9 +1,15 @@
 // apps/app/src/app/(modules)/control/[id]/page.tsx
+//
+// Device detail page. The "Connect" button launches the Electron viewer via
+// the hi5tech:// deep link. If the viewer is not installed, it shows an
+// install prompt instead of silently failing.
+
 import Link from "next/link";
 import TerminalPanel from "./ui/terminal-panel";
 import FileBrowserPanel from "./ui/file-browser-panel";
 import ServicesPanel from "./ui/services-panel";
 import ActivityPanel from "./ui/activity-panel";
+import RemotePanel from "./ui/remote-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -42,13 +48,17 @@ export default async function DevicePage({
             <div className="text-xs opacity-70">Device</div>
             <h1 className="text-2xl font-extrabold mt-1">{id}</h1>
             <p className="text-sm opacity-75 mt-2">
-              Device tools live here. Remote screen will be handled by your deep-link viewer later.
+              Remote access, terminal, file browser and service management.
             </p>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Link className="hi5-btn-primary text-sm" href={`/control/${id}?tab=remote`}>
-              Remote
+            {/* Connect launches the Electron viewer via hi5tech:// deep link */}
+            <Link
+              className="hi5-btn-primary text-sm"
+              href={`/control/${id}?tab=remote`}
+            >
+              Connect
             </Link>
             <Link className="hi5-btn-ghost text-sm" href={`/control/${id}?tab=terminal`}>
               Terminal
@@ -70,9 +80,9 @@ export default async function DevicePage({
 
         <div className="mt-4 flex flex-wrap gap-2">
           <TabLink href={`/control/${id}?tab=overview`} active={tab === "overview"} label="Overview" />
-          <TabLink href={`/control/${id}?tab=remote`} active={tab === "remote"} label="Remote" />
+          <TabLink href={`/control/${id}?tab=remote`}   active={tab === "remote"}   label="Remote" />
           <TabLink href={`/control/${id}?tab=terminal`} active={tab === "terminal"} label="Terminal" />
-          <TabLink href={`/control/${id}?tab=files`} active={tab === "files"} label="Files" />
+          <TabLink href={`/control/${id}?tab=files`}    active={tab === "files"}    label="Files" />
           <TabLink href={`/control/${id}?tab=services`} active={tab === "services"} label="Services" />
           <TabLink href={`/control/${id}?tab=activity`} active={tab === "activity"} label="Activity" />
         </div>
@@ -82,7 +92,6 @@ export default async function DevicePage({
         {tab === "overview" && (
           <div className="space-y-4">
             <div className="text-lg font-semibold">Overview</div>
-
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="hi5-card p-4">
                 <div className="text-xs opacity-70">CPU</div>
@@ -100,7 +109,6 @@ export default async function DevicePage({
                 <div className="text-xs opacity-70 mt-1">wire to metrics later</div>
               </div>
             </div>
-
             <div className="hi5-card p-4">
               <div className="text-sm font-semibold">Recent events</div>
               <ul className="mt-2 text-sm opacity-80 space-y-2">
@@ -112,23 +120,25 @@ export default async function DevicePage({
           </div>
         )}
 
+        {/* Remote tab: shows the ConnectPanel which handles deep link launch */}
+        {tab === "remote" && <RemotePanel deviceId={id} />}
+
         {tab === "terminal" && <TerminalPanel deviceId={id} />}
-
-        {tab === "files" && <FileBrowserPanel deviceId={id} />}
-
+        {tab === "files"    && <FileBrowserPanel deviceId={id} />}
         {tab === "services" && <ServicesPanel deviceId={id} />}
-
         {tab === "activity" && <ActivityPanel deviceId={id} />}
 
-        {tab !== "overview" && tab !== "terminal" && tab !== "files" && tab !== "services" && (
-          <div>
-            <div className="text-lg font-semibold capitalize">{tab}</div>
-            <p className="text-sm opacity-75 mt-2">
-              This tab is next. Terminal / Files / Services are now live UI panels; the others will be wired to your Go
-              control server APIs.
-            </p>
-          </div>
-        )}
+        {tab !== "overview" &&
+          tab !== "remote" &&
+          tab !== "terminal" &&
+          tab !== "files" &&
+          tab !== "services" &&
+          tab !== "activity" && (
+            <div>
+              <div className="text-lg font-semibold capitalize">{tab}</div>
+              <p className="text-sm opacity-75 mt-2">This tab is coming soon.</p>
+            </div>
+          )}
       </div>
     </div>
   );
