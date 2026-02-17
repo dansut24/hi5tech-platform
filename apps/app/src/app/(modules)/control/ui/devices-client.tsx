@@ -1,11 +1,11 @@
-// apps/app/src/app/(modules)/control/ui/devices-client.tsx
+// apps/app/src/app/(modules)/control/devices/ui/devices-client.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import StatCards from "./stat-cards";
-import DeviceTable from "./device-table";
-import DeviceDetailsPanel from "./device-details-panel";
-import { toDeviceRow, type DeviceApiRow, type DeviceRow } from "./device-data";
+import StatCards from "../../ui/stat-cards";
+import DeviceTable from "../../ui/device-table";
+import DeviceDetailsPanel from "../../ui/device-details-panel";
+import { toDeviceRow, type DeviceApiRow, type DeviceRow } from "../../ui/device-data";
 
 type Filter = "all" | "online" | "offline" | "warning";
 
@@ -23,9 +23,10 @@ export default function DevicesClient() {
   const [tag, setTag] = useState<string>("all");
 
   const [devices, setDevices] = useState<DeviceRow[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // Load devices
+  // Load devices from the real API, refreshing every 10 s
   useEffect(() => {
     let cancelled = false;
 
@@ -38,43 +39,51 @@ export default function DevicesClient() {
         if (!cancelled) {
           setDevices(mapped);
           setSelectedId((prev) => prev ?? mapped[0]?.id ?? null);
+          setLoading(false);
         }
       } catch {
-        // keep empty; UI will show 0 devices
+        if (!cancelled) setLoading(false);
+        // keep empty; UI shows 0 devices
       }
     }
 
     load();
-    const t = setInterval(load, 10_000); // refresh list
+    const t = setInterval(load, 10_000);
     return () => {
       cancelled = true;
       clearInterval(t);
     };
   }, []);
 
-  const allTags = useMemo(() => uniq(devices.flatMap((d) => d.tags)).sort((a, b) => a.localeCompare(b)), [devices]);
-  const allOS = useMemo(() => uniq(devices.map((d) => d.os)).sort((a, b) => a.localeCompare(b)), [devices]);
+  const allTags = useMemo(
+    () => uniq(devices.flatMap((d) => d.tags)).sort((a, b) => a.localeCompare(b)),
+    [devices]
+  );
+  const allOS = useMemo(
+    () => uniq(devices.map((d) => d.os)).sort((a, b) => a.localeCompare(b)),
+    [devices]
+  );
 
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
-
     return devices.filter((d) => {
       if (filter !== "all" && d.status !== filter) return false;
       if (os !== "all" && d.os !== os) return false;
       if (tag !== "all" && !d.tags.includes(tag)) return false;
-
       if (!term) return true;
-
-      const hay = [d.name, d.os, d.user ?? "", d.ip ?? "", d.lastSeen, d.tags.join(" ")].join(" ").toLowerCase();
+      const hay = [d.name, d.os, d.user ?? "", d.ip ?? "", d.lastSeen, d.tags.join(" ")]
+        .join(" ")
+        .toLowerCase();
       return hay.includes(term);
     });
   }, [devices, filter, os, tag, q]);
 
-  const selected: DeviceRow | null = useMemo(() => {
-    return devices.find((d) => d.id === selectedId) ?? null;
-  }, [devices, selectedId]);
+  const selected: DeviceRow | null = useMemo(
+    () => devices.find((d) => d.id === selectedId) ?? null,
+    [devices, selectedId]
+  );
 
-  // If filter/search removes selected device, pick first visible.
+  // If filter/search hides the selected device, pick the first visible one
   useMemo(() => {
     if (!selectedId) return;
     const stillVisible = filtered.some((d) => d.id === selectedId);
@@ -105,9 +114,7 @@ export default function DevicesClient() {
               <select className="hi5-input" value={os} onChange={(e) => setOs(e.target.value)}>
                 <option value="all">All</option>
                 {allOS.map((x) => (
-                  <option key={x} value={x}>
-                    {x}
-                  </option>
+                  <option key={x} value={x}>{x}</option>
                 ))}
               </select>
             </label>
@@ -117,9 +124,7 @@ export default function DevicesClient() {
               <select className="hi5-input" value={tag} onChange={(e) => setTag(e.target.value)}>
                 <option value="all">All</option>
                 {allTags.map((x) => (
-                  <option key={x} value={x}>
-                    {x}
-                  </option>
+                  <option key={x} value={x}>{x}</option>
                 ))}
               </select>
             </label>
@@ -139,8 +144,14 @@ export default function DevicesClient() {
         </div>
 
         <div className="mt-3 text-xs opacity-70">
-          Showing <span className="font-semibold">{filtered.length}</span> of{" "}
-          <span className="font-semibold">{devices.length}</span> devices.
+          {loading ? (
+            "Loading devices…"
+          ) : (
+            <>
+              Showing <span className="font-semibold">{filtered.length}</span> of{" "}
+              <span className="font-semibold">{devices.length}</span> devices.
+            </>
+          )}
         </div>
       </div>
 
@@ -151,7 +162,6 @@ export default function DevicesClient() {
         <div className="hidden lg:block">
           <DeviceDetailsPanel device={selected} />
         </div>
-
         <div className="lg:hidden">
           <DeviceDetailsPanel device={selected} compact />
         </div>
