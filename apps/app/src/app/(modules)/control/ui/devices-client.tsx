@@ -1,11 +1,11 @@
-// apps/app/src/app/(modules)/control/devices/ui/devices-client.tsx
+// apps/app/src/app/(modules)/control/ui/devices-client.tsx
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import StatCards from "../../ui/stat-cards";
-import DeviceTable from "../../ui/device-table";
-import DeviceDetailsPanel from "../../ui/device-details-panel";
-import { toDeviceRow, type DeviceApiRow, type DeviceRow } from "../../ui/device-data";
+import StatCards from "./stat-cards";
+import DeviceTable from "./device-table";
+import DeviceDetailsPanel from "./device-details-panel";
+import { toDeviceRow, type DeviceApiRow, type DeviceRow } from "./device-data";
 
 type Filter = "all" | "online" | "offline" | "warning";
 
@@ -43,7 +43,6 @@ export default function DevicesClient() {
         }
       } catch {
         if (!cancelled) setLoading(false);
-        // keep empty; UI shows 0 devices
       }
     }
 
@@ -86,8 +85,9 @@ export default function DevicesClient() {
   // If filter/search hides the selected device, pick the first visible one
   useMemo(() => {
     if (!selectedId) return;
-    const stillVisible = filtered.some((d) => d.id === selectedId);
-    if (!stillVisible) setSelectedId(filtered[0]?.id ?? null);
+    if (!filtered.some((d) => d.id === selectedId)) {
+      setSelectedId(filtered[0]?.id ?? null);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filtered]);
 
@@ -95,7 +95,6 @@ export default function DevicesClient() {
     <div className="space-y-4 sm:space-y-6">
       <StatCards devices={devices} activeFilter={filter} onFilter={setFilter} />
 
-      {/* Controls */}
       <div className="hi5-panel p-4">
         <div className="flex flex-col lg:flex-row lg:items-center gap-3">
           <div className="flex-1">
@@ -155,7 +154,6 @@ export default function DevicesClient() {
         </div>
       </div>
 
-      {/* Split view */}
       <div className="grid grid-cols-1 lg:grid-cols-[1.25fr_.75fr] gap-4">
         <DeviceTable devices={filtered} selectedId={selectedId} onSelect={setSelectedId} />
 
