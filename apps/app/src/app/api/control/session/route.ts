@@ -63,7 +63,7 @@ export async function POST(req: Request) {
 
   // The "server" field from Go is the base URL (e.g. https://rmm.hi5tech.co.uk).
   // Build the wss_url the Electron viewer needs for its signalling WebSocket.
-  // The viewer WS path matches the agent's pattern: /viewer/ws
+  // The Go server registers the viewer WS at /ws/viewer (NOT /viewer/ws).
   const serverBase = (data.server ?? RMM_API).replace(/\/+$/, "");
   const wssBase = serverBase.replace(/^https?:\/\//, (m) =>
     m.startsWith("https") ? "wss://" : "ws://"
@@ -73,7 +73,7 @@ export async function POST(req: Request) {
     session_id: data.session_id,
     token:      data.token,
     device_id:  data.device_id,
-    wss_url:    `${wssBase}/viewer/ws`,
+    wss_url:    `${wssBase}/ws/viewer`,
     expires_at: data.expires_at,
   });
 }
