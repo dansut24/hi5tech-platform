@@ -475,3 +475,97 @@ body::after {
 /* Scrollbar utilities */
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ----------------------------------------------------------
+   Focus rings — keyboard accessibility
+---------------------------------------------------------- */
+
+:focus-visible {
+  outline: 2px solid rgb(var(--hi5-accent) / 0.7);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* Suppress focus ring for mouse clicks, keep for keyboard */
+:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ----------------------------------------------------------
+   Skeleton shimmer animation
+---------------------------------------------------------- */
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgb(var(--hi5-border) / 0.08) 25%,
+    rgb(var(--hi5-border) / 0.16) 50%,
+    rgb(var(--hi5-border) / 0.08) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* ----------------------------------------------------------
+   Safe area padding (notches / home bar on iOS)
+---------------------------------------------------------- */
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* ----------------------------------------------------------
+   Slide-in animation for dropdowns
+---------------------------------------------------------- */
+
+@keyframes slideInFromTop {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-in {
+  animation: slideInFromTop 150ms ease forwards;
+}
+
+/* ----------------------------------------------------------
+   Line clamp utility
+---------------------------------------------------------- */
+
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ----------------------------------------------------------
+   Touch target minimum size (mobile accessibility)
+---------------------------------------------------------- */
+
+@media (pointer: coarse) {
+  button, [role="button"], a {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Exception for inline/badge-style elements */
+  .hi5-badge, .no-min-touch {
+    min-height: unset;
+    min-width: unset;
+  }
+}
