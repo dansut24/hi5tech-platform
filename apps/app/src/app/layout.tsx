@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { supabaseServer } from "@/lib/supabase/server";
 import SystemTheme from "@/components/theme/SystemTheme";
+import { ToastProvider } from "@/components/ui/toast";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -205,7 +206,7 @@ export default async function RootLayout({
       <body>
         <style dangerouslySetInnerHTML={{ __html: cssVars }} />
         {theme_mode === "system" ? <SystemTheme /> : null}
-        {children}
+        <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
   );
