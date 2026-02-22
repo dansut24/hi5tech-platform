@@ -36,7 +36,7 @@
   --hi5-card-alpha: 0.78;         /* was too low */
   --hi5-panel-alpha: 0.84;        /* panel slightly stronger */
 
-  /* Inner scrim to “neutralise” the blobs behind content */
+  /* Inner scrim to "neutralise" the blobs behind content */
   --hi5-scrim-light: 255 255 255;
   --hi5-scrim-alpha: 0.55;
 
@@ -64,7 +64,7 @@
       rgb(var(--hi5-accent-3) / 0.28) 32%,
       transparent 66%);
 
-  /* A subtle “wash” to blend spheres */
+  /* A subtle "wash" to blend spheres */
   --hi5-wash:
     radial-gradient(900px 520px at 18% 10%,
       rgb(var(--hi5-accent) / 0.12),
@@ -249,7 +249,7 @@ body::after {
   overflow: hidden;
 }
 
-/* Inner scrim: the KEY fix so content doesn’t get washed out */
+/* Inner scrim: the KEY fix so content doesn't get washed out */
 .hi5-card::before,
 .hi5-panel::before {
   content: "";
@@ -265,7 +265,7 @@ body::after {
 .hi5-panel > * { position: relative; z-index: 1; }
 
 /* ----------------------------------------------------------
-   Text defaults (don’t rely on opacity)
+   Text defaults (don't rely on opacity)
 ---------------------------------------------------------- */
 
 .hi5-accent { color: rgb(var(--hi5-accent)); }
@@ -309,7 +309,7 @@ body::after {
 }
 
 /* ----------------------------------------------------------
-   Buttons (vibrant + 3D) — supports solid mode
+   Buttons (vibrant + 3D) - supports solid mode
 ---------------------------------------------------------- */
 
 .hi5-btn-primary,
@@ -334,7 +334,7 @@ body::after {
 
   border: 1px solid rgb(255 255 255 / 0.34);
 
-  /* 3D: highlight + drop shadow + “lift” */
+  /* 3D: highlight + drop shadow + "lift" */
   box-shadow:
     0 18px 40px rgb(0 0 0 / 0.14),
     0 14px 34px rgb(var(--hi5-accent) / 0.18),
@@ -477,7 +477,7 @@ body::after {
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
 /* ----------------------------------------------------------
-   Focus rings — keyboard accessibility
+   Focus rings - keyboard accessibility
 ---------------------------------------------------------- */
 
 :focus-visible {
