@@ -3,10 +3,6 @@ import SelfServiceShell from "./ui/selfservice-shell";
 
 export const dynamic = "force-dynamic";
 
-export default function SelfServiceLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function SelfServiceLayout({ children }: { children: React.ReactNode }) {
   return <SelfServiceShell>{children}</SelfServiceShell>;
 }
