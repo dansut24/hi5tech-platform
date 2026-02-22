@@ -2,12 +2,18 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import AccountDropdown from "@/components/ui/account-dropdown";
 
 type ModuleKey = "itsm" | "control" | "selfservice" | "admin";
 
 type Props = {
   allowedModules: ModuleKey[];
   tenantLabel: string | null;
+  user?: {
+    name?: string | null;
+    email?: string | null;
+    role?: string | null;
+  } | null;
 };
 
 function NavLink({
@@ -35,7 +41,7 @@ function NavLink({
   );
 }
 
-export default function TopBar({ allowedModules, tenantLabel }: Props) {
+export default function TopBar({ allowedModules, tenantLabel, user }: Props) {
   const pathname = usePathname();
 
   const has = (m: ModuleKey) =>
@@ -72,13 +78,13 @@ export default function TopBar({ allowedModules, tenantLabel }: Props) {
             </div>
           </div>
 
-          {/* Right: account */}
-          <Link
-            href="/login"
-            className="text-sm opacity-80 hover:opacity-100 transition shrink-0"
-          >
-            Account
-          </Link>
+          {/* Right: account dropdown */}
+          <AccountDropdown
+            name={user?.name}
+            email={user?.email}
+            role={user?.role}
+            tenantLabel={tenantLabel}
+          />
         </div>
 
         {/* Module nav */}
