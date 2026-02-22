@@ -7,19 +7,13 @@ import AdminShell from "../ui/admin-shell";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminProtectedLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function AdminProtectedLayout({ children }: { children: React.ReactNode }) {
   const supabase = await supabaseServer();
 
-  // Auth
   const { data: userRes } = await supabase.auth.getUser();
   const user = userRes.user;
   if (!user) redirect("/login");
 
-  // Tenant from host
   const host = getEffectiveHost(await headers());
   const parsed = parseTenantHost(host);
   if (!parsed.subdomain) notFound();
@@ -33,7 +27,6 @@ export default async function AdminProtectedLayout({
 
   if (!tenant || tenant.is_active === false) notFound();
 
-  // Must be owner/admin
   const { data: myMembership } = await supabase
     .from("memberships")
     .select("role")
@@ -45,17 +38,14 @@ export default async function AdminProtectedLayout({
   const isAdmin = myRole === "owner" || myRole === "admin";
   if (!isAdmin) redirect("/apps");
 
-  // ✅ Authoritative hard gate (protected admin only)
   const { data: settings } = await supabase
     .from("tenant_settings")
     .select("onboarding_completed")
     .eq("tenant_id", tenant.id)
     .maybeSingle();
 
-  const onboardingCompleted = Boolean(settings?.onboarding_completed);
-  if (!onboardingCompleted) redirect("/admin/setup");
+  if (!Boolean(settings?.onboarding_completed)) redirect("/admin/setup");
 
-  // Profile for header
   const { data: profile } = await supabase
     .from("profiles")
     .select("full_name, email")
@@ -66,16 +56,11 @@ export default async function AdminProtectedLayout({
     (profile?.full_name && String(profile.full_name).trim()) ||
     (user.email ? user.email.split("@")[0] : "User");
 
-  const email = (profile?.email || user.email || "").toLowerCase();
+  const email = profile?.email || user.email || "";
 
   return (
     <AdminShell
-      user={{
-        id: user.id,
-        name: displayName,
-        email,
-        role: myRole,
-      }}
+      user={{ id: user.id, name: displayName, email, role: myRole }}
       tenant={{
         id: tenant.id,
         name: tenant.name ?? tenant.subdomain,
