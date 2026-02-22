@@ -23,43 +23,47 @@ type Props = {
 export default function AccountDropdown({ name, email, role, tenantLabel }: Props) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+  const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
+
   const btnRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const [mounted, setMounted] = useState(false);
 
-  useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    // Ensure we have a valid portal target in all environments
+    if (typeof document !== "undefined") setPortalTarget(document.body);
+  }, []);
+
+  const userInitials = useMemo(() => initials(name, email), [name, email]);
+  const displayName = name || email?.split("@")[0] || "Account";
 
   function computePos() {
     if (!btnRef.current) return null;
     const rect = btnRef.current.getBoundingClientRect();
-    return { top: rect.bottom + 8, right: Math.max(12, window.innerWidth - rect.right) };
+
+    // Keep within viewport a bit
+    const right = Math.max(12, window.innerWidth - rect.right);
+    const top = rect.bottom + 8;
+
+    return { top, right };
   }
 
-  function openMenu() {
-    const p = computePos();
-    if (!p) return;
-    setPos(p);
-    setOpen(true);
-  }
-
-  // Close on outside click (including menu)
+  // When opening, compute position (and recompute if already open and layout changes)
   useEffect(() => {
     if (!open) return;
-
-    function handler(e: MouseEvent) {
-      const t = e.target as Node;
-      if (btnRef.current && btnRef.current.contains(t)) return;
-      if (menuRef.current && menuRef.current.contains(t)) return;
-      setOpen(false);
-    }
-
-    document.addEventListener("mousedown", handler, { capture: true });
-    return () => document.removeEventListener("mousedown", handler, { capture: true } as any);
+    const p = computePos();
+    if (p) setPos(p);
   }, [open]);
 
-  // Close on escape; reposition on resize; optionally close on scroll
+  // Close on outside pointer down
   useEffect(() => {
     if (!open) return;
+
+    function onPointerDown(e: PointerEvent) {
+      const t = e.target as Node;
+      if (btnRef.current?.contains(t)) return;
+      if (menuRef.current?.contains(t)) return;
+      setOpen(false);
+    }
 
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setOpen(false);
@@ -70,35 +74,30 @@ export default function AccountDropdown({ name, email, role, tenantLabel }: Prop
       if (p) setPos(p);
     }
 
-    // If you want it to stay open while scrolling, swap this to reposition instead of closing.
+    // If you prefer it to remain open while scrolling, change this to reposition instead
     function onScroll() {
-      // Option A (recommended): close to avoid weird detachment
       setOpen(false);
-
-      // Option B: reposition instead (comment out setOpen(false) and uncomment below)
-      // const p = computePos();
-      // if (p) setPos(p);
     }
 
+    document.addEventListener("pointerdown", onPointerDown, { capture: true });
     document.addEventListener("keydown", onKey);
     window.addEventListener("resize", onResize, { passive: true });
     window.addEventListener("scroll", onScroll, { passive: true, capture: true });
 
     return () => {
+      document.removeEventListener("pointerdown", onPointerDown, { capture: true } as any);
       document.removeEventListener("keydown", onKey);
       window.removeEventListener("resize", onResize as any);
       window.removeEventListener("scroll", onScroll as any, { capture: true } as any);
     };
   }, [open]);
 
-  const userInitials = useMemo(() => initials(name, email), [name, email]);
-  const displayName = name || email?.split("@")[0] || "Account";
-
-  const menuNode =
+  const menu =
     open && pos ? (
       <div
         ref={menuRef}
-        className="fixed z-[99999] w-64 py-2 hi5-panel border hi5-border shadow-xl rounded-2xl"
+        className="fixed z-[99999] w-64 py-2 border hi5-border shadow-2xl rounded-2xl
+                   bg-white/95 dark:bg-black/85 backdrop-blur-xl"
         style={{ top: pos.top, right: pos.right }}
         role="menu"
       >
@@ -142,9 +141,9 @@ export default function AccountDropdown({ name, email, role, tenantLabel }: Prop
         <div className="border-t hi5-border py-1">
           <a
             href="/auth/signout"
+            onClick={() => setOpen(false)}
             className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-black/5 dark:hover:bg-white/5 transition text-rose-600 dark:text-rose-400"
             role="menuitem"
-            onClick={() => setOpen(false)}
           >
             <LogOut size={16} />
             Sign out
@@ -158,7 +157,7 @@ export default function AccountDropdown({ name, email, role, tenantLabel }: Prop
       <button
         ref={btnRef}
         type="button"
-        onClick={() => (open ? setOpen(false) : openMenu())}
+        onClick={() => setOpen((v) => !v)}
         className={[
           "flex items-center gap-2 rounded-xl border hi5-border px-2.5 py-1.5",
           "hover:bg-black/5 dark:hover:bg-white/5 transition",
@@ -180,8 +179,7 @@ export default function AccountDropdown({ name, email, role, tenantLabel }: Prop
         />
       </button>
 
-      {/* Portal ensures dropdown overlays everything and cannot be clipped */}
-      {mounted && menuNode ? createPortal(menuNode, document.body) : null}
+      {portalTarget && menu ? createPortal(menu, portalTarget) : null}
     </>
   );
 }
