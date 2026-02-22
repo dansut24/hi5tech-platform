@@ -109,33 +109,33 @@ function Breadcrumb() {
   let current = "";
   for (const seg of segments) {
     current += `/${seg}`;
-    crumbs.push({ label: labelFromSeg(seg), href: current });
+    const label = seg.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    crumbs.push({ label, href: current });
   }
 
   return (
-    <nav
-      aria-label="Breadcrumb"
-      className="mb-3 overflow-hidden"
-    >
-      <ol className="flex items-center gap-1.5 text-xs opacity-60 whitespace-nowrap">
+    <nav aria-label="Breadcrumb" className="mb-3 overflow-hidden">
+      <ol className="flex items-center gap-1.5 text-xs opacity-60 whitespace-nowrap leading-none">
         {crumbs.map((c, i) => {
           const isLast = i === crumbs.length - 1;
+
           return (
             <React.Fragment key={c.href}>
               {i > 0 ? (
-                <li aria-hidden="true" className="flex items-center">
-                  <Chevron size={11} className="opacity-50" />
+                <li aria-hidden="true" className="inline-flex items-center leading-none">
+                  <Chevron size={11} className="opacity-50 translate-y-[0.5px]" />
                 </li>
               ) : null}
-              <li className="min-w-0">
+
+              <li className="min-w-0 inline-flex items-center leading-none">
                 {isLast ? (
-                  <span className="font-medium opacity-100 truncate block max-w-[240px]">
+                  <span className="font-medium opacity-100 truncate max-w-[240px] inline-flex items-center leading-none">
                     {c.label}
                   </span>
                 ) : (
                   <Link
                     href={c.href}
-                    className="hover:opacity-100 transition truncate block max-w-[160px]"
+                    className="hover:opacity-100 transition truncate max-w-[160px] inline-flex items-center leading-none"
                   >
                     {c.label}
                   </Link>
