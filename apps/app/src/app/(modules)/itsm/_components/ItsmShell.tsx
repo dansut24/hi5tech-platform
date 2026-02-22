@@ -21,12 +21,16 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronRight as Chevron,
-  User,
 } from "lucide-react";
 
 import { useItsmUiStore } from "../_state/itsm-ui-store";
+import AccountDropdown from "@/components/ui/account-dropdown";
 
-type Props = { children: ReactNode };
+type Props = {
+  children: ReactNode;
+  user?: { name?: string | null; email?: string | null; role?: string | null } | null;
+  tenantLabel?: string | null;
+};
 
 function tabTitleFromPath(pathname: string) {
   if (pathname === "/itsm") return "Dashboard";
@@ -122,7 +126,7 @@ function Breadcrumb() {
   );
 }
 
-export default function ItsmShell({ children }: Props) {
+export default function ItsmShell({ children, user, tenantLabel }: Props) {
   const pathname = usePathname();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
@@ -217,8 +221,8 @@ export default function ItsmShell({ children }: Props) {
 
   return (
     <div className="min-h-dvh flex flex-col">
-      {/* ===== Sticky header ===== */}
-      <div className="sticky top-0 z-40 hi5-panel border-b hi5-border shrink-0">
+      {/* ===== Header (static - scrolls with page) ===== */}
+      <div className="hi5-panel border-b hi5-border shrink-0">
         {/* Header row */}
         <div className="h-14 px-3 sm:px-4 flex items-center gap-3">
           {/* Hamburger - mobile */}
@@ -276,13 +280,12 @@ export default function ItsmShell({ children }: Props) {
             >
               <Bell size={18} />
             </button>
-            <button
-              type="button"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition"
-              aria-label="Profile"
-            >
-              <User size={18} />
-            </button>
+            <AccountDropdown
+              name={user?.name}
+              email={user?.email}
+              role={user?.role}
+              tenantLabel={tenantLabel}
+            />
           </div>
         </div>
 
