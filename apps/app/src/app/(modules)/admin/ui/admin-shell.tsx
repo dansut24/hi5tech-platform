@@ -76,7 +76,6 @@ export default function AdminShell({
       }
       showBreadcrumbs={true}
     >
-      {/* Keep your content max width from before */}
       <div className="max-w-6xl mx-auto">{children}</div>
     </AppShell>
   );
