@@ -1,10 +1,9 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Monitor, TerminalSquare, FolderOpen, Settings, LayoutDashboard } from "lucide-react";
+import { LayoutDashboard, Monitor, TerminalSquare, FolderOpen, Settings, Bell, Search } from "lucide-react";
 import { AppShell, type ShellNavItem } from "@/components/shell";
 import AccountDropdown from "@/components/ui/account-dropdown";
-import { Bell, Search } from "lucide-react";
 
 type Props = {
   children: ReactNode;
