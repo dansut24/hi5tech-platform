@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
@@ -16,7 +16,7 @@ import {
 import { useToast } from "@/components/ui/toast";
 
 function fmt(ts?: string | null) {
-  if (!ts) return "—";
+  if (!ts) return "-";
   try {
     const d = new Date(ts);
     const now = new Date();
@@ -27,7 +27,7 @@ function fmt(ts?: string | null) {
     if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
     return d.toLocaleDateString();
   } catch {
-    return ts ?? "—";
+    return ts ?? "-";
   }
 }
 
@@ -109,7 +109,7 @@ function IncidentCard({
               <div className="flex items-start gap-2">
                 <AlertCircle size={15} className="mt-0.5 shrink-0 opacity-50" />
                 <div className="min-w-0">
-                  <span className="text-xs font-mono opacity-50 mr-1.5">{r.number ?? "—"}</span>
+                  <span className="text-xs font-mono opacity-50 mr-1.5">{r.number ?? "-"}</span>
                   <span className="text-sm font-semibold group-hover:text-[rgb(var(--hi5-accent))] transition line-clamp-2">
                     {r.title ?? "Untitled incident"}
                   </span>
@@ -131,11 +131,11 @@ function IncidentCard({
         {/* Badges row */}
         <div className="flex flex-wrap gap-1.5 mt-3">
           <Badge className={statCls}>
-            {(r.status ?? "—").replace(/_/g, " ")}
+            {(r.status ?? "-").replace(/_/g, " ")}
           </Badge>
           <Badge className={pri.bg}>
             <span className={["h-1.5 w-1.5 rounded-full", pri.dot].join(" ")} />
-            {r.priority ?? "—"}
+            {r.priority ?? "-"}
           </Badge>
           {r.triage_status && (
             <Badge>{r.triage_status.replace(/_/g, " ")}</Badge>
@@ -158,7 +158,7 @@ function IncidentCard({
           )}
         </div>
 
-        {/* Actions row — stacked on mobile, inline on sm+ */}
+        {/* Actions row - stacked on mobile, inline on sm+ */}
         <div className="mt-4 pt-3 border-t hi5-divider flex flex-col sm:flex-row gap-2">
           {/* Assign to me */}
           <button
@@ -172,7 +172,7 @@ function IncidentCard({
             ) : (
               <UserCheck size={13} />
             )}
-            {busy ? "Assigning…" : "Assign to me"}
+            {busy ? "Assigning..." : "Assign to me"}
           </button>
 
           {/* Team assignment */}
