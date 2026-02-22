@@ -10,6 +10,7 @@ import {
   Plus,
   Pin,
   X,
+  Search,
   MoreHorizontal,
   LayoutDashboard,
   AlertCircle,
@@ -172,6 +173,8 @@ export default function ItsmShell({ children, user, tenantLabel }: Props) {
 
   // Context menu for tabs
   const [menu, setMenu] = useState<MenuState>({ open: false });
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const longPressTimerRef = useRef<number | null>(null);
 
   function closeMenu() { setMenu({ open: false }); }
@@ -221,10 +224,47 @@ export default function ItsmShell({ children, user, tenantLabel }: Props) {
 
   return (
     <div className="min-h-dvh flex flex-col">
+      {/* ===== Search overlay ===== */}
+      {searchOpen && (
+        <div className="fixed inset-0 z-[70] flex flex-col" onClick={() => setSearchOpen(false)}>
+          <div className="bg-black/60 backdrop-blur-sm absolute inset-0" />
+          <div
+            className="relative z-10 mx-4 mt-16 sm:mx-auto sm:w-full sm:max-w-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="hi5-panel border hi5-border rounded-2xl shadow-xl overflow-hidden">
+              <div className="flex items-center gap-3 px-4 h-14 border-b hi5-border">
+                <Search size={18} className="opacity-50 shrink-0" />
+                <input
+                  ref={searchInputRef}
+                  autoFocus
+                  className="bg-transparent outline-none flex-1 text-sm placeholder:opacity-40"
+                  placeholder="Search incidents, users, assets..."
+                  inputMode="search"
+                  onKeyDown={(e) => { if (e.key === "Escape") setSearchOpen(false); }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setSearchOpen(false)}
+                  className="shrink-0 h-8 w-8 rounded-lg border hi5-border flex items-center justify-center opacity-60 hover:opacity-100 transition"
+                  aria-label="Close search"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="p-4 text-xs opacity-50 text-center">
+                Type to search across all ITSM records
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ===== Header (static - scrolls with page) ===== */}
-      <div className="hi5-panel border-b hi5-border shrink-0">
+      {/* overflow-visible is critical so the account dropdown is not clipped */}
+      <div className="hi5-panel border-b hi5-border shrink-0 overflow-visible">
         {/* Header row */}
-        <div className="h-14 px-3 sm:px-4 flex items-center gap-3">
+        <div className="h-14 px-3 sm:px-4 flex items-center gap-2 overflow-visible">
           {/* Hamburger - mobile */}
           <button
             type="button"
@@ -252,27 +292,21 @@ export default function ItsmShell({ children, user, tenantLabel }: Props) {
             Hi5Tech ITSM
           </Link>
 
-          {/* Search */}
-          <div className="flex-1 min-w-0">
-            <div className="hi5-input flex items-center gap-2 px-3 h-10 rounded-xl border hi5-border">
-              <input
-                className="bg-transparent outline-none w-full text-sm"
-                placeholder="Search incidents, users, assets..."
-                inputMode="search"
-              />
-            </div>
-          </div>
+          {/* Spacer */}
+          <div className="flex-1" />
 
           {/* Right icons */}
-          <div className="flex items-center gap-1.5">
-            <Link
-              href="/itsm/new-tab"
+          <div className="flex items-center gap-1.5 overflow-visible">
+            {/* Search icon - opens overlay */}
+            <button
+              type="button"
+              onClick={() => setSearchOpen(true)}
               className="inline-flex h-10 w-10 items-center justify-center rounded-xl border hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition"
-              aria-label="New tab"
-              title="New tab"
+              aria-label="Search"
+              title="Search"
             >
-              <Plus size={18} />
-            </Link>
+              <Search size={18} />
+            </button>
             <button
               type="button"
               className="inline-flex h-10 w-10 items-center justify-center rounded-xl border hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition"
@@ -290,7 +324,7 @@ export default function ItsmShell({ children, user, tenantLabel }: Props) {
         </div>
 
         {/* ===== Tabs bar ===== */}
-        <div className="border-t hi5-border px-2 relative">
+        <div className="border-t hi5-border px-2 relative overflow-visible">
           <div className="h-11 flex items-center gap-2">
             <div
               ref={stripRef}
