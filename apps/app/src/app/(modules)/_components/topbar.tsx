@@ -73,7 +73,7 @@ export default function TopBar({ allowedModules, tenantLabel, user }: Props) {
             <div className="min-w-0">
               <div className="text-[10px] opacity-70 leading-tight">Tenant</div>
               <div className="text-xs font-medium truncate max-w-[140px]">
-                {tenantLabel ?? "—"}
+                {tenantLabel ?? "-"}
               </div>
             </div>
           </div>
