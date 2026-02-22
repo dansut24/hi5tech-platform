@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { createPortal } from "react-dom";
 import { User, Settings, LogOut, ChevronDown } from "lucide-react";
 
 function initials(name?: string | null, email?: string | null) {
@@ -23,45 +24,141 @@ export default function AccountDropdown({ name, email, role, tenantLabel }: Prop
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
+
+  function computePos() {
+    if (!btnRef.current) return null;
+    const rect = btnRef.current.getBoundingClientRect();
+    return { top: rect.bottom + 8, right: Math.max(12, window.innerWidth - rect.right) };
+  }
 
   function openMenu() {
-    if (!btnRef.current) return;
-    const rect = btnRef.current.getBoundingClientRect();
-    setPos({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+    const p = computePos();
+    if (!p) return;
+    setPos(p);
     setOpen(true);
   }
 
+  // Close on outside click (including menu)
   useEffect(() => {
     if (!open) return;
+
     function handler(e: MouseEvent) {
-      if (btnRef.current && btnRef.current.contains(e.target as Node)) return;
+      const t = e.target as Node;
+      if (btnRef.current && btnRef.current.contains(t)) return;
+      if (menuRef.current && menuRef.current.contains(t)) return;
       setOpen(false);
     }
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+
+    document.addEventListener("mousedown", handler, { capture: true });
+    return () => document.removeEventListener("mousedown", handler, { capture: true } as any);
   }, [open]);
 
+  // Close on escape; reposition on resize; optionally close on scroll
   useEffect(() => {
     if (!open) return;
-    function onKey(e: KeyboardEvent) { if (e.key === "Escape") setOpen(false); }
-    function onScroll() { setOpen(false); }
+
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpen(false);
+    }
+
+    function onResize() {
+      const p = computePos();
+      if (p) setPos(p);
+    }
+
+    // If you want it to stay open while scrolling, swap this to reposition instead of closing.
+    function onScroll() {
+      // Option A (recommended): close to avoid weird detachment
+      setOpen(false);
+
+      // Option B: reposition instead (comment out setOpen(false) and uncomment below)
+      // const p = computePos();
+      // if (p) setPos(p);
+    }
+
     document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", onResize, { passive: true });
     window.addEventListener("scroll", onScroll, { passive: true, capture: true });
+
     return () => {
       document.removeEventListener("keydown", onKey);
-      window.removeEventListener("scroll", onScroll, { capture: true } as any);
+      window.removeEventListener("resize", onResize as any);
+      window.removeEventListener("scroll", onScroll as any, { capture: true } as any);
     };
   }, [open]);
 
-  const userInitials = initials(name, email);
+  const userInitials = useMemo(() => initials(name, email), [name, email]);
   const displayName = name || email?.split("@")[0] || "Account";
+
+  const menuNode =
+    open && pos ? (
+      <div
+        ref={menuRef}
+        className="fixed z-[99999] w-64 py-2 hi5-panel border hi5-border shadow-xl rounded-2xl"
+        style={{ top: pos.top, right: pos.right }}
+        role="menu"
+      >
+        <div className="px-4 py-3 border-b hi5-border">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-xl bg-[rgba(var(--hi5-accent),0.18)] border border-[rgba(var(--hi5-accent),0.30)] flex items-center justify-center text-sm font-bold text-[rgb(var(--hi5-accent))] shrink-0">
+              {userInitials}
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-semibold truncate">{displayName}</div>
+              {email && <div className="text-xs opacity-60 truncate">{email}</div>}
+              {role && <div className="text-xs opacity-50 mt-0.5 capitalize">{role}</div>}
+            </div>
+          </div>
+          {tenantLabel && (
+            <div className="mt-2 text-xs opacity-50 truncate">Tenant: {tenantLabel}</div>
+          )}
+        </div>
+
+        <div className="py-1">
+          <Link
+            href="/settings"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-black/5 dark:hover:bg-white/5 transition"
+            role="menuitem"
+          >
+            <User size={16} className="opacity-60" />
+            Profile & Preferences
+          </Link>
+          <Link
+            href="/settings"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-black/5 dark:hover:bg-white/5 transition"
+            role="menuitem"
+          >
+            <Settings size={16} className="opacity-60" />
+            Settings
+          </Link>
+        </div>
+
+        <div className="border-t hi5-border py-1">
+          <a
+            href="/auth/signout"
+            className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-black/5 dark:hover:bg-white/5 transition text-rose-600 dark:text-rose-400"
+            role="menuitem"
+            onClick={() => setOpen(false)}
+          >
+            <LogOut size={16} />
+            Sign out
+          </a>
+        </div>
+      </div>
+    ) : null;
 
   return (
     <>
       <button
         ref={btnRef}
         type="button"
-        onClick={() => open ? setOpen(false) : openMenu()}
+        onClick={() => (open ? setOpen(false) : openMenu())}
         className={[
           "flex items-center gap-2 rounded-xl border hi5-border px-2.5 py-1.5",
           "hover:bg-black/5 dark:hover:bg-white/5 transition",
@@ -83,47 +180,8 @@ export default function AccountDropdown({ name, email, role, tenantLabel }: Prop
         />
       </button>
 
-      {open && pos && (
-        <div
-          className="fixed z-[9000] w-64 py-2 hi5-panel border hi5-border shadow-xl rounded-2xl"
-          style={{ top: pos.top, right: pos.right }}
-          role="menu"
-        >
-          <div className="px-4 py-3 border-b hi5-border">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-[rgba(var(--hi5-accent),0.18)] border border-[rgba(var(--hi5-accent),0.30)] flex items-center justify-center text-sm font-bold text-[rgb(var(--hi5-accent))] shrink-0">
-                {userInitials}
-              </div>
-              <div className="min-w-0">
-                <div className="text-sm font-semibold truncate">{displayName}</div>
-                {email && <div className="text-xs opacity-60 truncate">{email}</div>}
-                {role && <div className="text-xs opacity-50 mt-0.5 capitalize">{role}</div>}
-              </div>
-            </div>
-            {tenantLabel && (
-              <div className="mt-2 text-xs opacity-50 truncate">Tenant: {tenantLabel}</div>
-            )}
-          </div>
-
-          <div className="py-1">
-            <Link href="/settings" onClick={() => setOpen(false)} className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-black/5 dark:hover:bg-white/5 transition" role="menuitem">
-              <User size={16} className="opacity-60" />
-              Profile & Preferences
-            </Link>
-            <Link href="/settings" onClick={() => setOpen(false)} className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-black/5 dark:hover:bg-white/5 transition" role="menuitem">
-              <Settings size={16} className="opacity-60" />
-              Settings
-            </Link>
-          </div>
-
-          <div className="border-t hi5-border py-1">
-            <a href="/auth/signout" className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-black/5 dark:hover:bg-white/5 transition text-rose-600 dark:text-rose-400" role="menuitem">
-              <LogOut size={16} />
-              Sign out
-            </a>
-          </div>
-        </div>
-      )}
+      {/* Portal ensures dropdown overlays everything and cannot be clipped */}
+      {mounted && menuNode ? createPortal(menuNode, document.body) : null}
     </>
   );
 }
