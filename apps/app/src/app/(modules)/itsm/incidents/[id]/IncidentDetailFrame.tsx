@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import Link from "next/link";
 import { usePathname, useSearchParams, useRouter } from "next/navigation";
@@ -97,10 +97,10 @@ export default function IncidentDetailFrame({
     return (
       <div className="flex items-center gap-2 flex-wrap">
         <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs hi5-border opacity-80">
-          {String(status ?? "—").replaceAll("_", " ")}
+          {String(status ?? "-").replaceAll("_", " ")}
         </span>
         <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs hi5-border opacity-80">
-          {priority ?? "—"}
+          {priority ?? "-"}
         </span>
         {triageStatus ? (
           <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs hi5-border opacity-80">
@@ -202,8 +202,8 @@ export default function IncidentDetailFrame({
 
       <div className="hi5-card p-4 text-xs opacity-60 space-y-1">
         <div>tenant: <span className="font-mono">{tenantId}</span></div>
-        <div>assignee: <span className="font-mono">{assigneeId ?? "—"}</span></div>
-        <div>team: <span className="font-mono">{assignedTeamId ?? "—"}</span></div>
+        <div>assignee: <span className="font-mono">{assigneeId ?? "-"}</span></div>
+        <div>team: <span className="font-mono">{assignedTeamId ?? "-"}</span></div>
       </div>
     </div>
   );
@@ -221,7 +221,7 @@ export default function IncidentDetailFrame({
             </Link>
             <ChevronRight className="h-4 w-4 opacity-50 shrink-0" />
             <span className="truncate text-sm">
-              {number ?? "—"} • {title ?? "Untitled incident"}
+              {number ?? "-"} * {title ?? "Untitled incident"}
             </span>
           </div>
         }
@@ -269,7 +269,7 @@ export default function IncidentDetailFrame({
         <div className="grid gap-3 lg:grid-cols-[1fr_360px]">
           <div className="space-y-3">{children}</div>
 
-          {/* Desktop workflow rail — always visible */}
+          {/* Desktop workflow rail - always visible */}
           <div className="hidden lg:block space-y-3">
             <WorkflowContent />
           </div>
