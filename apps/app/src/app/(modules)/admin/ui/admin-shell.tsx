@@ -1,4 +1,3 @@
-// apps/app/src/app/admin/ui/admin-shell.tsx
 “use client”;
 
 import { useMemo, useState } from “react”;
