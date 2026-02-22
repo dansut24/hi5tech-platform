@@ -10,6 +10,10 @@ import InviteUserClient from "./invite-user-client";
 
 export const dynamic = "force-dynamic";
 
+function normalizeHost(rawHost: string) {
+  return (rawHost || "").split(":")[0].trim().toLowerCase();
+}
+
 async function getTenantAndAdminUser() {
   const supabase = await supabaseServer();
 
@@ -19,8 +23,10 @@ async function getTenantAndAdminUser() {
   if (!user) redirect("/login");
 
   // Tenant from host
-  const host = getEffectiveHost(await headers());
-  const parsed = parseTenantHost(host);
+  const rawHost = getEffectiveHost(await headers());
+  const requestHost = normalizeHost(rawHost);
+
+  const parsed = parseTenantHost(rawHost);
   if (!parsed.subdomain) notFound();
 
   const { data: tenant } = await supabase
@@ -53,22 +59,18 @@ async function getTenantAndAdminUser() {
 
   if (!Boolean(settings?.onboarding_completed)) redirect("/admin/setup");
 
-  const tenantLabel =
-    (tenant.company_name || tenant.name || tenant.subdomain) as string;
+  const tenantLabel = (tenant.company_name || tenant.name || tenant.subdomain) as string;
 
   return {
     tenantId: tenant.id as string,
     tenantLabel,
-    tenantDomain: tenant.domain as string,
-    tenantSubdomain: tenant.subdomain as string,
+    // IMPORTANT: use the real request host for invites (most reliable)
+    requestHost, // e.g. "dansworld.hi5tech.co.uk"
   };
 }
 
 export default async function InviteUserPage() {
-  const { tenantId, tenantLabel, tenantDomain, tenantSubdomain } =
-    await getTenantAndAdminUser();
-
-  const tenantHost = `${tenantSubdomain}.${tenantDomain}`;
+  const { tenantId, tenantLabel, requestHost } = await getTenantAndAdminUser();
 
   async function inviteAction(formData: FormData) {
     "use server";
@@ -85,34 +87,30 @@ export default async function InviteUserPage() {
       return { ok: false, error: "Please enter a valid email address." };
     }
     if (module !== "selfservice") {
-      return {
-        ok: false,
-        error: "This invite flow currently supports Self Service only.",
-      };
+      return { ok: false, error: "This invite flow currently supports Self Service only." };
     }
 
-    // Use service role for provisioning writes (bypasses RLS safely)
+    // Service role for provisioning writes (bypasses RLS safely)
     const admin = supabaseAdmin();
 
-    // Build a tenant-aware invite link so the email points to the right subdomain,
-    // and company/tenant are populated for your template/UI.
-    const companyParam = encodeURIComponent(tenantLabel || tenantSubdomain);
-    const tenantParam = encodeURIComponent(tenantHost);
+    // Tenant-aware invite link MUST use the host the admin is on right now
+    // to avoid ".hi5tech.co.uk" issues.
+    const companyParam = encodeURIComponent(tenantLabel || "Hi5Tech");
+    const tenantParam = encodeURIComponent(requestHost);
 
-    // Supabase will append token_hash/type automatically.
-    // We include `next` so your /auth/invite handler can forward to set-password.
-    const redirectTo = `https://${tenantHost}/auth/invite?next=/auth/set-password&company=${companyParam}&tenant=${tenantParam}`;
+    // Supabase appends token_hash/type automatically.
+    // We include next/company/tenant for your /auth/invite and email template.
+    const redirectTo = `https://${requestHost}/auth/invite?next=/auth/set-password&company=${companyParam}&tenant=${tenantParam}`;
 
     let invitedUserId: string | null = null;
 
-    // 1) Invite via Supabase Auth Admin (tenant-aware redirect)
+    // 1) Invite via Auth Admin
     const inviteRes = await admin.auth.admin.inviteUserByEmail(email, {
       data: {
         full_name: full_name || undefined,
         tenant_id: tenantId,
-        tenant_host: tenantHost,
-        tenant_subdomain: tenantSubdomain,
-        company: tenantLabel || tenantSubdomain,
+        tenant_host: requestHost,
+        company: tenantLabel || "Hi5Tech",
       },
       redirectTo,
     });
@@ -153,7 +151,7 @@ export default async function InviteUserPage() {
       return { ok: false, error: "Could not determine invited user id." };
     }
 
-    // 2) Upsert profile (optional but recommended)
+    // 2) Upsert profile
     const { error: upErr } = await admin.from("profiles").upsert(
       {
         id: invitedUserId,
@@ -162,9 +160,7 @@ export default async function InviteUserPage() {
       },
       { onConflict: "id" }
     );
-    if (upErr) {
-      return { ok: false, error: `Profile upsert failed: ${upErr.message}` };
-    }
+    if (upErr) return { ok: false, error: `Profile upsert failed: ${upErr.message}` };
 
     // 3) Create membership (or reuse existing)
     const { data: existingMembership, error: emErr } = await admin
@@ -174,9 +170,7 @@ export default async function InviteUserPage() {
       .eq("user_id", invitedUserId)
       .maybeSingle();
 
-    if (emErr) {
-      return { ok: false, error: `Membership lookup failed: ${emErr.message}` };
-    }
+    if (emErr) return { ok: false, error: `Membership lookup failed: ${emErr.message}` };
 
     let membershipId = existingMembership?.id ?? null;
 
@@ -191,24 +185,16 @@ export default async function InviteUserPage() {
         .select("id")
         .single();
 
-      if (memErr) {
-        return { ok: false, error: `Membership create failed: ${memErr.message}` };
-      }
+      if (memErr) return { ok: false, error: `Membership create failed: ${memErr.message}` };
       membershipId = newMembership.id;
     }
 
     // 4) Assign Self Service module only (idempotent)
-    // NOTE: requires unique(membership_id, module) for perfect upsert behavior.
     const { error: modErr } = await admin
       .from("module_assignments")
-      .upsert(
-        { membership_id: membershipId, module: "selfservice" },
-        { onConflict: "membership_id,module" }
-      );
+      .upsert({ membership_id: membershipId, module: "selfservice" }, { onConflict: "membership_id,module" });
 
-    if (modErr) {
-      return { ok: false, error: `Module assignment failed: ${modErr.message}` };
-    }
+    if (modErr) return { ok: false, error: `Module assignment failed: ${modErr.message}` };
 
     return { ok: true, invited_user_id: invitedUserId };
   }
@@ -219,13 +205,10 @@ export default async function InviteUserPage() {
         <div className="mb-4">
           <h1 className="text-lg font-semibold">Invite a Self Service user</h1>
           <p className="text-sm opacity-70 mt-1">
-            Invite a user to{" "}
-            <span className="font-medium">{tenantLabel}</span> with Self Service
-            access only.
+            Invite a user to <span className="font-medium">{tenantLabel}</span> with Self Service access only.
           </p>
           <p className="text-xs opacity-60 mt-2">
-            Invite link will open on:{" "}
-            <span className="font-medium">{tenantHost}</span>
+            Invite link will open on: <span className="font-medium">{requestHost}</span>
           </p>
         </div>
 
