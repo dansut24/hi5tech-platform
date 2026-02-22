@@ -315,15 +315,15 @@ export default function ItsmShell({ children }: Props) {
                         : "opacity-80 hover:bg-black/5 dark:hover:bg-white/5",
                     ].join(" ")}
                   >
-                    <div className="flex items-center gap-1.5 min-w-0 w-full">
+                    <div className="flex items-center gap-1.5 min-w-0 w-full h-full">
                       {t.pinned ? <Pin size={11} className="opacity-50 flex-none" /> : null}
-                      <Link href={t.href} className="min-w-0 text-xs font-medium truncate">
-                        {t.title}
+                      <Link href={t.href} className="min-w-0 flex-1 flex items-center h-full text-xs font-medium truncate leading-none">
+                        <span className="truncate">{t.title}</span>
                       </Link>
                       {canClose ? (
                         <button
                           type="button"
-                          className="flex-none text-xs opacity-60 hover:opacity-100 ml-auto pl-1"
+                          className="flex-none flex items-center justify-center opacity-60 hover:opacity-100 ml-auto pl-1"
                           onClick={(e) => { e.preventDefault(); e.stopPropagation(); closeTab(t.id); }}
                           aria-label="Close tab"
                         >
