@@ -110,14 +110,14 @@ function Breadcrumb() {
   }
 
   return (
-    <div className="flex items-center gap-1 text-xs opacity-50 mb-3 flex-wrap">
+    <div className="flex items-center gap-1 text-xs opacity-50 mb-3 overflow-hidden whitespace-nowrap">
       {crumbs.map((c, i) => (
-        <span key={c.href} className="flex items-center gap-1">
-          {i > 0 && <Chevron size={11} className="opacity-50" />}
+        <span key={c.href} className="inline-flex items-center gap-1 shrink-0">
+          {i > 0 && <Chevron size={11} className="opacity-50 shrink-0" />}
           {i === crumbs.length - 1 ? (
-            <span className="font-medium opacity-100 text-[rgb(var(--hi5-fg))]">{c.label}</span>
+            <span className="font-medium opacity-100 truncate max-w-[180px]">{c.label}</span>
           ) : (
-            <Link href={c.href} className="hover:opacity-100 transition">
+            <Link href={c.href} className="hover:opacity-100 transition truncate max-w-[120px]">
               {c.label}
             </Link>
           )}
@@ -260,11 +260,10 @@ export default function ItsmShell({ children, user, tenantLabel }: Props) {
         </div>
       )}
 
-      {/* ===== Header (static - scrolls with page) ===== */}
-      {/* overflow-visible is critical so the account dropdown is not clipped */}
-      <div className="hi5-panel border-b hi5-border shrink-0 overflow-visible">
+      {/* ===== Header - sticky ===== */}
+      <div className="sticky top-0 z-40 hi5-panel border-b hi5-border shrink-0">
         {/* Header row */}
-        <div className="h-14 px-3 sm:px-4 flex items-center gap-2 overflow-visible">
+        <div className="h-14 px-3 sm:px-4 flex items-center gap-2">
           {/* Hamburger - mobile */}
           <button
             type="button"
@@ -296,7 +295,7 @@ export default function ItsmShell({ children, user, tenantLabel }: Props) {
           <div className="flex-1" />
 
           {/* Right icons */}
-          <div className="flex items-center gap-1.5 overflow-visible">
+          <div className="flex items-center gap-1.5">
             {/* Search icon - opens overlay */}
             <button
               type="button"
@@ -324,7 +323,7 @@ export default function ItsmShell({ children, user, tenantLabel }: Props) {
         </div>
 
         {/* ===== Tabs bar ===== */}
-        <div className="border-t hi5-border px-2 relative overflow-visible">
+        <div className="border-t hi5-border px-2 relative">
           <div className="h-11 flex items-center gap-2">
             <div
               ref={stripRef}
@@ -377,10 +376,10 @@ export default function ItsmShell({ children, user, tenantLabel }: Props) {
 
             <Link
               href="/itsm/new-tab"
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border hi5-border hover:bg-black/5 dark:hover:bg-white/5 shrink-0"
+              className="inline-flex h-6 w-6 items-center justify-center rounded-md border hi5-border hover:bg-black/5 dark:hover:bg-white/5 shrink-0 opacity-70 hover:opacity-100 transition"
               aria-label="New tab"
             >
-              <Plus size={14} />
+              <Plus size={11} />
             </Link>
           </div>
 
