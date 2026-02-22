@@ -37,7 +37,7 @@ async function getTenantAndMe() {
 
   if (!membership) redirect("/apps");
 
-  // Module access (Control) - if you use module_assignments
+  // Module access (Control)
   const { data: mod } = await supabase
     .from("module_assignments")
     .select("id, module")
@@ -45,25 +45,31 @@ async function getTenantAndMe() {
     .eq("module", "control")
     .maybeSingle();
 
-  // If you don't use module_assignments yet, comment this gate out.
   if (!mod) redirect("/apps");
 
-  return { supabase, me, tenant, membership };
+  // Optional: profile name if you store it (safe if missing)
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name")
+    .eq("id", me.id)
+    .maybeSingle();
+
+  return { me, tenant, membership, profile };
 }
 
-export default async function ControlLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
-  const { me, tenant, membership } = await getTenantAndMe();
+export default async function ControlLayout({ children }: { children: React.ReactNode }) {
+  const { me, tenant, membership, profile } = await getTenantAndMe();
+
+  const tenantLabel = (tenant.company_name || tenant.name || tenant.subdomain) as string;
 
   return (
     <ControlShell
-      tenantSubdomain={tenant.subdomain}
-      tenantName={(tenant.company_name || tenant.name || tenant.subdomain) as string}
-      userEmail={me.email || ""}
-      userRole={String(membership.role || "user")}
+      tenantLabel={tenantLabel}
+      user={{
+        name: profile?.full_name ?? null,
+        email: me.email || "",
+        role: String(membership.role || "user"),
+      }}
     >
       {children}
     </ControlShell>
