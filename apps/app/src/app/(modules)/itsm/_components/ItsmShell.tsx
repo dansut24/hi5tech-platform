@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -96,6 +96,10 @@ function NavItem({
   );
 }
 
+function labelFromSeg(seg: string) {
+  return seg.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 function Breadcrumb() {
   const pathname = usePathname();
   const segments = pathname.split("/").filter(Boolean);
@@ -105,25 +109,43 @@ function Breadcrumb() {
   let current = "";
   for (const seg of segments) {
     current += `/${seg}`;
-    const label = seg.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-    crumbs.push({ label, href: current });
+    crumbs.push({ label: labelFromSeg(seg), href: current });
   }
 
   return (
-    <div className="flex items-center gap-1 text-xs opacity-50 mb-3 overflow-hidden whitespace-nowrap">
-      {crumbs.map((c, i) => (
-        <span key={c.href} className="inline-flex items-center gap-1 shrink-0">
-          {i > 0 && <Chevron size={11} className="opacity-50 shrink-0" />}
-          {i === crumbs.length - 1 ? (
-            <span className="font-medium opacity-100 truncate max-w-[180px]">{c.label}</span>
-          ) : (
-            <Link href={c.href} className="hover:opacity-100 transition truncate max-w-[120px]">
-              {c.label}
-            </Link>
-          )}
-        </span>
-      ))}
-    </div>
+    <nav
+      aria-label="Breadcrumb"
+      className="mb-3 overflow-hidden"
+    >
+      <ol className="flex items-center gap-1.5 text-xs opacity-60 whitespace-nowrap">
+        {crumbs.map((c, i) => {
+          const isLast = i === crumbs.length - 1;
+          return (
+            <React.Fragment key={c.href}>
+              {i > 0 ? (
+                <li aria-hidden="true" className="flex items-center">
+                  <Chevron size={11} className="opacity-50" />
+                </li>
+              ) : null}
+              <li className="min-w-0">
+                {isLast ? (
+                  <span className="font-medium opacity-100 truncate block max-w-[240px]">
+                    {c.label}
+                  </span>
+                ) : (
+                  <Link
+                    href={c.href}
+                    className="hover:opacity-100 transition truncate block max-w-[160px]"
+                  >
+                    {c.label}
+                  </Link>
+                )}
+              </li>
+            </React.Fragment>
+          );
+        })}
+      </ol>
+    </nav>
   );
 }
 
@@ -167,7 +189,11 @@ export default function ItsmShell({ children, user, tenantLabel }: Props) {
     const el = tabEls.current.get(activeId) || tabEls.current.get((tabs ?? []).at(-1)?.id || "");
     if (!el) return;
     if (sig !== prevSig || pathname) {
-      try { el.scrollIntoView({ behavior: "smooth", inline: "nearest", block: "nearest" }); } catch { /* */ }
+      try {
+        el.scrollIntoView({ behavior: "smooth", inline: "nearest", block: "nearest" });
+      } catch {
+        /* */
+      }
     }
   }, [tabs, pathname]);
 
@@ -193,7 +219,11 @@ export default function ItsmShell({ children, user, tenantLabel }: Props) {
     list[idx] = next;
     const dashboard = list.find((x) => x.id === "dashboard");
     const others = list.filter((x) => x.id !== "dashboard");
-    const reordered = [...(dashboard ? [{ ...dashboard, pinned: true }] : []), ...others.filter((x) => x.pinned), ...others.filter((x) => !x.pinned)];
+    const reordered = [
+      ...(dashboard ? [{ ...dashboard, pinned: true }] : []),
+      ...others.filter((x) => x.pinned),
+      ...others.filter((x) => !x.pinned),
+    ];
     setTabs(reordered);
     closeMenu();
   }
@@ -260,162 +290,177 @@ export default function ItsmShell({ children, user, tenantLabel }: Props) {
         </div>
       )}
 
-      {/* ===== Header - sticky ===== */}
-      <div className="sticky top-0 z-40 hi5-panel border-b hi5-border shrink-0">
-        {/* Header row */}
-        <div className="h-14 px-3 sm:px-4 flex items-center gap-2">
-          {/* Hamburger - mobile */}
-          <button
-            type="button"
-            className="md:hidden inline-flex h-10 w-10 items-center justify-center rounded-xl border hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition shrink-0"
-            onClick={toggleDrawer}
-            aria-label="Open navigation"
-          >
-            <Menu size={18} />
-          </button>
-
-          {/* Sidebar collapse - desktop */}
-          {showSidebar && (
+      {/* ===== Header - sticky (must never scroll) ===== */}
+      <header className="sticky top-0 z-40 shrink-0 isolate">
+        <div className="hi5-panel border-b hi5-border">
+          {/* Header row */}
+          <div className="h-14 px-3 sm:px-4 flex items-center gap-2">
+            {/* Hamburger - mobile */}
             <button
               type="button"
-              className="hidden md:inline-flex h-10 w-10 items-center justify-center rounded-xl border hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition shrink-0"
-              onClick={() => setSidebarCollapsed((v) => !v)}
-              aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              className="md:hidden inline-flex h-10 w-10 items-center justify-center rounded-xl border hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition shrink-0"
+              onClick={toggleDrawer}
+              aria-label="Open navigation"
             >
-              {sidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+              <Menu size={18} />
             </button>
-          )}
 
-          <Link href="/itsm" className="font-semibold tracking-tight whitespace-nowrap text-sm">
-            Hi5Tech ITSM
-          </Link>
+            {/* Sidebar collapse - desktop */}
+            {showSidebar && (
+              <button
+                type="button"
+                className="hidden md:inline-flex h-10 w-10 items-center justify-center rounded-xl border hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition shrink-0"
+                onClick={() => setSidebarCollapsed((v) => !v)}
+                aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+              >
+                {sidebarCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+              </button>
+            )}
 
-          {/* Spacer */}
-          <div className="flex-1" />
+            <Link href="/itsm" className="font-semibold tracking-tight whitespace-nowrap text-sm">
+              Hi5Tech ITSM
+            </Link>
 
-          {/* Right icons */}
-          <div className="flex items-center gap-1.5">
-            {/* Search icon - opens overlay */}
-            <button
-              type="button"
-              onClick={() => setSearchOpen(true)}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition"
-              aria-label="Search"
-              title="Search"
-            >
-              <Search size={18} />
-            </button>
-            <button
-              type="button"
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition"
-              aria-label="Notifications"
-            >
-              <Bell size={18} />
-            </button>
-            <AccountDropdown
-              name={user?.name}
-              email={user?.email}
-              role={user?.role}
-              tenantLabel={tenantLabel}
-            />
+            <div className="flex-1" />
+
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setSearchOpen(true)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition"
+                aria-label="Search"
+                title="Search"
+              >
+                <Search size={18} />
+              </button>
+              <button
+                type="button"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-xl border hi5-border hover:bg-black/5 dark:hover:bg-white/5 transition"
+                aria-label="Notifications"
+              >
+                <Bell size={18} />
+              </button>
+
+              <AccountDropdown
+                name={user?.name}
+                email={user?.email}
+                role={user?.role}
+                tenantLabel={tenantLabel}
+              />
+            </div>
           </div>
-        </div>
 
-        {/* ===== Tabs bar ===== */}
-        <div className="border-t hi5-border px-2 relative">
-          <div className="h-11 flex items-center gap-2">
-            <div
-              ref={stripRef}
-              className="relative flex-1 flex items-center gap-1.5 flex-nowrap overflow-x-auto overflow-y-hidden no-scrollbar"
-              style={{ WebkitOverflowScrolling: "touch" }}
-            >
-              {(tabs ?? []).map((t) => {
-                const isActive = pathname === t.href || (t.id !== "dashboard" && pathname === t.id);
-                const canClose = !t.pinned && t.id !== "dashboard";
+          {/* ===== Tabs bar ===== */}
+          <div className="border-t hi5-border px-2 relative">
+            <div className="h-11 flex items-center gap-2">
+              <div
+                ref={stripRef}
+                className="relative flex-1 flex items-center gap-1.5 flex-nowrap overflow-x-auto overflow-y-hidden no-scrollbar"
+                style={{ WebkitOverflowScrolling: "touch" }}
+              >
+                {(tabs ?? []).map((t) => {
+                  const isActive = pathname === t.href || (t.id !== "dashboard" && pathname === t.id);
+                  const canClose = !t.pinned && t.id !== "dashboard";
 
-                return (
-                  <div
-                    key={t.id}
-                    ref={(el) => { if (el) tabEls.current.set(t.id, el); else tabEls.current.delete(t.id); }}
-                    onContextMenu={(e) => onTabContextMenu(e, t.id)}
-                    onTouchStart={(e) => { const touch = e.touches?.[0]; if (touch) startLongPress(t.id, touch.clientX, touch.clientY); }}
-                    onTouchEnd={cancelLongPress}
-                    onTouchCancel={cancelLongPress}
-                    onTouchMove={cancelLongPress}
-                    className={[
-                      "shrink-0 inline-flex items-center h-8 px-3 rounded-lg border hi5-border",
-                      "min-w-[100px] max-w-[55vw] md:min-w-0 md:max-w-[16vw]",
-                      isActive
-                        ? "bg-[rgba(var(--hi5-accent),0.12)] border-[rgba(var(--hi5-accent),0.30)]"
-                        : "opacity-80 hover:bg-black/5 dark:hover:bg-white/5",
-                    ].join(" ")}
-                  >
-                    <div className="flex items-center gap-1.5 min-w-0 w-full h-full">
-                      {t.pinned ? <Pin size={11} className="opacity-50 flex-none" /> : null}
-                      <Link href={t.href} className="min-w-0 flex-1 flex items-center h-full text-xs font-medium truncate leading-none">
-                        <span className="truncate">{t.title}</span>
-                      </Link>
-                      {canClose ? (
-                        <button
-                          type="button"
-                          className="flex-none flex items-center justify-center opacity-60 hover:opacity-100 ml-auto pl-1"
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); closeTab(t.id); }}
-                          aria-label="Close tab"
-                        >
-                          <X size={12} />
-                        </button>
-                      ) : null}
+                  return (
+                    <div
+                      key={t.id}
+                      ref={(el) => { if (el) tabEls.current.set(t.id, el); else tabEls.current.delete(t.id); }}
+                      onContextMenu={(e) => onTabContextMenu(e, t.id)}
+                      onTouchStart={(e) => { const touch = e.touches?.[0]; if (touch) startLongPress(t.id, touch.clientX, touch.clientY); }}
+                      onTouchEnd={cancelLongPress}
+                      onTouchCancel={cancelLongPress}
+                      onTouchMove={cancelLongPress}
+                      className={[
+                        "shrink-0 inline-flex items-center h-8 px-3 rounded-lg border hi5-border",
+                        "min-w-[100px] max-w-[55vw] md:min-w-0 md:max-w-[16vw]",
+                        isActive
+                          ? "bg-[rgba(var(--hi5-accent),0.12)] border-[rgba(var(--hi5-accent),0.30)]"
+                          : "opacity-80 hover:bg-black/5 dark:hover:bg-white/5",
+                      ].join(" ")}
+                    >
+                      <div className="flex items-center gap-1.5 min-w-0 w-full h-full">
+                        {t.pinned ? <Pin size={11} className="opacity-50 flex-none" /> : null}
+                        <Link href={t.href} className="min-w-0 flex-1 flex items-center h-full text-xs font-medium truncate leading-none">
+                          <span className="truncate">{t.title}</span>
+                        </Link>
+                        {canClose ? (
+                          <button
+                            type="button"
+                            className="flex-none flex items-center justify-center opacity-60 hover:opacity-100 ml-auto pl-1"
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); closeTab(t.id); }}
+                            aria-label="Close tab"
+                          >
+                            <X size={12} />
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-              <div className="pointer-events-none md:hidden absolute left-0 top-0 h-full w-5 bg-gradient-to-r from-[rgba(var(--hi5-bg),1)] to-transparent" />
-              <div className="pointer-events-none md:hidden absolute right-0 top-0 h-full w-8 bg-gradient-to-l from-[rgba(var(--hi5-bg),1)] to-transparent" />
+                  );
+                })}
+
+                <div className="pointer-events-none md:hidden absolute left-0 top-0 h-full w-5 bg-gradient-to-r from-[rgba(var(--hi5-bg),1)] to-transparent" />
+                <div className="pointer-events-none md:hidden absolute right-0 top-0 h-full w-8 bg-gradient-to-l from-[rgba(var(--hi5-bg),1)] to-transparent" />
+              </div>
+
+              {/* New tab button (smaller visual, good touch target) */}
+              <Link
+                href="/itsm/new-tab"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-lg border hi5-border hover:bg-black/5 dark:hover:bg-white/5 shrink-0 opacity-70 hover:opacity-100 transition"
+                aria-label="New tab"
+                title="New tab"
+              >
+                <Plus size={10} />
+              </Link>
             </div>
 
-            <Link
-              href="/itsm/new-tab"
-              className="inline-flex h-6 w-6 items-center justify-center rounded-md border hi5-border hover:bg-black/5 dark:hover:bg-white/5 shrink-0 opacity-70 hover:opacity-100 transition"
-              aria-label="New tab"
-            >
-              <Plus size={11} />
-            </Link>
-          </div>
-
-          {/* Context menu */}
-          {menu.open ? (
-            <div className="fixed inset-0 z-[60]" onClick={closeMenu}>
-              <div
-                className="absolute hi5-panel border hi5-border rounded-xl shadow-lg p-2 min-w-[200px]"
-                style={{ left: Math.min(menu.x, window.innerWidth - 220), top: Math.min(menu.y, window.innerHeight - 140) }}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <div className="px-2 py-1 text-xs opacity-70 flex items-center justify-between">
-                  <span>Tab options</span>
-                  <MoreHorizontal size={16} className="opacity-60" />
-                </div>
-                <button type="button" className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-sm" onClick={() => closeOthers(menu.tabId)}>
-                  <X size={16} className="opacity-70" /> Close others
-                </button>
-                <button type="button" className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-sm" onClick={() => togglePin(menu.tabId)}>
-                  <Pin size={16} className="opacity-70" /> Pin / unpin
-                </button>
-                <div className="pt-1">
-                  <button type="button" className="w-full px-3 py-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-sm opacity-80" onClick={closeMenu}>
-                    Close menu
+            {/* Context menu */}
+            {menu.open ? (
+              <div className="fixed inset-0 z-[60]" onClick={closeMenu}>
+                <div
+                  className="absolute hi5-panel border hi5-border rounded-xl shadow-lg p-2 min-w-[200px]"
+                  style={{ left: Math.min(menu.x, window.innerWidth - 220), top: Math.min(menu.y, window.innerHeight - 140) }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="px-2 py-1 text-xs opacity-70 flex items-center justify-between">
+                    <span>Tab options</span>
+                    <MoreHorizontal size={16} className="opacity-60" />
+                  </div>
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-sm"
+                    onClick={() => closeOthers(menu.tabId)}
+                  >
+                    <X size={16} className="opacity-70" /> Close others
                   </button>
+                  <button
+                    type="button"
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-sm"
+                    onClick={() => togglePin(menu.tabId)}
+                  >
+                    <Pin size={16} className="opacity-70" /> Pin / unpin
+                  </button>
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      className="w-full px-3 py-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-sm opacity-80"
+                      onClick={closeMenu}
+                    >
+                      Close menu
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
-      </div>
+      </header>
 
       {/* ===== Body ===== */}
       <div className="flex flex-1 min-h-0">
         {/* Desktop sidebar */}
-        {showSidebar && (
+        {sidebarMode !== "hidden" && (
           <aside
             className={[
               "hidden md:flex flex-col border-r hi5-border shrink-0 transition-all duration-200",
@@ -442,7 +487,12 @@ export default function ItsmShell({ children, user, tenantLabel }: Props) {
             <div className="absolute top-0 left-0 h-full w-[85vw] max-w-[320px] hi5-panel border-r hi5-border">
               <div className="flex items-center justify-between p-4 border-b hi5-border">
                 <div className="font-semibold text-sm">Navigation</div>
-                <button type="button" className="h-9 w-9 rounded-xl border hi5-border flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 transition" onClick={closeDrawer} aria-label="Close">
+                <button
+                  type="button"
+                  className="h-9 w-9 rounded-xl border hi5-border flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 transition"
+                  onClick={closeDrawer}
+                  aria-label="Close"
+                >
                   <X size={16} />
                 </button>
               </div>
