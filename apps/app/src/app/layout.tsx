@@ -143,7 +143,7 @@ export default async function RootLayout({
   }
 
   // ---------------------------------------------------------
-  // 2) User settings (mode only) – do NOT override tenant colors
+  // 2) User settings (mode only) - do NOT override tenant colors
   // ---------------------------------------------------------
   let theme_mode: ThemeMode = "system";
 
