@@ -1,16 +1,10 @@
 import { cookies } from "next/headers";
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
-
-type CookieToSet = {
-  name: string;
-  value: string;
-  options: CookieOptions;
-};
+import { createServerClient } from "@supabase/ssr";
 
 export async function supabaseServer() {
-  const cookieStore = await cookies();
+  const cookieStore = await cookies(); // ✅ MUST be awaited in Next 16
 
-  return createServerClient(
+  const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -18,22 +12,18 @@ export async function supabaseServer() {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll(cookiesToSet: CookieToSet[]) {
+        setAll(cookiesToSet) {
           try {
-            for (const { name, value, options } of cookiesToSet) {
-              cookieStore.set(name, value, {
-                ...options,
-                domain: ".hi5tech.co.uk", // 🔥 CRITICAL FIX
-                sameSite: "lax",
-                secure: true,
-                path: "/",
-              });
-            }
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options);
+            });
           } catch {
-            // ignore
+            // ignore — server components can't always set cookies
           }
         },
       },
     }
   );
+
+  return supabase;
 }
