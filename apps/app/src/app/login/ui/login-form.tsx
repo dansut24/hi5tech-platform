@@ -43,7 +43,7 @@ export default function LoginForm() {
   }
 
   // ------------------------
-  // PASSWORD LOGIN (FIXED)
+  // PASSWORD LOGIN (FIXED PROPERLY)
   // ------------------------
   async function handlePasswordLogin() {
     setLoading(true);
@@ -62,20 +62,21 @@ export default function LoginForm() {
       return doneErr(ex?.message || "Auth check failed.");
     }
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email: e,
       password,
     });
 
     if (error) return doneErr(error.message);
 
-    // 🔥 CRITICAL FIX:
-    // Complete SSR cookie handshake
-    window.location.href = "/auth/callback?next=/";
+    // 🔥 CRITICAL: ensure SSR cookie gets written
+    await supabase.auth.refreshSession();
+
+    window.location.href = "/";
   }
 
   // ------------------------
-  // EMAIL OTP (FIXED)
+  // EMAIL OTP
   // ------------------------
   async function sendOtpCode() {
     setLoading(true);
@@ -120,12 +121,14 @@ export default function LoginForm() {
 
     if (error) return doneErr(error.message);
 
-    // 🔥 CRITICAL FIX:
-    window.location.href = "/auth/callback?next=/";
+    // 🔥 ensure cookie written after OTP login too
+    await supabase.auth.refreshSession();
+
+    window.location.href = "/";
   }
 
   // ------------------------
-  // RESET PASSWORD (ALREADY CORRECT)
+  // RESET PASSWORD (CORRECT CALLBACK USE)
   // ------------------------
   async function sendPasswordReset() {
     setLoading(true);
