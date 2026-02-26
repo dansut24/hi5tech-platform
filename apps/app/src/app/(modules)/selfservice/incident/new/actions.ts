@@ -5,8 +5,6 @@ import { headers, cookies } from "next/headers";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
 
-export const runtime = "nodejs"; // IMPORTANT for consistent cookie behavior
-
 type CookieToSet = {
   name: string;
   value: string;
@@ -30,8 +28,7 @@ function serverSupabase() {
               cookieStore.set(name, value, options);
             }
           } catch {
-            // If this throws in some contexts, we don't want to crash.
-            // Session should still be readable when valid.
+            // ignore
           }
         },
       },
@@ -42,20 +39,13 @@ function serverSupabase() {
 export async function createIncident(formData: FormData) {
   const supabase = serverSupabase();
 
-  // ✅ Prefer getSession (more reliable in server actions)
-  const {
-    data: { session },
-    error: sessionErr,
-  } = await supabase.auth.getSession();
+  // Prefer getSession (more reliable in server actions)
+  const { data, error: sessionErr } = await supabase.auth.getSession();
+  if (sessionErr) console.error("[createIncident] getSession error:", sessionErr);
 
-  if (sessionErr) {
-    console.error("[createIncident] getSession error:", sessionErr);
-  }
-
-  const user = session?.user ?? null;
+  const user = data.session?.user ?? null;
 
   if (!user) {
-    // This is the redirect you're seeing as 303
     console.error("[createIncident] NO USER IN SERVER ACTION (session missing).");
     redirect("/login");
   }
@@ -76,11 +66,7 @@ export async function createIncident(formData: FormData) {
     .maybeSingle();
 
   if (tenantErr) console.error("[createIncident] tenant lookup error:", tenantErr);
-
-  if (!tenant) {
-    console.error("[createIncident] Tenant not found for:", parsed);
-    throw new Error("Tenant not found");
-  }
+  if (!tenant) throw new Error("Tenant not found");
 
   // Profile (for submitted_by)
   const { data: profile, error: profErr } = await supabase
