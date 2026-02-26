@@ -1,5 +1,12 @@
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
+import type { CookieOptions } from "@supabase/ssr";
+
+type CookieToSet = {
+  name: string;
+  value: string;
+  options?: CookieOptions;
+};
 
 export async function supabaseServer() {
   const cookieStore = await cookies(); // ✅ MUST be awaited in Next 16
@@ -12,13 +19,14 @@ export async function supabaseServer() {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: CookieToSet[]) {
           try {
-            cookiesToSet.forEach(({ name, value, options }) => {
+            for (const { name, value, options } of cookiesToSet) {
               cookieStore.set(name, value, options);
-            });
+            }
           } catch {
-            // ignore — server components can't always set cookies
+            // In some server contexts cookies cannot be set
+            // Safe to ignore
           }
         },
       },
