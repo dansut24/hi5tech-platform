@@ -20,10 +20,22 @@ function MicrosoftLogo(props: React.SVGProps<SVGSVGElement>) {
 function GoogleLogo(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 48 48" width="18" height="18" aria-hidden="true" {...props}>
-      <path fill="#EA4335" d="M24 9.5c3.54 0 6.02 1.53 7.4 2.8l5.4-5.4C33.54 3.7 29.2 1.5 24 1.5 14.8 1.5 6.9 6.8 3.1 14.4l6.5 5.1C11.4 13.2 17.2 9.5 24 9.5z"/>
-      <path fill="#4285F4" d="M46.5 24c0-1.6-.15-2.8-.47-4.05H24v7.7h12.7c-.26 2.0-1.67 5.0-4.8 7.05l6.2 4.8C43.8 35.7 46.5 30.4 46.5 24z"/>
-      <path fill="#FBBC05" d="M9.6 28.5c-.45-1.35-.7-2.8-.7-4.5s.25-3.15.68-4.5l-6.5-5.1C1.7 17.2 1 20.5 1 24s.7 6.8 2.1 9.6l6.5-5.1z"/>
-      <path fill="#34A853" d="M24 46.5c6.5 0 12-2.15 16-5.85l-6.2-4.8c-1.65 1.15-3.85 1.95-9.8 1.95-6.8 0-12.55-3.7-15.2-9.0l-6.5 5.1C6.9 41.2 14.8 46.5 24 46.5z"/>
+      <path
+        fill="#EA4335"
+        d="M24 9.5c3.54 0 6.02 1.53 7.4 2.8l5.4-5.4C33.54 3.7 29.2 1.5 24 1.5 14.8 1.5 6.9 6.8 3.1 14.4l6.5 5.1C11.4 13.2 17.2 9.5 24 9.5z"
+      />
+      <path
+        fill="#4285F4"
+        d="M46.5 24c0-1.6-.15-2.8-.47-4.05H24v7.7h12.7c-.26 2.0-1.67 5.0-4.8 7.05l6.2 4.8C43.8 35.7 46.5 30.4 46.5 24z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M9.6 28.5c-.45-1.35-.7-2.8-.7-4.5s.25-3.15.68-4.5l-6.5-5.1C1.7 17.2 1 20.5 1 24s.7 6.8 2.1 9.6l6.5-5.1z"
+      />
+      <path
+        fill="#34A853"
+        d="M24 46.5c6.5 0 12-2.15 16-5.85l-6.2-4.8c-1.65 1.15-3.85 1.95-9.8 1.95-6.8 0-12.55-3.7-15.2-9.0l-6.5 5.1C6.9 41.2 14.8 46.5 24 46.5z"
+      />
     </svg>
   );
 }
@@ -67,6 +79,12 @@ export default function LoginForm() {
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j?.error || "Auth check failed");
     return Boolean(j?.allowed);
+  }
+
+  function doneErr(message: string) {
+    setLoading(false);
+    setErr(message);
+    return;
   }
 
   async function handlePasswordLogin() {
@@ -152,19 +170,15 @@ export default function LoginForm() {
       return doneErr(ex?.message || "Auth check failed.");
     }
 
-    const redirectTo = `${window.location.origin}/auth/reset`;
+    // ✅ Critical: go via /auth/callback so Next can exchange the code for a session,
+    // then forward to /auth/reset on the SAME tenant origin.
+    const redirectTo = `${window.location.origin}/auth/callback?next=/auth/reset`;
     const { error } = await supabase.auth.resetPasswordForEmail(e, { redirectTo });
 
     if (error) return doneErr(error.message);
 
     setLoading(false);
     setInfo("Password reset email sent. Check your inbox.");
-  }
-
-  function doneErr(message: string) {
-    setLoading(false);
-    setErr(message);
-    return;
   }
 
   // UI-only for now (wire later when providers configured)
@@ -180,9 +194,7 @@ export default function LoginForm() {
         type="button"
         className={[
           "flex-1 rounded-2xl px-3 py-2 text-sm font-semibold transition",
-          active
-            ? "hi5-btn-primary"
-            : "hi5-btn-ghost",
+          active ? "hi5-btn-primary" : "hi5-btn-ghost",
         ].join(" ")}
         onClick={() => {
           setMode(value);
