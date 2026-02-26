@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createIncident } from "./actions";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs"; // IMPORTANT: make server actions reliably see auth cookies
 
 export default function NewSelfServiceIncidentPage() {
   return (
@@ -30,7 +31,11 @@ export default function NewSelfServiceIncidentPage() {
       </div>
 
       {/* Form */}
-      <form id="incident-form" action={createIncident} className="hi5-panel border hi5-border rounded-3xl p-4 sm:p-6 space-y-4">
+      <form
+        id="incident-form"
+        action={createIncident}
+        className="hi5-panel border hi5-border rounded-3xl p-4 sm:p-6 space-y-4"
+      >
         <div>
           <label className="text-sm opacity-80">Title</label>
           <input
@@ -63,7 +68,6 @@ export default function NewSelfServiceIncidentPage() {
             </select>
           </div>
 
-          {/* If you want Impact persisted later, add a column. For now it’s UI-only. */}
           <div>
             <label className="text-sm opacity-80">Impact</label>
             <select name="impact" defaultValue="just_me" className="hi5-input mt-2">
