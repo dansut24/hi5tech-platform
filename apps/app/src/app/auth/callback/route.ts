@@ -1,0 +1,20 @@
+// apps/app/src/app/auth/callback/route.ts
+import { NextResponse } from "next/server";
+import { supabaseServer } from "@/lib/supabase/server";
+
+export const dynamic = "force-dynamic";
+
+export async function GET(req: Request) {
+  const url = new URL(req.url);
+  const code = url.searchParams.get("code");
+  const next = url.searchParams.get("next") || "/apps";
+
+  if (code) {
+    const supabase = await supabaseServer();
+    await supabase.auth.exchangeCodeForSession(code);
+  }
+
+  // Always redirect relative to current host (tenant subdomain)
+  const redirectUrl = new URL(next, url.origin);
+  return NextResponse.redirect(redirectUrl);
+}
