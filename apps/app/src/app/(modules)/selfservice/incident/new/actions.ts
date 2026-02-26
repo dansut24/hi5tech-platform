@@ -2,8 +2,14 @@
 
 import { redirect } from "next/navigation";
 import { headers, cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
+
+type CookieToSet = {
+  name: string;
+  value: string;
+  options: CookieOptions;
+};
 
 export async function createIncident(formData: FormData) {
   const cookieStore = await cookies();
@@ -16,30 +22,27 @@ export async function createIncident(formData: FormData) {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: CookieToSet[]) {
           try {
             for (const { name, value, options } of cookiesToSet) {
               cookieStore.set(name, value, options);
             }
           } catch {
-            // ignore
+            // ignore in build/runtime edge cases
           }
         },
       },
     }
   );
 
-  // 🔎 Confirm session exists
+  // 🔐 Auth
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    console.log("NO USER IN SERVER ACTION");
-    redirect("/login");
-  }
+  if (!user) redirect("/login");
 
-  // Tenant resolution
+  // 🌐 Tenant resolution
   const host = getEffectiveHost(await headers());
   const parsed = parseTenantHost(host);
   if (!parsed.subdomain) throw new Error("No tenant context");
@@ -53,6 +56,7 @@ export async function createIncident(formData: FormData) {
 
   if (!tenant) throw new Error("Tenant not found");
 
+  // 👤 Profile lookup
   const { data: profile } = await supabase
     .from("profiles")
     .select("full_name")
