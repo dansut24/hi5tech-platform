@@ -1,23 +1,32 @@
-// // apps/app/src/lib/supabase/server.ts
+// apps/app/src/lib/supabase/server.ts
 import { cookies } from "next/headers";
-import { createSupabaseServerClient } from "@hi5tech/auth";
+import { createServerClient } from "@supabase/ssr";
 
-/**
- * Server-component Supabase client.
- * IMPORTANT: Server Components cannot mutate cookies.
- * Cookie refresh happens in /src/proxy.ts.
- */
 export async function supabaseServer() {
   const cookieStore = await cookies();
 
-  return createSupabaseServerClient({
-    get(name: string) {
-      return cookieStore.get(name)?.value;
-    },
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-    // Server Components cannot set/remove cookies.
-    // Proxy handles refresh + cookie writes.
-    set() {},
-    remove() {},
+  if (!url) throw new Error("Missing env: NEXT_PUBLIC_SUPABASE_URL");
+  if (!anon) throw new Error("Missing env: NEXT_PUBLIC_SUPABASE_ANON_KEY");
+
+  return createServerClient(url, anon, {
+    cookies: {
+      getAll() {
+        return cookieStore.getAll();
+      },
+      setAll(cookiesToSet) {
+        // Important: server actions/route handlers need to be able to set cookies
+        // This will throw in some server-only contexts; we safely ignore those.
+        try {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options);
+          });
+        } catch {
+          // noop
+        }
+      },
+    },
   });
 }
