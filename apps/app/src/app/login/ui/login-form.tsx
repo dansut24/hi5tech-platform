@@ -25,24 +25,25 @@ export default function LoginForm() {
   const [err, setErr] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
+  function doneErr(message: string) {
+    setLoading(false);
+    setErr(message);
+  }
+
   async function checkAllowed(e: string) {
     const r = await fetch("/api/auth/allowed", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ email: e }),
     });
+
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j?.error || "Auth check failed");
     return Boolean(j?.allowed);
   }
 
-  function doneErr(message: string) {
-    setLoading(false);
-    setErr(message);
-  }
-
   // ------------------------
-  // PASSWORD LOGIN
+  // PASSWORD LOGIN (FIXED)
   // ------------------------
   async function handlePasswordLogin() {
     setLoading(true);
@@ -68,12 +69,13 @@ export default function LoginForm() {
 
     if (error) return doneErr(error.message);
 
-    setLoading(false);
-    window.location.assign("/");
+    // 🔥 CRITICAL FIX:
+    // Complete SSR cookie handshake
+    window.location.href = "/auth/callback?next=/";
   }
 
   // ------------------------
-  // EMAIL OTP
+  // EMAIL OTP (FIXED)
   // ------------------------
   async function sendOtpCode() {
     setLoading(true);
@@ -92,6 +94,7 @@ export default function LoginForm() {
     }
 
     const { error } = await supabase.auth.signInWithOtp({ email: e });
+
     if (error) return doneErr(error.message);
 
     setLoading(false);
@@ -106,24 +109,23 @@ export default function LoginForm() {
 
     const e = email.trim().toLowerCase();
     const token = code.trim();
+
     if (!token) return doneErr("Please enter the code.");
 
-    const { data, error } = await supabase.auth.verifyOtp({
+    const { error } = await supabase.auth.verifyOtp({
       email: e,
       token,
       type: "email",
     });
 
     if (error) return doneErr(error.message);
-    if (!data.session)
-      return doneErr("Verified, but no session returned.");
 
-    setLoading(false);
-    window.location.assign("/");
+    // 🔥 CRITICAL FIX:
+    window.location.href = "/auth/callback?next=/";
   }
 
   // ------------------------
-  // RESET PASSWORD (FIXED)
+  // RESET PASSWORD (ALREADY CORRECT)
   // ------------------------
   async function sendPasswordReset() {
     setLoading(true);
@@ -141,14 +143,12 @@ export default function LoginForm() {
       return doneErr(ex?.message || "Auth check failed.");
     }
 
-    // 🔥 THIS IS THE IMPORTANT PART
     const redirectTo =
       `${window.location.origin}/auth/callback?next=/auth/reset`;
 
-    const { error } =
-      await supabase.auth.resetPasswordForEmail(e, {
-        redirectTo,
-      });
+    const { error } = await supabase.auth.resetPasswordForEmail(e, {
+      redirectTo,
+    });
 
     if (error) return doneErr(error.message);
 
@@ -156,6 +156,9 @@ export default function LoginForm() {
     setInfo("Password reset email sent. Check your inbox.");
   }
 
+  // ------------------------
+  // UI
+  // ------------------------
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
