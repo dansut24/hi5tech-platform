@@ -11,8 +11,8 @@ type CookieToSet = {
   options: CookieOptions;
 };
 
-function serverSupabase() {
-  const cookieStore = cookies();
+async function serverSupabase() {
+  const cookieStore = await cookies();
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -28,7 +28,7 @@ function serverSupabase() {
               cookieStore.set(name, value, options);
             }
           } catch {
-            // ignore
+            // ignore in contexts that disallow setting cookies
           }
         },
       },
@@ -37,7 +37,7 @@ function serverSupabase() {
 }
 
 export async function createIncident(formData: FormData) {
-  const supabase = serverSupabase();
+  const supabase = await serverSupabase();
 
   // Prefer getSession (more reliable in server actions)
   const { data, error: sessionErr } = await supabase.auth.getSession();
