@@ -1,17 +1,43 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { headers } from "next/headers";
-import { supabaseServer } from "@/lib/supabase/server";
+import { headers, cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
 import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
 
 export async function createIncident(formData: FormData) {
-  const supabase = await supabaseServer();
+  const cookieStore = await cookies();
 
-  // Auth
-  const { data: userRes } = await supabase.auth.getUser();
-  const user = userRes.user;
-  if (!user) redirect("/login");
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll(cookiesToSet) {
+          try {
+            for (const { name, value, options } of cookiesToSet) {
+              cookieStore.set(name, value, options);
+            }
+          } catch {
+            // ignore
+          }
+        },
+      },
+    }
+  );
+
+  // 🔎 Confirm session exists
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    console.log("NO USER IN SERVER ACTION");
+    redirect("/login");
+  }
 
   // Tenant resolution
   const host = getEffectiveHost(await headers());
@@ -27,7 +53,6 @@ export async function createIncident(formData: FormData) {
 
   if (!tenant) throw new Error("Tenant not found");
 
-  // Profile (for submitted_by)
   const { data: profile } = await supabase
     .from("profiles")
     .select("full_name")
@@ -40,7 +65,6 @@ export async function createIncident(formData: FormData) {
 
   if (!title) throw new Error("Title is required");
 
-  // Generate reference number
   const number = `INC-${Date.now().toString().slice(-6)}`;
 
   const { data: inserted, error } = await supabase
