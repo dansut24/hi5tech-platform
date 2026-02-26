@@ -5,16 +5,18 @@ import { headers, cookies } from "next/headers";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
 
+export const runtime = "nodejs"; // IMPORTANT for consistent cookie behavior
+
 type CookieToSet = {
   name: string;
   value: string;
   options: CookieOptions;
 };
 
-export async function createIncident(formData: FormData) {
-  const cookieStore = await cookies();
+function serverSupabase() {
+  const cookieStore = cookies();
 
-  const supabase = createServerClient(
+  return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -28,40 +30,66 @@ export async function createIncident(formData: FormData) {
               cookieStore.set(name, value, options);
             }
           } catch {
-            // ignore in build/runtime edge cases
+            // If this throws in some contexts, we don't want to crash.
+            // Session should still be readable when valid.
           }
         },
       },
     }
   );
+}
 
-  // 🔐 Auth
+export async function createIncident(formData: FormData) {
+  const supabase = serverSupabase();
+
+  // ✅ Prefer getSession (more reliable in server actions)
   const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    data: { session },
+    error: sessionErr,
+  } = await supabase.auth.getSession();
 
-  if (!user) redirect("/login");
+  if (sessionErr) {
+    console.error("[createIncident] getSession error:", sessionErr);
+  }
 
-  // 🌐 Tenant resolution
+  const user = session?.user ?? null;
+
+  if (!user) {
+    // This is the redirect you're seeing as 303
+    console.error("[createIncident] NO USER IN SERVER ACTION (session missing).");
+    redirect("/login");
+  }
+
+  // Tenant resolution
   const host = getEffectiveHost(await headers());
   const parsed = parseTenantHost(host);
-  if (!parsed.subdomain) throw new Error("No tenant context");
+  if (!parsed.subdomain) {
+    console.error("[createIncident] No tenant subdomain. host=", host);
+    throw new Error("No tenant context");
+  }
 
-  const { data: tenant } = await supabase
+  const { data: tenant, error: tenantErr } = await supabase
     .from("tenants")
     .select("id")
     .eq("domain", parsed.rootDomain)
     .eq("subdomain", parsed.subdomain)
     .maybeSingle();
 
-  if (!tenant) throw new Error("Tenant not found");
+  if (tenantErr) console.error("[createIncident] tenant lookup error:", tenantErr);
 
-  // 👤 Profile lookup
-  const { data: profile } = await supabase
+  if (!tenant) {
+    console.error("[createIncident] Tenant not found for:", parsed);
+    throw new Error("Tenant not found");
+  }
+
+  // Profile (for submitted_by)
+  const { data: profile, error: profErr } = await supabase
     .from("profiles")
     .select("full_name")
     .eq("id", user.id)
     .maybeSingle();
+
+  if (profErr) console.error("[createIncident] profile lookup error:", profErr);
 
   const title = String(formData.get("title") || "").trim();
   const description = String(formData.get("description") || "").trim();
@@ -88,8 +116,8 @@ export async function createIncident(formData: FormData) {
     .single();
 
   if (error) {
-    console.error(error);
-    throw new Error("Failed to create incident");
+    console.error("[createIncident] insert error:", error);
+    throw new Error(`Failed to create incident: ${error.message}`);
   }
 
   redirect(`/selfservice/incident/${inserted.id}`);
