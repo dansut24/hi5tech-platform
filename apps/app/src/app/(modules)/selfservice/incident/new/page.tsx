@@ -1,6 +1,5 @@
 // apps/app/src/app/(modules)/selfservice/incident/new/page.tsx
 import Link from "next/link";
-import { createIncident } from "./actions";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs"; // IMPORTANT: make server actions reliably see auth cookies
