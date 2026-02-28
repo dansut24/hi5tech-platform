@@ -25,57 +25,76 @@ export default function LoginForm() {
   const [err, setErr] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  function doneErr(message: string) {
-    setLoading(false);
-    setErr(message);
-  }
-
   async function checkAllowed(e: string) {
     const r = await fetch("/api/auth/allowed", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ email: e }),
     });
-
     const j = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(j?.error || "Auth check failed");
     return Boolean(j?.allowed);
   }
 
-  // ------------------------
-  // PASSWORD LOGIN (FIXED PROPERLY)
-  // ------------------------
-  async function handlePasswordLogin() {
-  setLoading(true);
-  setErr(null);
-  setInfo(null);
-
-  const e = email.trim().toLowerCase();
-  if (!e) return doneErr("Please enter your email.");
-  if (!password) return doneErr("Please enter your password.");
-
-  try {
-    const allowed = await checkAllowed(e);
-    if (!allowed) return doneErr("That email isn’t authorised for this tenant.");
-  } catch (ex: any) {
-    return doneErr(ex?.message || "Auth check failed.");
+  function doneErr(message: string) {
+    setLoading(false);
+    setErr(message);
   }
 
-  const res = await fetch("/api/auth/signin", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({ email: e, password }),
-  });
+  async function bridgeSessionToCookies(session: { access_token: string; refresh_token: string }) {
+    const r = await fetch("/api/auth/session", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+      }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j?.error || "Failed to persist session");
+  }
 
-  const j = await res.json().catch(() => ({}));
-  if (!res.ok) return doneErr(j?.error || "Login failed");
+  // ------------------------
+  // PASSWORD LOGIN
+  // ------------------------
+  async function handlePasswordLogin() {
+    setLoading(true);
+    setErr(null);
+    setInfo(null);
 
-  setLoading(false);
+    const e = email.trim().toLowerCase();
+    if (!e) return doneErr("Please enter your email.");
+    if (!password) return doneErr("Please enter your password.");
 
-  // IMPORTANT: hard nav so server components re-read cookies
-  window.location.href = "/";
-}
+    try {
+      const allowed = await checkAllowed(e);
+      if (!allowed) return doneErr("That email isn’t authorised for this tenant.");
+    } catch (ex: any) {
+      return doneErr(ex?.message || "Auth check failed.");
+    }
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: e,
+      password,
+    });
+
+    if (error) return doneErr(error.message);
+    if (!data.session) return doneErr("Signed in, but no session returned.");
+
+    try {
+      // ✅ CRITICAL: make the server set HttpOnly cookies
+      await bridgeSessionToCookies({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+      });
+    } catch (ex: any) {
+      return doneErr(ex?.message || "Failed to persist session.");
+    }
+
+    setLoading(false);
+    window.location.assign("/auth/callback?next=/");
+  }
+
   // ------------------------
   // EMAIL OTP
   // ------------------------
@@ -89,19 +108,17 @@ export default function LoginForm() {
 
     try {
       const allowed = await checkAllowed(e);
-      if (!allowed)
-        return doneErr("That email isn’t authorised for this tenant.");
+      if (!allowed) return doneErr("That email isn’t authorised for this tenant.");
     } catch (ex: any) {
       return doneErr(ex?.message || "Auth check failed.");
     }
 
     const { error } = await supabase.auth.signInWithOtp({ email: e });
-
     if (error) return doneErr(error.message);
 
     setLoading(false);
     setStep("enterCode");
-    setInfo("Code sent. Check your email and enter the 6-digit code.");
+    setInfo("Code sent. Check your email and enter the code.");
   }
 
   async function verifyOtpCode() {
@@ -111,25 +128,32 @@ export default function LoginForm() {
 
     const e = email.trim().toLowerCase();
     const token = code.trim();
-
     if (!token) return doneErr("Please enter the code.");
 
-    const { error } = await supabase.auth.verifyOtp({
+    const { data, error } = await supabase.auth.verifyOtp({
       email: e,
       token,
       type: "email",
     });
 
     if (error) return doneErr(error.message);
+    if (!data.session) return doneErr("Verified, but no session returned.");
 
-    // 🔥 ensure cookie written after OTP login too
-    await supabase.auth.refreshSession();
+    try {
+      await bridgeSessionToCookies({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+      });
+    } catch (ex: any) {
+      return doneErr(ex?.message || "Failed to persist session.");
+    }
 
-    window.location.href = "/";
+    setLoading(false);
+    window.location.assign("/auth/callback?next=/");
   }
 
   // ------------------------
-  // RESET PASSWORD (CORRECT CALLBACK USE)
+  // RESET PASSWORD (your working flow)
   // ------------------------
   async function sendPasswordReset() {
     setLoading(true);
@@ -141,28 +165,20 @@ export default function LoginForm() {
 
     try {
       const allowed = await checkAllowed(e);
-      if (!allowed)
-        return doneErr("That email isn’t authorised for this tenant.");
+      if (!allowed) return doneErr("That email isn’t authorised for this tenant.");
     } catch (ex: any) {
       return doneErr(ex?.message || "Auth check failed.");
     }
 
-    const redirectTo =
-      `${window.location.origin}/auth/callback?next=/auth/reset`;
+    const redirectTo = `${window.location.origin}/auth/callback?next=/auth/reset`;
 
-    const { error } = await supabase.auth.resetPasswordForEmail(e, {
-      redirectTo,
-    });
-
+    const { error } = await supabase.auth.resetPasswordForEmail(e, { redirectTo });
     if (error) return doneErr(error.message);
 
     setLoading(false);
     setInfo("Password reset email sent. Check your inbox.");
   }
 
-  // ------------------------
-  // UI
-  // ------------------------
   return (
     <div className="space-y-4">
       <div className="flex gap-2">
@@ -174,6 +190,8 @@ export default function LoginForm() {
             setStep("enterEmail");
             setErr(null);
             setInfo(null);
+            setCode("");
+            setPassword("");
           }}
           disabled={loading}
         >
@@ -188,6 +206,8 @@ export default function LoginForm() {
             setStep("enterEmail");
             setErr(null);
             setInfo(null);
+            setCode("");
+            setPassword("");
           }}
           disabled={loading}
         >
