@@ -72,13 +72,22 @@ export async function proxy(req: NextRequest) {
       getAll() {
         return req.cookies.getAll();
       },
-      setAll(cookiesToSet: CookieToSet[]) {
-        for (const { name, value, options } of cookiesToSet) {
-          res.cookies.set(name, value, options);
-        }
+            setAll(cookiesToSet: CookieToSet[]) {
+        const host = req.headers.get("host") || "";
+        const h = host.split(":")[0].toLowerCase();
+        const domain =
+          h === "localhost" || h.endsWith(".vercel.app")
+            ? undefined
+            : `.${ROOT_DOMAIN}`;
+
+        cookiesToSet.forEach(({ name, value, options }) => {
+          res.cookies.set(name, value, {
+            ...options,
+            domain: options?.domain ?? domain,
+            path: options?.path ?? "/",
+          });
+        });
       },
-    },
-  });
 
   // CRITICAL: this refreshes & persists session cookies
   const { data: userRes } = await supabase.auth.getUser();
