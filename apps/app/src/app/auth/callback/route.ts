@@ -1,16 +1,35 @@
 // apps/app/src/app/auth/callback/route.ts
-
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
-import { cookies } from "next/headers";
 
-export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "hi5tech.co.uk";
 
-  const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/";
+type CookieToSet = {
+  name: string;
+  value: string;
+  options?: CookieOptions;
+};
 
-  const cookieStore = await cookies();
+function sharedCookieDomain(hostname: string) {
+  const host = hostname.split(":")[0].toLowerCase();
+  if (host === "localhost" || host.endsWith(".vercel.app")) return undefined;
+  // Share cookies across app.hi5tech.co.uk + tenant subdomains
+  return `.${ROOT_DOMAIN}`;
+}
+
+export async function GET(req: NextRequest) {
+  const url = new URL(req.url);
+
+  // where to go after callback
+  const next = url.searchParams.get("next") || "/";
+  const redirectTo = new URL(next, url.origin);
+
+  // Supabase returns either `code` (PKCE) or sometimes `token_hash` flows
+  const code = url.searchParams.get("code");
+  const token_hash = url.searchParams.get("token_hash");
+  const type = url.searchParams.get("type");
+
+  const res = NextResponse.redirect(redirectTo);
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,21 +37,16 @@ export async function GET(request: Request) {
     {
       cookies: {
         getAll() {
-          return cookieStore.getAll();
+          return req.cookies.getAll();
         },
-        setAll(cookiesToSet: {
-          name: string;
-          value: string;
-          options: CookieOptions;
-        }[]) {
+        setAll(cookiesToSet: CookieToSet[]) {
+          const domain = sharedCookieDomain(req.headers.get("host") || "");
           for (const { name, value, options } of cookiesToSet) {
-            cookieStore.set(name, value, {
+            res.cookies.set(name, value, {
               ...options,
-              // 🔥 CRITICAL FOR MULTI-SUBDOMAIN TENANTS
-              domain: ".hi5tech.co.uk",
-              path: "/",
-              sameSite: "lax",
-              secure: true,
+              // IMPORTANT: share across subdomains
+              domain: options?.domain ?? domain,
+              path: options?.path ?? "/",
             });
           }
         },
@@ -40,14 +54,26 @@ export async function GET(request: Request) {
     }
   );
 
-  if (code) {
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-
-    if (error) {
-      console.error("[auth/callback] exchange error:", error);
-      return NextResponse.redirect(`${origin}/login`);
+  try {
+    if (code) {
+      const { error } = await supabase.auth.exchangeCodeForSession(code);
+      if (error) return NextResponse.redirect(new URL("/login?e=callback", url.origin));
+      return res;
     }
-  }
 
-  return NextResponse.redirect(`${origin}${next}`);
+    // Optional: handle invite/recovery token_hash if it hits callback
+    if (token_hash && type) {
+      const { error } = await supabase.auth.verifyOtp({
+        type: type as any,
+        token_hash,
+      });
+      if (error) return NextResponse.redirect(new URL("/login?e=verify", url.origin));
+      return res;
+    }
+
+    // Nothing usable
+    return NextResponse.redirect(new URL("/login?e=missing_code", url.origin));
+  } catch {
+    return NextResponse.redirect(new URL("/login?e=exception", url.origin));
+  }
 }
