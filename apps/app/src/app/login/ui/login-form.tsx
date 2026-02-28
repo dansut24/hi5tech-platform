@@ -46,35 +46,36 @@ export default function LoginForm() {
   // PASSWORD LOGIN (FIXED PROPERLY)
   // ------------------------
   async function handlePasswordLogin() {
-    setLoading(true);
-    setErr(null);
-    setInfo(null);
+  setLoading(true);
+  setErr(null);
+  setInfo(null);
 
-    const e = email.trim().toLowerCase();
-    if (!e) return doneErr("Please enter your email.");
-    if (!password) return doneErr("Please enter your password.");
+  const e = email.trim().toLowerCase();
+  if (!e) return doneErr("Please enter your email.");
+  if (!password) return doneErr("Please enter your password.");
 
-    try {
-      const allowed = await checkAllowed(e);
-      if (!allowed)
-        return doneErr("That email isn’t authorised for this tenant.");
-    } catch (ex: any) {
-      return doneErr(ex?.message || "Auth check failed.");
-    }
-
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: e,
-      password,
-    });
-
-    if (error) return doneErr(error.message);
-
-    // 🔥 CRITICAL: ensure SSR cookie gets written
-    await supabase.auth.refreshSession();
-
-    window.location.href = "/";
+  try {
+    const allowed = await checkAllowed(e);
+    if (!allowed) return doneErr("That email isn’t authorised for this tenant.");
+  } catch (ex: any) {
+    return doneErr(ex?.message || "Auth check failed.");
   }
 
+  const res = await fetch("/api/auth/signin", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ email: e, password }),
+  });
+
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) return doneErr(j?.error || "Login failed");
+
+  setLoading(false);
+
+  // IMPORTANT: hard nav so server components re-read cookies
+  window.location.href = "/";
+}
   // ------------------------
   // EMAIL OTP
   // ------------------------
