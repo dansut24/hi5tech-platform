@@ -6,11 +6,23 @@ import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "hi5tech.co.uk";
+
 type CookieToSet = {
   name: string;
   value: string;
   options?: CookieOptions;
 };
+
+function withSharedDomain(options?: CookieOptions): CookieOptions {
+  return {
+    path: "/",
+    sameSite: "lax",
+    secure: true,
+    ...options,
+    domain: `.${ROOT_DOMAIN}`,
+  };
+}
 
 function supabaseFromRequest(req: NextRequest, res: NextResponse) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
@@ -23,7 +35,7 @@ function supabaseFromRequest(req: NextRequest, res: NextResponse) {
       },
       setAll(cookiesToSet: CookieToSet[]) {
         for (const { name, value, options } of cookiesToSet) {
-          res.cookies.set(name, value, options);
+          res.cookies.set(name, value, withSharedDomain(options));
         }
       },
     },
