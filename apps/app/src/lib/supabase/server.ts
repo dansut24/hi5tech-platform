@@ -1,3 +1,4 @@
+// apps/app/src/lib/supabase/server.ts
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import type { CookieOptions } from "@supabase/ssr";
@@ -22,6 +23,7 @@ function withSharedDomain(options?: CookieOptions): CookieOptions {
 }
 
 export async function supabaseServer() {
+  // ✅ Next 16: cookies() is async
   const cookieStore = await cookies();
 
   return createServerClient(
@@ -38,7 +40,7 @@ export async function supabaseServer() {
               cookieStore.set(name, value, withSharedDomain(options));
             }
           } catch {
-            // safe in server contexts that cannot set cookies
+            // Some server contexts can’t mutate cookies; safe to ignore.
           }
         },
       },
