@@ -30,122 +30,121 @@ function supabaseFromRequest(req: NextRequest, res: NextResponse) {
   });
 }
 
-// Copy any cookies written to `from` onto `to`
-function carryCookies(from: NextResponse, to: NextResponse) {
-  for (const c of from.cookies.getAll()) {
-    to.cookies.set(c.name, c.value, c);
+/** Create a JSON response AND preserve any cookies Supabase wrote onto `base`. */
+function jsonWithCookies(base: NextResponse, body: any, init?: ResponseInit) {
+  const out = NextResponse.json(body, init);
+  for (const c of base.cookies.getAll()) {
+    out.cookies.set(c.name, c.value, c);
   }
-  return to;
+  return out;
 }
 
 export async function POST(req: NextRequest) {
-  // IMPORTANT: this "base" response is what Supabase writes cookies onto
+  // This is the response Supabase will write refreshed cookies onto
   const base = new NextResponse(null, { status: 200 });
   const supabase = supabaseFromRequest(req, base);
 
-  // 1) Auth
-  const { data: userRes, error: userErr } = await supabase.auth.getUser();
+  try {
+    // ✅ Auth from cookies
+    const { data: userRes, error: userErr } = await supabase.auth.getUser();
 
-  if (userErr) {
-    const out = NextResponse.json(
-      { ok: false, error: "Not authenticated (invalid session)", details: userErr.message },
-      { status: 401 }
-    );
-    return carryCookies(base, out);
-  }
+    if (userErr) {
+      return jsonWithCookies(
+        base,
+        { ok: false, error: "Not authenticated (invalid session)", details: userErr.message },
+        { status: 401 }
+      );
+    }
 
-  const user = userRes.user;
-  if (!user) {
-    const out = NextResponse.json(
-      { ok: false, error: "Not authenticated (no user from cookies)" },
-      { status: 401 }
-    );
-    return carryCookies(base, out);
-  }
+    const user = userRes.user;
+    if (!user) {
+      return jsonWithCookies(
+        base,
+        { ok: false, error: "Not authenticated (no user from cookies)" },
+        { status: 401 }
+      );
+    }
 
-  // 2) Tenant resolution
-  const host = getEffectiveHost(req.headers as any);
-  const parsed = parseTenantHost(host);
+    // ✅ Tenant resolution from host
+    const host = getEffectiveHost(req.headers as any);
+    const parsed = parseTenantHost(host);
 
-  if (!parsed.subdomain) {
-    const out = NextResponse.json({ ok: false, error: "No tenant context" }, { status: 400 });
-    return carryCookies(base, out);
-  }
+    if (!parsed.subdomain) {
+      return jsonWithCookies(base, { ok: false, error: "No tenant context" }, { status: 400 });
+    }
 
-  const { data: tenant, error: tenantErr } = await supabase
-    .from("tenants")
-    .select("id")
-    .eq("domain", parsed.rootDomain)
-    .eq("subdomain", parsed.subdomain)
-    .maybeSingle();
+    const { data: tenant, error: tenantErr } = await supabase
+      .from("tenants")
+      .select("id")
+      .eq("domain", parsed.rootDomain)
+      .eq("subdomain", parsed.subdomain)
+      .maybeSingle();
 
-  if (tenantErr) {
-    const out = NextResponse.json(
-      { ok: false, error: "Tenant lookup failed", details: tenantErr.message },
+    if (tenantErr) {
+      return jsonWithCookies(
+        base,
+        { ok: false, error: "Tenant lookup failed", details: tenantErr.message },
+        { status: 500 }
+      );
+    }
+
+    if (!tenant?.id) {
+      return jsonWithCookies(base, { ok: false, error: "Tenant not found" }, { status: 404 });
+    }
+
+    // ✅ Parse body
+    const body = (await req.json().catch(() => ({}))) as {
+      title?: string;
+      description?: string;
+      priority?: string;
+    };
+
+    const title = String(body.title || "").trim();
+    const description = String(body.description || "").trim();
+    const priority = String(body.priority || "medium").toLowerCase();
+
+    if (!title) return jsonWithCookies(base, { ok: false, error: "Title is required" }, { status: 400 });
+    if (!description) return jsonWithCookies(base, { ok: false, error: "Description is required" }, { status: 400 });
+
+    // Profile (for submitted_by)
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    const number = `INC-${Date.now().toString().slice(-6)}`;
+
+    const { data: inserted, error: insertErr } = await supabase
+      .from("incidents")
+      .insert({
+        tenant_id: tenant.id,
+        title,
+        description,
+        priority,
+        status: "new",
+        triage_status: "untriaged",
+        requester_id: user.id,
+        submitted_by: profile?.full_name ?? user.email,
+        number,
+      })
+      .select("id")
+      .single();
+
+    if (insertErr) {
+      return jsonWithCookies(
+        base,
+        { ok: false, error: "Failed to create incident", details: insertErr.message },
+        { status: 500 }
+      );
+    }
+
+    return jsonWithCookies(base, { ok: true, id: inserted.id }, { status: 200 });
+  } catch (e: any) {
+    return jsonWithCookies(
+      base,
+      { ok: false, error: "Unexpected error", details: e?.message || String(e) },
       { status: 500 }
     );
-    return carryCookies(base, out);
   }
-
-  if (!tenant?.id) {
-    const out = NextResponse.json({ ok: false, error: "Tenant not found" }, { status: 404 });
-    return carryCookies(base, out);
-  }
-
-  // 3) Body
-  const body = (await req.json().catch(() => ({}))) as {
-    title?: string;
-    description?: string;
-    priority?: string;
-  };
-
-  const title = String(body.title || "").trim();
-  const description = String(body.description || "").trim();
-  const priority = String(body.priority || "medium").toLowerCase();
-
-  if (!title) {
-    const out = NextResponse.json({ ok: false, error: "Title is required" }, { status: 400 });
-    return carryCookies(base, out);
-  }
-
-  if (!description) {
-    const out = NextResponse.json({ ok: false, error: "Description is required" }, { status: 400 });
-    return carryCookies(base, out);
-  }
-
-  // 4) Optional profile name
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  const number = `INC-${Date.now().toString().slice(-6)}`;
-
-  const { data: inserted, error: insertErr } = await supabase
-    .from("incidents")
-    .insert({
-      tenant_id: tenant.id,
-      title,
-      description,
-      priority,
-      status: "new",
-      triage_status: "untriaged",
-      requester_id: user.id,
-      submitted_by: profile?.full_name ?? user.email,
-      number,
-    })
-    .select("id")
-    .single();
-
-  if (insertErr) {
-    const out = NextResponse.json(
-      { ok: false, error: "Failed to create incident", details: insertErr.message },
-      { status: 500 }
-    );
-    return carryCookies(base, out);
-  }
-
-  const out = NextResponse.json({ ok: true, id: inserted.id }, { status: 200 });
-  return carryCookies(base, out);
 }
