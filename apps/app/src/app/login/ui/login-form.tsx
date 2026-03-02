@@ -41,17 +41,10 @@ export default function LoginForm() {
     setErr(message);
   }
 
-  async function bridgeSessionToCookies(session: { access_token: string; refresh_token: string }) {
-    const r = await fetch("/api/auth/session", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        access_token: session.access_token,
-        refresh_token: session.refresh_token,
-      }),
-    });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j?.error || "Failed to persist session");
+  function afterAuthRedirect() {
+    // ✅ ALWAYS run through callback on the *current tenant subdomain*
+    // so server can refresh and stamp cookies with Domain=.hi5tech.co.uk
+    window.location.href = "/auth/callback?next=/apps";
   }
 
   // ------------------------
@@ -73,26 +66,11 @@ export default function LoginForm() {
       return doneErr(ex?.message || "Auth check failed.");
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email: e,
-      password,
-    });
-
+    const { error } = await supabase.auth.signInWithPassword({ email: e, password });
     if (error) return doneErr(error.message);
-    if (!data.session) return doneErr("Signed in, but no session returned.");
-
-    try {
-      // ✅ CRITICAL: make the server set HttpOnly cookies
-      await bridgeSessionToCookies({
-        access_token: data.session.access_token,
-        refresh_token: data.session.refresh_token,
-      });
-    } catch (ex: any) {
-      return doneErr(ex?.message || "Failed to persist session.");
-    }
 
     setLoading(false);
-    window.location.assign("/auth/callback?next=/");
+    afterAuthRedirect();
   }
 
   // ------------------------
@@ -118,7 +96,7 @@ export default function LoginForm() {
 
     setLoading(false);
     setStep("enterCode");
-    setInfo("Code sent. Check your email and enter the code.");
+    setInfo("Code sent. Check your email and enter the 6-digit code.");
   }
 
   async function verifyOtpCode() {
@@ -139,21 +117,12 @@ export default function LoginForm() {
     if (error) return doneErr(error.message);
     if (!data.session) return doneErr("Verified, but no session returned.");
 
-    try {
-      await bridgeSessionToCookies({
-        access_token: data.session.access_token,
-        refresh_token: data.session.refresh_token,
-      });
-    } catch (ex: any) {
-      return doneErr(ex?.message || "Failed to persist session.");
-    }
-
     setLoading(false);
-    window.location.assign("/auth/callback?next=/");
+    afterAuthRedirect();
   }
 
   // ------------------------
-  // RESET PASSWORD (your working flow)
+  // RESET PASSWORD
   // ------------------------
   async function sendPasswordReset() {
     setLoading(true);
@@ -184,7 +153,7 @@ export default function LoginForm() {
       <div className="flex gap-2">
         <button
           type="button"
-          className={`flex-1 hi5-btn-${mode === "password" ? "primary" : "ghost"}`}
+          className={`flex-1 ${mode === "password" ? "hi5-btn-primary" : "hi5-btn-ghost"}`}
           onClick={() => {
             setMode("password");
             setStep("enterEmail");
@@ -200,7 +169,7 @@ export default function LoginForm() {
 
         <button
           type="button"
-          className={`flex-1 hi5-btn-${mode === "otp" ? "primary" : "ghost"}`}
+          className={`flex-1 ${mode === "otp" ? "hi5-btn-primary" : "hi5-btn-ghost"}`}
           onClick={() => {
             setMode("otp");
             setStep("enterEmail");
@@ -221,6 +190,7 @@ export default function LoginForm() {
           className="mt-2 hi5-input"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
+          inputMode="email"
           placeholder="you@company.com"
           disabled={loading || (mode === "otp" && step === "enterCode")}
         />
@@ -236,6 +206,7 @@ export default function LoginForm() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               disabled={loading}
+              placeholder="••••••••"
             />
           </label>
 
@@ -272,13 +243,17 @@ export default function LoginForm() {
             </button>
           ) : (
             <>
-              <input
-                className="hi5-input tracking-widest"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                placeholder="123456"
-                disabled={loading}
-              />
+              <label className="block text-sm font-medium">
+                6-digit code
+                <input
+                  className="mt-2 hi5-input tracking-widest"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  inputMode="numeric"
+                  placeholder="123456"
+                  disabled={loading}
+                />
+              </label>
 
               <button
                 type="button"
@@ -288,6 +263,31 @@ export default function LoginForm() {
               >
                 {loading ? "Verifying..." : "Continue"}
               </button>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  className="w-full hi5-btn-ghost"
+                  disabled={loading}
+                  onClick={() => {
+                    setStep("enterEmail");
+                    setCode("");
+                    setErr(null);
+                    setInfo(null);
+                  }}
+                >
+                  Change email
+                </button>
+
+                <button
+                  type="button"
+                  className="w-full hi5-btn-ghost"
+                  disabled={loading}
+                  onClick={sendOtpCode}
+                >
+                  Resend
+                </button>
+              </div>
             </>
           )}
         </>
