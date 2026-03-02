@@ -1,136 +1,127 @@
-// apps/app/src/app/api/selfservice/incident/route.ts
 import { NextResponse, type NextRequest } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import { parseTenantHost } from "@/lib/tenant/tenant-from-host";
+import { headers } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
+import type { CookieOptions } from "@supabase/ssr";
+import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type Body = {
-  title?: string;
-  description?: string;
-  priority?: string;
+type CookieToSet = {
+  name: string;
+  value: string;
+  options?: CookieOptions;
 };
 
-function json(status: number, payload: any) {
-  return NextResponse.json(payload, { status });
-}
-
-function getBearer(req: NextRequest) {
-  const h = req.headers.get("authorization") || "";
-  const m = h.match(/^Bearer\s+(.+)$/i);
-  return m?.[1] || null;
+function json(status: number, body: any) {
+  return NextResponse.json(body, { status });
 }
 
 export async function POST(req: NextRequest) {
-  try {
-    const token = getBearer(req);
-    if (!token) return json(401, { error: "Not authenticated (missing token)" });
+  // We must create the response early so we can set cookies on it if Supabase refreshes.
+  const res = NextResponse.next();
 
-    const host = (req.headers.get("host") || "").toLowerCase();
-    const parsed = parseTenantHost(host);
-
-    if (!parsed.subdomain || !parsed.rootDomain) {
-      return json(400, { error: "No tenant context (missing subdomain)" });
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return req.cookies.getAll();
+        },
+        setAll(cookiesToSet: CookieToSet[]) {
+          for (const { name, value, options } of cookiesToSet) {
+            res.cookies.set(name, value, options);
+          }
+        },
+      },
     }
+  );
 
-    const { title, description, priority } = (await req.json().catch(() => ({}))) as Body;
+  // ✅ Auth from cookies (httpOnly) – this is the key fix
+  const { data: userRes, error: userErr } = await supabase.auth.getUser();
+  const user = userRes.user;
 
-    const cleanTitle = String(title || "").trim();
-    const cleanDesc = String(description || "").trim();
-    const cleanPriority = String(priority || "medium").toLowerCase();
-
-    if (!cleanTitle) return json(400, { error: "Title is required" });
-    if (!cleanDesc) return json(400, { error: "Description is required" });
-
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!serviceKey) {
-      return json(500, { error: "Server missing SUPABASE_SERVICE_ROLE_KEY" });
-    }
-
-    // 1) Verify user from token (no cookies required)
-    const authClient = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: `Bearer ${token}` } },
+  if (userErr || !user) {
+    // Helpful debug (remove later)
+    const cookieNames = req.cookies.getAll().map((c) => c.name);
+    return json(401, {
+      error: "Not authenticated (no user from cookies)",
+      cookieNames,
     });
-
-    const { data: userRes, error: userErr } = await authClient.auth.getUser();
-    if (userErr || !userRes.user) {
-      return json(401, { error: "Not authenticated (invalid session)" });
-    }
-    const user = userRes.user;
-
-    // 2) Use service role for DB ops (but enforce our own checks)
-    const db = createClient(supabaseUrl, serviceKey);
-
-    // Tenant lookup by host
-    const { data: tenant, error: tenantErr } = await db
-      .from("tenants")
-      .select("id, domain, subdomain, is_active, name, company_name")
-      .eq("domain", parsed.rootDomain)
-      .eq("subdomain", parsed.subdomain)
-      .eq("is_active", true)
-      .maybeSingle();
-
-    if (tenantErr) return json(500, { error: tenantErr.message });
-    if (!tenant) return json(404, { error: "Tenant not found" });
-
-    // Membership check
-    const { data: membership, error: memErr } = await db
-      .from("memberships")
-      .select("id, role")
-      .eq("tenant_id", tenant.id)
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (memErr) return json(500, { error: memErr.message });
-    if (!membership) return json(403, { error: "No membership for this tenant" });
-
-    // Module assignment check (selfservice)
-    const { data: mod, error: modErr } = await db
-      .from("module_assignments")
-      .select("id")
-      .eq("membership_id", membership.id)
-      .eq("module", "selfservice")
-      .maybeSingle();
-
-    if (modErr) return json(500, { error: modErr.message });
-    if (!mod) return json(403, { error: "No selfservice module access" });
-
-    // Profile (optional)
-    const { data: profile } = await db
-      .from("profiles")
-      .select("full_name")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    const submittedBy =
-      (profile?.full_name && String(profile.full_name).trim()) || user.email || "User";
-
-    const number = `INC-${Date.now().toString().slice(-6)}`;
-
-    const { data: inserted, error: insErr } = await db
-      .from("incidents")
-      .insert({
-        tenant_id: tenant.id,
-        title: cleanTitle,
-        description: cleanDesc,
-        priority: cleanPriority,
-        status: "new",
-        triage_status: "untriaged",
-        requester_id: user.id,
-        submitted_by: submittedBy,
-        number,
-      })
-      .select("id")
-      .single();
-
-    if (insErr) return json(500, { error: insErr.message });
-
-    return json(200, { id: inserted.id });
-  } catch (e: any) {
-    return json(500, { error: e?.message || "Unexpected error" });
   }
+
+  // Tenant resolution from host
+  const host = getEffectiveHost(await headers());
+  const parsed = parseTenantHost(host);
+  if (!parsed.subdomain) return json(400, { error: "No tenant context (no subdomain)" });
+
+  const { data: tenant, error: tenantErr } = await supabase
+    .from("tenants")
+    .select("id")
+    .eq("domain", parsed.rootDomain)
+    .eq("subdomain", parsed.subdomain)
+    .maybeSingle();
+
+  if (tenantErr || !tenant?.id) return json(404, { error: "Tenant not found" });
+
+  // Optional: ensure this user is a member of this tenant (good security)
+  const { data: membership } = await supabase
+    .from("memberships")
+    .select("id, role")
+    .eq("tenant_id", tenant.id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!membership?.id) return json(403, { error: "Not a tenant member" });
+
+  // Optional: ensure this user has selfservice module
+  const { data: mod } = await supabase
+    .from("module_assignments")
+    .select("id")
+    .eq("membership_id", membership.id)
+    .eq("module", "selfservice")
+    .maybeSingle();
+
+  if (!mod?.id) return json(403, { error: "No selfservice access" });
+
+  const body = await req.json().catch(() => ({}));
+  const title = String(body.title || "").trim();
+  const description = String(body.description || "").trim();
+  const priority = String(body.priority || "medium").toLowerCase();
+
+  if (!title) return json(400, { error: "Title is required" });
+  if (!description) return json(400, { error: "Description is required" });
+
+  // requester name
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const number = `INC-${Date.now().toString().slice(-6)}`;
+
+  const { data: inserted, error: insertErr } = await supabase
+    .from("incidents")
+    .insert({
+      tenant_id: tenant.id,
+      title,
+      description,
+      priority,
+      status: "new",
+      triage_status: "untriaged",
+      requester_id: user.id,
+      submitted_by: profile?.full_name ?? user.email,
+      number,
+    })
+    .select("id")
+    .single();
+
+  if (insertErr || !inserted?.id) {
+    return json(500, { error: insertErr?.message || "Failed to create incident" });
+  }
+
+  // Return JSON *and* include any cookie refresh on the response
+  return NextResponse.json({ ok: true, id: inserted.id }, { status: 200, headers: res.headers });
 }
