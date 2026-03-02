@@ -1,53 +1,62 @@
+// apps/app/src/app/(modules)/selfservice/incident/new/page.tsx
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 export const dynamic = "force-dynamic";
 
 export default function NewSelfServiceIncidentPage() {
-  const router = useRouter();
-
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("medium");
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setErr(null);
-
-    const t = title.trim();
-    const d = description.trim();
-    if (!t) return setErr("Title is required");
-    if (!d) return setErr("Description is required");
-
+  async function submit() {
     setLoading(true);
+    setErr(null);
+    setInfo(null);
+
     try {
       const r = await fetch("/api/selfservice/incident", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        // ✅ CRITICAL so cookies are sent
-        credentials: "include",
-        body: JSON.stringify({ title: t, description: d, priority }),
+        credentials: "same-origin",
+        body: JSON.stringify({
+          title,
+          description,
+          priority,
+        }),
       });
 
       const j = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(j?.error || "Failed to create incident");
 
-      router.push(`/selfservice/incident/${j.id}`);
-    } catch (ex: any) {
-      setErr(ex?.message || "Failed to create incident");
-    } finally {
+      if (!r.ok || !j?.ok) {
+        const msg = j?.error || "Failed to submit incident";
+        // Helpful UX for the exact problem you’re seeing
+        if (r.status === 401) {
+          setErr(`${msg}. Please log in again, then come straight back to Self Service.`);
+        } else {
+          setErr(msg + (j?.details ? ` (${j.details})` : ""));
+        }
+        setLoading(false);
+        return;
+      }
+
+      setInfo("Incident created. Redirecting...");
+      window.location.assign(`/selfservice/incident/${j.id}`);
+    } catch (e: any) {
+      setErr(e?.message || "Request failed");
       setLoading(false);
     }
   }
 
   return (
     <div className="max-w-3xl mx-auto">
+      {/* Header */}
       <div className="flex items-start justify-between gap-3 mb-4">
         <div>
           <div className="text-xs opacity-70">Self Service</div>
@@ -64,43 +73,36 @@ export default function NewSelfServiceIncidentPage() {
             Back
           </Link>
           <button
-            type="submit"
-            form="incident-form"
+            type="button"
+            onClick={submit}
+            disabled={loading || !title.trim() || !description.trim()}
             className="hi5-btn-primary text-sm"
-            disabled={loading}
           >
             {loading ? "Submitting..." : "Submit"}
           </button>
         </div>
       </div>
 
-      <form
-        id="incident-form"
-        onSubmit={onSubmit}
-        className="hi5-panel border hi5-border rounded-3xl p-4 sm:p-6 space-y-4"
-      >
+      {/* Form card */}
+      <div className="hi5-panel border hi5-border rounded-3xl p-4 sm:p-6 space-y-4">
         <div>
           <label className="text-sm opacity-80">Title</label>
           <input
-            required
-            className="hi5-input mt-2"
-            placeholder="e.g. Can’t access email"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            disabled={loading}
+            className="hi5-input mt-2"
+            placeholder="e.g. Can’t access email"
           />
         </div>
 
         <div>
           <label className="text-sm opacity-80">Description</label>
           <textarea
-            required
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
             rows={6}
             className="hi5-input mt-2"
             placeholder="What happened? What did you expect? Any error messages?"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            disabled={loading}
           />
         </div>
 
@@ -108,10 +110,9 @@ export default function NewSelfServiceIncidentPage() {
           <div>
             <label className="text-sm opacity-80">Priority</label>
             <select
-              className="hi5-input mt-2"
               value={priority}
               onChange={(e) => setPriority(e.target.value)}
-              disabled={loading}
+              className="hi5-input mt-2"
             >
               <option value="low">Low</option>
               <option value="medium">Medium</option>
@@ -122,7 +123,7 @@ export default function NewSelfServiceIncidentPage() {
 
           <div>
             <label className="text-sm opacity-80">Impact</label>
-            <select className="hi5-input mt-2" defaultValue="just_me" disabled={loading}>
+            <select className="hi5-input mt-2" defaultValue="just_me" disabled>
               <option value="just_me">Just me</option>
               <option value="team">My team</option>
               <option value="site">Whole site</option>
@@ -130,8 +131,13 @@ export default function NewSelfServiceIncidentPage() {
           </div>
         </div>
 
+        {info && <div className="text-sm opacity-80">{info}</div>}
         {err && <div className="text-sm text-red-600">{err}</div>}
-      </form>
+
+        <div className="text-xs opacity-60">
+          This creates a real incident in Supabase via <code>/api/selfservice/incident</code>.
+        </div>
+      </div>
     </div>
   );
 }
