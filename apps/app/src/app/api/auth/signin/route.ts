@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 401 });
     }
 
-    // ✅ auth cookies are now attached to `res`
+    // ✅ auth cookies are now attached to `res` with shared domain
     return res;
   } catch {
     return NextResponse.json({ error: "Unexpected error" }, { status: 500 });
