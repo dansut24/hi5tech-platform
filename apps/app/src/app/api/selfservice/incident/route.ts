@@ -1,8 +1,7 @@
 // apps/app/src/app/api/selfservice/incident/route.ts
 import { NextResponse, type NextRequest } from "next/server";
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
-import type { CookieOptions } from "@supabase/ssr";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,7 +22,6 @@ function supabaseFromRequest(req: NextRequest, res: NextResponse) {
         return req.cookies.getAll();
       },
       setAll(cookiesToSet: CookieToSet[]) {
-        // Ensure cookies are actually persisted on the response
         for (const { name, value, options } of cookiesToSet) {
           res.cookies.set(name, value, options);
         }
@@ -32,97 +30,122 @@ function supabaseFromRequest(req: NextRequest, res: NextResponse) {
   });
 }
 
+// Copy any cookies written to `from` onto `to`
+function carryCookies(from: NextResponse, to: NextResponse) {
+  for (const c of from.cookies.getAll()) {
+    to.cookies.set(c.name, c.value, c);
+  }
+  return to;
+}
+
 export async function POST(req: NextRequest) {
-  const res = NextResponse.json({ ok: false }, { status: 200 });
+  // IMPORTANT: this "base" response is what Supabase writes cookies onto
+  const base = new NextResponse(null, { status: 200 });
+  const supabase = supabaseFromRequest(req, base);
 
-  try {
-    const supabase = supabaseFromRequest(req, res);
+  // 1) Auth
+  const { data: userRes, error: userErr } = await supabase.auth.getUser();
 
-    // ✅ Auth from cookies
-    const { data: userRes, error: userErr } = await supabase.auth.getUser();
-    if (userErr) {
-      return NextResponse.json(
-        { ok: false, error: "Not authenticated (invalid session)", details: userErr.message },
-        { status: 401 }
-      );
-    }
-    const user = userRes.user;
-    if (!user) {
-      return NextResponse.json({ ok: false, error: "Not authenticated (no user from cookies)" }, { status: 401 });
-    }
+  if (userErr) {
+    const out = NextResponse.json(
+      { ok: false, error: "Not authenticated (invalid session)", details: userErr.message },
+      { status: 401 }
+    );
+    return carryCookies(base, out);
+  }
 
-    // ✅ Tenant resolution from host
-    const host = getEffectiveHost(req.headers as any);
-    const parsed = parseTenantHost(host);
-    if (!parsed.subdomain) {
-      return NextResponse.json({ ok: false, error: "No tenant context" }, { status: 400 });
-    }
+  const user = userRes.user;
+  if (!user) {
+    const out = NextResponse.json(
+      { ok: false, error: "Not authenticated (no user from cookies)" },
+      { status: 401 }
+    );
+    return carryCookies(base, out);
+  }
 
-    const { data: tenant, error: tenantErr } = await supabase
-      .from("tenants")
-      .select("id")
-      .eq("domain", parsed.rootDomain)
-      .eq("subdomain", parsed.subdomain)
-      .maybeSingle();
+  // 2) Tenant resolution
+  const host = getEffectiveHost(req.headers as any);
+  const parsed = parseTenantHost(host);
 
-    if (tenantErr) {
-      return NextResponse.json({ ok: false, error: "Tenant lookup failed", details: tenantErr.message }, { status: 500 });
-    }
-    if (!tenant?.id) {
-      return NextResponse.json({ ok: false, error: "Tenant not found" }, { status: 404 });
-    }
+  if (!parsed.subdomain) {
+    const out = NextResponse.json({ ok: false, error: "No tenant context" }, { status: 400 });
+    return carryCookies(base, out);
+  }
 
-    // ✅ Parse body
-    const body = (await req.json().catch(() => ({}))) as {
-      title?: string;
-      description?: string;
-      priority?: string;
-    };
+  const { data: tenant, error: tenantErr } = await supabase
+    .from("tenants")
+    .select("id")
+    .eq("domain", parsed.rootDomain)
+    .eq("subdomain", parsed.subdomain)
+    .maybeSingle();
 
-    const title = String(body.title || "").trim();
-    const description = String(body.description || "").trim();
-    const priority = String(body.priority || "medium").toLowerCase();
-
-    if (!title) return NextResponse.json({ ok: false, error: "Title is required" }, { status: 400 });
-    if (!description) return NextResponse.json({ ok: false, error: "Description is required" }, { status: 400 });
-
-    // Profile (for submitted_by)
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("full_name")
-      .eq("id", user.id)
-      .maybeSingle();
-
-    const number = `INC-${Date.now().toString().slice(-6)}`;
-
-    const { data: inserted, error: insertErr } = await supabase
-      .from("incidents")
-      .insert({
-        tenant_id: tenant.id,
-        title,
-        description,
-        priority,
-        status: "new",
-        triage_status: "untriaged",
-        requester_id: user.id,
-        submitted_by: profile?.full_name ?? user.email,
-        number,
-      })
-      .select("id")
-      .single();
-
-    if (insertErr) {
-      return NextResponse.json(
-        { ok: false, error: "Failed to create incident", details: insertErr.message },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ ok: true, id: inserted.id }, { status: 200 });
-  } catch (e: any) {
-    return NextResponse.json(
-      { ok: false, error: "Unexpected error", details: e?.message || String(e) },
+  if (tenantErr) {
+    const out = NextResponse.json(
+      { ok: false, error: "Tenant lookup failed", details: tenantErr.message },
       { status: 500 }
     );
+    return carryCookies(base, out);
   }
+
+  if (!tenant?.id) {
+    const out = NextResponse.json({ ok: false, error: "Tenant not found" }, { status: 404 });
+    return carryCookies(base, out);
+  }
+
+  // 3) Body
+  const body = (await req.json().catch(() => ({}))) as {
+    title?: string;
+    description?: string;
+    priority?: string;
+  };
+
+  const title = String(body.title || "").trim();
+  const description = String(body.description || "").trim();
+  const priority = String(body.priority || "medium").toLowerCase();
+
+  if (!title) {
+    const out = NextResponse.json({ ok: false, error: "Title is required" }, { status: 400 });
+    return carryCookies(base, out);
+  }
+
+  if (!description) {
+    const out = NextResponse.json({ ok: false, error: "Description is required" }, { status: 400 });
+    return carryCookies(base, out);
+  }
+
+  // 4) Optional profile name
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const number = `INC-${Date.now().toString().slice(-6)}`;
+
+  const { data: inserted, error: insertErr } = await supabase
+    .from("incidents")
+    .insert({
+      tenant_id: tenant.id,
+      title,
+      description,
+      priority,
+      status: "new",
+      triage_status: "untriaged",
+      requester_id: user.id,
+      submitted_by: profile?.full_name ?? user.email,
+      number,
+    })
+    .select("id")
+    .single();
+
+  if (insertErr) {
+    const out = NextResponse.json(
+      { ok: false, error: "Failed to create incident", details: insertErr.message },
+      { status: 500 }
+    );
+    return carryCookies(base, out);
+  }
+
+  const out = NextResponse.json({ ok: true, id: inserted.id }, { status: 200 });
+  return carryCookies(base, out);
 }
