@@ -21,6 +21,17 @@ function withSharedDomain(options?: CookieOptions): CookieOptions {
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const next = url.searchParams.get("next") || "/apps";
+  const code = url.searchParams.get("code");
+
+  // If no code param, the session was set client-side via createBrowserClient (localStorage).
+  // We can't read that server-side, so redirect to /auth/stamp — a client page
+  // that reads the browser session and POSTs it to /api/auth/session to stamp
+  // it into shared-domain server cookies.
+  if (!code) {
+    const stamp = new URL("/auth/stamp", url.origin);
+    stamp.searchParams.set("next", next);
+    return NextResponse.redirect(stamp);
+  }
 
   const res = NextResponse.redirect(new URL(next, url.origin));
 
@@ -41,9 +52,8 @@ export async function GET(req: NextRequest) {
     }
   );
 
-  // ✅ Critical: exchange code->session & refresh cookies
-  // If there is no code, this is still safe; it will just keep existing cookies.
-  await supabase.auth.getUser();
+  // Exchange PKCE code for session and stamp shared-domain cookies
+  await supabase.auth.exchangeCodeForSession(code);
 
   return res;
 }
