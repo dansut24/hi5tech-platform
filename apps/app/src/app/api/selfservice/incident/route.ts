@@ -1,41 +1,24 @@
 // apps/app/src/app/api/selfservice/incident/route.ts
 import { NextResponse, type NextRequest } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { supabaseServer } from "@/lib/supabase/server";
 import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function getBearer(req: NextRequest) {
-  const h = req.headers.get("authorization") || "";
-  const m = h.match(/^Bearer\s+(.+)$/i);
-  return m?.[1] || null;
-}
-
 export async function POST(req: NextRequest) {
-  const token = getBearer(req);
-  if (!token) {
-    return NextResponse.json(
-      { ok: false, error: "Not authenticated — missing token" },
-      { status: 401 }
-    );
-  }
+  // Use cookie-based auth via supabaseServer() — consistent with every other
+  // API route in the codebase. The shared-domain cookie (domain: .hi5tech.co.uk)
+  // is set at login and is available on all tenant subdomains automatically.
+  const supabase = await supabaseServer();
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { global: { headers: { Authorization: `Bearer ${token}` } } }
-  );
-
-  const { data: userRes, error: userErr } = await supabase.auth.getUser();
-  if (userErr || !userRes.user) {
-    return NextResponse.json(
-      { ok: false, error: "Not authenticated — invalid token" },
-      { status: 401 }
-    );
+  const { data: userRes } = await supabase.auth.getUser();
+  if (!userRes.user) {
+    return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
   }
   const user = userRes.user;
 
+  // Resolve tenant from the subdomain of the current host
   const host = getEffectiveHost(req.headers as unknown as Headers);
   const parsed = parseTenantHost(host);
   if (!parsed.subdomain) {
@@ -56,6 +39,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Tenant not found" }, { status: 404 });
   }
 
+  // Parse and validate body
   const body = (await req.json().catch(() => ({}))) as {
     title?: string;
     description?: string;
@@ -66,20 +50,23 @@ export async function POST(req: NextRequest) {
   const description = String(body.description || "").trim();
   const priority    = String(body.priority || "Medium");
 
-  if (!title)       return NextResponse.json({ ok: false, error: "Title is required" }, { status: 400 });
-  if (!description) return NextResponse.json({ ok: false, error: "Description is required" }, { status: 400 });
-
+  if (!title)
+    return NextResponse.json({ ok: false, error: "Title is required" }, { status: 400 });
+  if (!description)
+    return NextResponse.json({ ok: false, error: "Description is required" }, { status: 400 });
   if (title.length > 255)
     return NextResponse.json({ ok: false, error: "Title must be 255 characters or fewer" }, { status: 400 });
   if (description.length > 10000)
     return NextResponse.json({ ok: false, error: "Description must be 10,000 characters or fewer" }, { status: 400 });
 
+  // Profile for submitted_by display name
   const { data: profile } = await supabase
     .from("profiles")
     .select("full_name")
     .eq("id", user.id)
     .maybeSingle();
 
+  // Atomic sequential incident number — same counter used by the ITSM route
   const { data: counterData, error: counterErr } = await supabase.rpc(
     "next_tenant_counter",
     { p_tenant_id: tenant.id, p_counter_name: "incidents" }
