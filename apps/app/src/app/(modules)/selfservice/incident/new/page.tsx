@@ -20,8 +20,7 @@ export default function NewSelfServiceIncidentPage() {
     setInfo(null);
 
     try {
-      // Cookie is sent automatically by the browser — no token wrangling needed
-      const r = await fetch("/selfservice/incident", {
+      const r = await fetch("/api/selfservice/incident", {
         method: "POST",
         headers: { "content-type": "application/json" },
         credentials: "include",
