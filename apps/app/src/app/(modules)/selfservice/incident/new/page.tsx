@@ -2,11 +2,18 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { createBrowserClient } from "@supabase/ssr";
 
 export const dynamic = "force-dynamic";
 
 export default function NewSelfServiceIncidentPage() {
+  const supabase = useMemo(() =>
+    createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    ), []);
+
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("Medium");
@@ -15,19 +22,39 @@ export default function NewSelfServiceIncidentPage() {
   const [err, setErr] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
+  async function getToken(): Promise<string | null> {
+    // 1. Try refreshSession first — makes a live network call to Supabase,
+    //    doesn't depend on localStorage being populated correctly.
+    const { data: refreshed } = await supabase.auth.refreshSession();
+    if (refreshed?.session?.access_token) {
+      return refreshed.session.access_token;
+    }
+
+    // 2. Fall back to getSession (localStorage) if refresh fails
+    const { data: sessionData } = await supabase.auth.getSession();
+    return sessionData?.session?.access_token ?? null;
+  }
+
   async function submit() {
     setLoading(true);
     setErr(null);
     setInfo(null);
 
     try {
-      // No Authorization header needed — the shared-domain Supabase cookie
-      // (set at login with domain: .hi5tech.co.uk) is sent automatically by
-      // the browser on all tenant subdomains.
+      const token = await getToken();
+
+      if (!token) {
+        setErr("Your session has expired. Please sign in again.");
+        setLoading(false);
+        return;
+      }
+
       const r = await fetch("/api/selfservice/incident", {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        credentials: "include",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${token}`,
+        },
         body: JSON.stringify({ title, description, priority }),
       });
 
