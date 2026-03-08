@@ -1,4 +1,3 @@
-// apps/app/src/app/api/selfservice/incident/route.ts
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
@@ -6,63 +5,71 @@ import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function getBearer(req: NextRequest): string | null {
-  const h = req.headers.get("authorization") || "";
-  const m = h.match(/^Bearer\s+(.+)$/i);
-  return m?.[1] || null;
-}
-
 export async function POST(req: NextRequest) {
-  const token = getBearer(req);
-  if (!token) {
-    return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
-  }
+  const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/$/, "");
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 
-  // Validate the token directly with Supabase using the anon key.
-  // This is the correct pattern when the client sends a Bearer token explicitly —
-  // it does not depend on cookies being set correctly across subdomains.
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { global: { headers: { Authorization: `Bearer ${token}` } } }
+  // Decode token from browser-format cookie (base64-eyJ...)
+  const allCookies = req.cookies.getAll();
+  const rawCookie = allCookies.find(
+    c => c.name.match(/sb-.+-auth-token$/) && !c.name.includes(".")
   );
 
-  const { data: userRes, error: userErr } = await supabase.auth.getUser();
-  if (userErr || !userRes.user) {
+  let accessToken: string | null = null;
+  if (rawCookie?.value?.startsWith("base64-")) {
+    try {
+      const raw = Buffer.from(rawCookie.value.slice(7), "base64").toString("utf8");
+      accessToken = JSON.parse(raw).access_token ?? null;
+    } catch { /* ignore */ }
+  }
+
+  if (!accessToken) {
     return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
   }
-  const user = userRes.user;
 
-  // Resolve tenant from the request host
+  // Verify token directly via Supabase REST — confirmed working in debug route
+  const authRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      apikey: supabaseKey,
+    },
+  });
+
+  if (!authRes.ok) {
+    return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
+  }
+
+  const user = await authRes.json();
+  if (!user?.id) {
+    return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
+  }
+
+  // Tenant resolution
   const host = getEffectiveHost(req.headers as unknown as Headers);
   const parsed = parseTenantHost(host);
   if (!parsed.subdomain) {
     return NextResponse.json({ ok: false, error: "No tenant context" }, { status: 400 });
   }
 
-  const { data: tenant, error: tenantErr } = await supabase
+  const supabase = createClient(supabaseUrl, supabaseKey, {
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+  });
+
+  const { data: tenant } = await supabase
     .from("tenants")
     .select("id")
     .eq("domain", parsed.rootDomain)
     .eq("subdomain", parsed.subdomain)
     .maybeSingle();
 
-  if (tenantErr) {
-    return NextResponse.json({ ok: false, error: "Tenant lookup failed" }, { status: 500 });
-  }
   if (!tenant?.id) {
     return NextResponse.json({ ok: false, error: "Tenant not found" }, { status: 404 });
   }
 
-  const body = (await req.json().catch(() => ({}))) as {
-    title?: string;
-    description?: string;
-    priority?: string;
-  };
-
-  const title       = String(body.title || "").trim();
-  const description = String(body.description || "").trim();
-  const priority    = String(body.priority || "Medium");
+  const body = await req.json().catch(() => ({}));
+  const title       = String(body?.title || "").trim();
+  const description = String(body?.description || "").trim();
+  const priority    = String(body?.priority || "Medium");
 
   if (!title)
     return NextResponse.json({ ok: false, error: "Title is required" }, { status: 400 });
@@ -112,5 +119,5 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Failed to create incident" }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, id: inserted.id }, { status: 200 });
+  return NextResponse.json({ ok: true, id: inserted.id });
 }
