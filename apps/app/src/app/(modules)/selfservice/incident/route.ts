@@ -1,22 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { supabaseRoute } from "@/lib/supabase/route";
 import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
 
 export async function POST(req: NextRequest) {
-  // Use Bearer token auth — the client sends its access token explicitly.
-  // This avoids any dependency on cookies being set correctly across subdomains.
-  const authHeader = req.headers.get("authorization") || "";
-  const token = authHeader.match(/^Bearer\s+(.+)$/i)?.[1] || null;
-
-  if (!token) {
-    return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
-  }
-
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { global: { headers: { Authorization: `Bearer ${token}` } } }
-  );
+  // Session is in a cookie — use supabaseRoute() which reads from req.cookies
+  // NOT supabaseServer() which reads from the Next.js cookie store (different context)
+  const res = NextResponse.next();
+  const supabase = supabaseRoute(req, res);
 
   const { data: userRes } = await supabase.auth.getUser();
   const user = userRes.user;
@@ -47,21 +37,21 @@ export async function POST(req: NextRequest) {
   const description = String(body?.description || "").trim();
   const priority    = String(body?.priority || "Medium");
 
-  if (!title)       return NextResponse.json({ ok: false, error: "Title is required" }, { status: 400 });
-  if (!description) return NextResponse.json({ ok: false, error: "Description is required" }, { status: 400 });
+  if (!title)
+    return NextResponse.json({ ok: false, error: "Title is required" }, { status: 400 });
+  if (!description)
+    return NextResponse.json({ ok: false, error: "Description is required" }, { status: 400 });
   if (title.length > 255)
     return NextResponse.json({ ok: false, error: "Title must be 255 characters or fewer" }, { status: 400 });
   if (description.length > 10000)
     return NextResponse.json({ ok: false, error: "Description must be 10,000 characters or fewer" }, { status: 400 });
 
-  // Profile for submitted_by
   const { data: profile } = await supabase
     .from("profiles")
     .select("full_name")
     .eq("id", user.id)
     .maybeSingle();
 
-  // Atomic sequential number
   const { data: counterData, error: counterErr } = await supabase.rpc(
     "next_tenant_counter",
     { p_tenant_id: tenant.id, p_counter_name: "incidents" }
