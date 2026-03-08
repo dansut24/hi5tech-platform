@@ -1,4 +1,3 @@
-// apps/app/src/app/(modules)/selfservice/incident/new/page.tsx
 "use client";
 
 import Link from "next/link";
@@ -23,14 +22,13 @@ export default function NewSelfServiceIncidentPage() {
   const [info, setInfo] = useState<string | null>(null);
 
   async function getToken(): Promise<string | null> {
-    // 1. Try refreshSession first — makes a live network call to Supabase,
-    //    doesn't depend on localStorage being populated correctly.
+    // refreshSession() makes a live call to Supabase — doesn't depend on
+    // localStorage being populated, works reliably across subdomains.
     const { data: refreshed } = await supabase.auth.refreshSession();
     if (refreshed?.session?.access_token) {
       return refreshed.session.access_token;
     }
-
-    // 2. Fall back to getSession (localStorage) if refresh fails
+    // Fallback to getSession if refresh fails (e.g. truly logged out)
     const { data: sessionData } = await supabase.auth.getSession();
     return sessionData?.session?.access_token ?? null;
   }
@@ -49,7 +47,7 @@ export default function NewSelfServiceIncidentPage() {
         return;
       }
 
-      const r = await fetch("/api/selfservice/incident", {
+      const r = await fetch("/selfservice/incident", {
         method: "POST",
         headers: {
           "content-type": "application/json",
