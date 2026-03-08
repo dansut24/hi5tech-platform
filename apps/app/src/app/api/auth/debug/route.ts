@@ -1,12 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "MISSING";
+  const url = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "MISSING").replace(/\/$/, "");
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "MISSING";
 
-  // Call Supabase auth directly with the token from the cookie
+  // Decode token from browser-format cookie
   const allCookies = req.cookies.getAll();
   const rawCookie = allCookies.find(
     c => c.name.match(/sb-.+-auth-token$/) && !c.name.includes(".")
@@ -20,17 +21,20 @@ export async function GET(req: NextRequest) {
     } catch { /* ignore */ }
   }
 
-  // Call Supabase REST directly — same as what worked in the browser
-  let directResult = null;
-  let directError = null;
+  // Call Supabase auth REST directly from the server
+  let directResult: any = null;
+  let directError: string | null = null;
+  let directStatus: number | null = null;
   if (accessToken) {
     try {
-      const r = await fetch(`${url}/auth/v1/user`, {
+      const endpoint = `${url}/auth/v1/user`;
+      const r = await fetch(endpoint, {
         headers: {
           Authorization: `Bearer ${accessToken}`,
           apikey: key,
         },
       });
+      directStatus = r.status;
       directResult = await r.json();
     } catch (e: any) {
       directError = e.message;
@@ -40,11 +44,11 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     envUrl: url,
     envKeyLength: key.length,
-    envKeyStart: key.slice(0, 20),
     envKeyEnd: key.slice(-10),
     hasToken: !!accessToken,
-    tokenStart: accessToken?.slice(0, 20) ?? null,
-    directResult: directResult ? { id: directResult.id, email: directResult.email, error: directResult.error } : null,
+    directStatus,
+    directEmail: directResult?.email ?? null,
+    directErrorMsg: directResult?.message ?? directResult?.error ?? null,
     directError,
   });
 }
