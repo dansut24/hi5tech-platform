@@ -13,9 +13,6 @@ function uniq<T>(arr: T[]) {
   return Array.from(new Set(arr));
 }
 
-const API_BASE =
-  process.env.NEXT_PUBLIC_RMM_API_BASE?.replace(/\/+$/, "") || "https://rmm.hi5tech.co.uk";
-
 export default function DevicesClient() {
   const [filter, setFilter] = useState<Filter>("all");
   const [q, setQ] = useState("");
@@ -24,25 +21,45 @@ export default function DevicesClient() {
 
   const [devices, setDevices] = useState<DeviceRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // Load devices from the real API, refreshing every 10 s
+  // Poll through our own authenticated Next.js API route — never hit the RMM
+  // server directly from the browser. The API route validates the session and
+  // forwards the request with a verified tenant ID.
   useEffect(() => {
     let cancelled = false;
 
     async function load() {
       try {
-        const res = await fetch(`${API_BASE}/api/devices`, { cache: "no-store" });
-        if (!res.ok) throw new Error(`devices http ${res.status}`);
+        const res = await fetch("/api/control/devices", { cache: "no-store" });
+
+        if (res.status === 401) {
+          if (!cancelled) {
+            setError("Session expired — please refresh the page.");
+            setLoading(false);
+          }
+          return;
+        }
+
+        if (!res.ok) {
+          throw new Error(`Devices API responded with HTTP ${res.status}`);
+        }
+
         const arr = (await res.json()) as DeviceApiRow[];
         const mapped = arr.map(toDeviceRow);
+
         if (!cancelled) {
           setDevices(mapped);
+          setError(null);
           setSelectedId((prev) => prev ?? mapped[0]?.id ?? null);
           setLoading(false);
         }
-      } catch {
-        if (!cancelled) setLoading(false);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load devices");
+          setLoading(false);
+        }
       }
     }
 
@@ -82,7 +99,6 @@ export default function DevicesClient() {
     [devices, selectedId]
   );
 
-  // If filter/search hides the selected device, pick the first visible one
   useMemo(() => {
     if (!selectedId) return;
     if (!filtered.some((d) => d.id === selectedId)) {
@@ -145,6 +161,8 @@ export default function DevicesClient() {
         <div className="mt-3 text-xs opacity-70">
           {loading ? (
             "Loading devices…"
+          ) : error ? (
+            <span className="text-red-500">{error}</span>
           ) : (
             <>
               Showing <span className="font-semibold">{filtered.length}</span> of{" "}
@@ -156,7 +174,6 @@ export default function DevicesClient() {
 
       <div className="grid grid-cols-1 lg:grid-cols-[1.25fr_.75fr] gap-4">
         <DeviceTable devices={filtered} selectedId={selectedId} onSelect={setSelectedId} />
-
         <div className="hidden lg:block">
           <DeviceDetailsPanel device={selected} />
         </div>
@@ -167,4 +184,3 @@ export default function DevicesClient() {
     </div>
   );
 }
-
