@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default function NewSelfServiceIncidentPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [priority, setPriority] = useState("medium");
+  const [priority, setPriority] = useState("Medium");
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -21,42 +21,34 @@ export default function NewSelfServiceIncidentPage() {
     setInfo(null);
 
     try {
+      // No Authorization header needed — the shared-domain Supabase cookie
+      // (set at login with domain: .hi5tech.co.uk) is sent automatically by
+      // the browser on all tenant subdomains.
       const r = await fetch("/api/selfservice/incident", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        credentials: "same-origin",
-        body: JSON.stringify({
-          title,
-          description,
-          priority,
-        }),
+        credentials: "include",
+        body: JSON.stringify({ title, description, priority }),
       });
 
       const j = await r.json().catch(() => ({}));
 
       if (!r.ok || !j?.ok) {
-        const msg = j?.error || "Failed to submit incident";
-        // Helpful UX for the exact problem you’re seeing
-        if (r.status === 401) {
-          setErr(`${msg}. Please log in again, then come straight back to Self Service.`);
-        } else {
-          setErr(msg + (j?.details ? ` (${j.details})` : ""));
-        }
+        setErr(j?.error || "Failed to submit incident. Please try again.");
         setLoading(false);
         return;
       }
 
-      setInfo("Incident created. Redirecting...");
-      window.location.assign(`/selfservice/incident/${j.id}`);
-    } catch (e: any) {
-      setErr(e?.message || "Request failed");
+      setInfo("Incident submitted. Redirecting…");
+      window.location.assign("/selfservice");
+    } catch {
+      setErr("A network error occurred. Please check your connection and try again.");
       setLoading(false);
     }
   }
 
   return (
     <div className="max-w-3xl mx-auto">
-      {/* Header */}
       <div className="flex items-start justify-between gap-3 mb-4">
         <div>
           <div className="text-xs opacity-70">Self Service</div>
@@ -78,12 +70,11 @@ export default function NewSelfServiceIncidentPage() {
             disabled={loading || !title.trim() || !description.trim()}
             className="hi5-btn-primary text-sm"
           >
-            {loading ? "Submitting..." : "Submit"}
+            {loading ? "Submitting…" : "Submit"}
           </button>
         </div>
       </div>
 
-      {/* Form card */}
       <div className="hi5-panel border hi5-border rounded-3xl p-4 sm:p-6 space-y-4">
         <div>
           <label className="text-sm opacity-80">Title</label>
@@ -91,7 +82,7 @@ export default function NewSelfServiceIncidentPage() {
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             className="hi5-input mt-2"
-            placeholder="e.g. Can’t access email"
+            placeholder="e.g. Can't access email"
           />
         </div>
 
@@ -114,10 +105,10 @@ export default function NewSelfServiceIncidentPage() {
               onChange={(e) => setPriority(e.target.value)}
               className="hi5-input mt-2"
             >
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-              <option value="critical">Critical</option>
+              <option value="Low">Low</option>
+              <option value="Medium">Medium</option>
+              <option value="High">High</option>
+              <option value="Critical">Critical</option>
             </select>
           </div>
 
@@ -132,11 +123,11 @@ export default function NewSelfServiceIncidentPage() {
         </div>
 
         {info && <div className="text-sm opacity-80">{info}</div>}
-        {err && <div className="text-sm text-red-600">{err}</div>}
-
-        <div className="text-xs opacity-60">
-          This creates a real incident in Supabase via <code>/api/selfservice/incident</code>.
-        </div>
+        {err && (
+          <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl p-3">
+            {err}
+          </div>
+        )}
       </div>
     </div>
   );
