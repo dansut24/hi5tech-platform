@@ -1,18 +1,61 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { supabaseRoute } from "@/lib/supabase/route";
+import { createClient } from "@supabase/supabase-js";
 import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
 
 export async function POST(req: NextRequest) {
-  // Session is in a cookie — use supabaseRoute() which reads from req.cookies
-  // NOT supabaseServer() which reads from the Next.js cookie store (different context)
-  const res = NextResponse.next();
-  const supabase = supabaseRoute(req, res);
+  // The browser Supabase client stores the session as a base64-encoded JSON cookie.
+  // We decode it directly and extract the access_token to authenticate the request.
+  const allCookies = req.cookies.getAll();
 
-  const { data: userRes } = await supabase.auth.getUser();
-  const user = userRes.user;
-  if (!user) {
+  const rawCookie = allCookies.find(
+    c => c.name.match(/sb-.+-auth-token$/) && !c.name.includes(".")
+  );
+
+  // Also check chunked format (.0) as fallback
+  const chunkCookie = allCookies.find(c => c.name.endsWith(".0"));
+
+  let accessToken: string | null = null;
+  let refreshToken: string | null = null;
+
+  // Try base64 browser cookie first
+  if (rawCookie?.value?.startsWith("base64-")) {
+    try {
+      const raw = Buffer.from(rawCookie.value.slice(7), "base64").toString("utf8");
+      const session = JSON.parse(raw);
+      accessToken = session.access_token ?? null;
+      refreshToken = session.refresh_token ?? null;
+    } catch {
+      // fall through
+    }
+  }
+
+  // Try chunked cookie (.0 only may have full content if session is small enough)
+  if (!accessToken && chunkCookie?.value) {
+    try {
+      const session = JSON.parse(chunkCookie.value);
+      accessToken = session.access_token ?? null;
+      refreshToken = session.refresh_token ?? null;
+    } catch {
+      // fall through
+    }
+  }
+
+  if (!accessToken) {
     return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
   }
+
+  // Validate the token with Supabase
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { global: { headers: { Authorization: `Bearer ${accessToken}` } } }
+  );
+
+  const { data: userRes, error: userErr } = await supabase.auth.getUser(accessToken);
+  if (userErr || !userRes.user) {
+    return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
+  }
+  const user = userRes.user;
 
   // Tenant resolution
   const host = getEffectiveHost(req.headers as unknown as Headers);
