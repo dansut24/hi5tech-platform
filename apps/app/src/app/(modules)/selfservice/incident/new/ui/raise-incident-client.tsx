@@ -16,22 +16,43 @@ export default function RaiseIncidentClient() {
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [priority, setPriority] = useState("medium");
+  const [priority, setPriority] = useState("Medium");
 
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  /**
+   * Reliably retrieve a live access token.
+   *
+   * getSession() reads from localStorage and can return null on subdomains
+   * or after navigation if the session hasn't been hydrated yet.
+   *
+   * Instead we call refreshSession() which always talks to Supabase directly
+   * and returns a fresh token — no dependency on localStorage state.
+   */
+  async function getLiveAccessToken(): Promise<string | null> {
+    // First try: refresh the session to get a guaranteed live token
+    const { data: refreshed, error: refreshErr } = await supabase.auth.refreshSession();
+    if (!refreshErr && refreshed?.session?.access_token) {
+      return refreshed.session.access_token;
+    }
+
+    // Second try: fall back to getSession() in case refresh fails (e.g. offline)
+    const { data: sessionData } = await supabase.auth.getSession();
+    return sessionData?.session?.access_token ?? null;
+  }
 
   async function submit() {
     setLoading(true);
     setErr(null);
 
     try {
-      // Get the current session access token from the browser
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
+      const accessToken = await getLiveAccessToken();
 
       if (!accessToken) {
-        setErr("Not authenticated — please refresh and sign in again.");
+        setErr(
+          "Your session could not be verified. Please sign out and sign back in, then try again."
+        );
         setLoading(false);
         return;
       }
@@ -40,8 +61,7 @@ export default function RaiseIncidentClient() {
         method: "POST",
         headers: {
           "content-type": "application/json",
-          // Send token in Authorization header — no cookie dependency
-          "authorization": `Bearer ${accessToken}`,
+          authorization: `Bearer ${accessToken}`,
         },
         body: JSON.stringify({ title, description, priority }),
       });
@@ -49,15 +69,15 @@ export default function RaiseIncidentClient() {
       const j = await r.json().catch(() => ({}));
 
       if (!r.ok) {
-        setErr(j?.error || "Failed to submit incident");
+        setErr(j?.error || "Failed to submit incident. Please try again.");
         setLoading(false);
         return;
       }
 
-      router.push(`/selfservice`);
+      router.push("/selfservice");
       router.refresh();
     } catch {
-      setErr("Network error");
+      setErr("A network error occurred. Please check your connection and try again.");
     } finally {
       setLoading(false);
     }
@@ -93,14 +113,18 @@ export default function RaiseIncidentClient() {
           value={priority}
           onChange={(e) => setPriority(e.target.value)}
         >
-          <option value="low">Low</option>
-          <option value="medium">Medium</option>
-          <option value="high">High</option>
-          <option value="critical">Critical</option>
+          <option value="Low">Low</option>
+          <option value="Medium">Medium</option>
+          <option value="High">High</option>
+          <option value="Critical">Critical</option>
         </select>
       </div>
 
-      {err && <div className="text-sm text-red-600">{err}</div>}
+      {err && (
+        <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl p-3">
+          {err}
+        </div>
+      )}
 
       <button
         type="button"
@@ -108,7 +132,7 @@ export default function RaiseIncidentClient() {
         disabled={loading || !title.trim() || !description.trim()}
         className="w-full hi5-btn-primary"
       >
-        {loading ? "Submitting..." : "Submit Incident"}
+        {loading ? "Submitting…" : "Submit Incident"}
       </button>
     </div>
   );
