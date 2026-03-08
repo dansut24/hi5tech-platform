@@ -1,18 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState, useMemo } from "react";
-import { createBrowserClient } from "@supabase/ssr";
+import { useState } from "react";
 
 export const dynamic = "force-dynamic";
 
 export default function NewSelfServiceIncidentPage() {
-  const supabase = useMemo(() =>
-    createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    ), []);
-
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("Medium");
@@ -21,38 +14,17 @@ export default function NewSelfServiceIncidentPage() {
   const [err, setErr] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
-  async function getToken(): Promise<string | null> {
-    // refreshSession() makes a live call to Supabase — doesn't depend on
-    // localStorage being populated, works reliably across subdomains.
-    const { data: refreshed } = await supabase.auth.refreshSession();
-    if (refreshed?.session?.access_token) {
-      return refreshed.session.access_token;
-    }
-    // Fallback to getSession if refresh fails (e.g. truly logged out)
-    const { data: sessionData } = await supabase.auth.getSession();
-    return sessionData?.session?.access_token ?? null;
-  }
-
   async function submit() {
     setLoading(true);
     setErr(null);
     setInfo(null);
 
     try {
-      const token = await getToken();
-
-      if (!token) {
-        setErr("Your session has expired. Please sign in again.");
-        setLoading(false);
-        return;
-      }
-
+      // Cookie is sent automatically by the browser — no token wrangling needed
       const r = await fetch("/selfservice/incident", {
         method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${token}`,
-        },
+        headers: { "content-type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ title, description, priority }),
       });
 
