@@ -9,25 +9,15 @@ export async function POST(req: NextRequest) {
   const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/$/, "");
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 
-  // Decode token from browser-format cookie (base64-eyJ...)
-  const allCookies = req.cookies.getAll();
-  const rawCookie = allCookies.find(
-    c => c.name.match(/sb-.+-auth-token$/) && !c.name.includes(".")
-  );
-
-  let accessToken: string | null = null;
-  if (rawCookie?.value?.startsWith("base64-")) {
-    try {
-      const raw = Buffer.from(rawCookie.value.slice(7), "base64").toString("utf8");
-      accessToken = JSON.parse(raw).access_token ?? null;
-    } catch { /* ignore */ }
-  }
+  // Token is extracted from the cookie client-side and sent as a custom header.
+  // This bypasses all cookie domain/HttpOnly/SSR parsing issues entirely.
+  const accessToken = req.headers.get("x-supabase-token");
 
   if (!accessToken) {
     return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
   }
 
-  // Verify token directly via Supabase REST — confirmed working in debug route
+  // Verify token directly via Supabase REST
   const authRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -36,6 +26,8 @@ export async function POST(req: NextRequest) {
   });
 
   if (!authRes.ok) {
+    const body = await authRes.json().catch(() => ({}));
+    console.error("[selfservice] auth failed:", authRes.status, body);
     return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
   }
 
