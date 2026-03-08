@@ -1,24 +1,39 @@
 // apps/app/src/app/api/selfservice/incident/route.ts
 import { NextResponse, type NextRequest } from "next/server";
-import { supabaseServer } from "@/lib/supabase/server";
+import { createClient } from "@supabase/supabase-js";
 import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function POST(req: NextRequest) {
-  // Use cookie-based auth via supabaseServer() — consistent with every other
-  // API route in the codebase. The shared-domain cookie (domain: .hi5tech.co.uk)
-  // is set at login and is available on all tenant subdomains automatically.
-  const supabase = await supabaseServer();
+function getBearer(req: NextRequest): string | null {
+  const h = req.headers.get("authorization") || "";
+  const m = h.match(/^Bearer\s+(.+)$/i);
+  return m?.[1] || null;
+}
 
-  const { data: userRes } = await supabase.auth.getUser();
-  if (!userRes.user) {
+export async function POST(req: NextRequest) {
+  const token = getBearer(req);
+  if (!token) {
+    return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
+  }
+
+  // Validate the token directly with Supabase using the anon key.
+  // This is the correct pattern when the client sends a Bearer token explicitly —
+  // it does not depend on cookies being set correctly across subdomains.
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { global: { headers: { Authorization: `Bearer ${token}` } } }
+  );
+
+  const { data: userRes, error: userErr } = await supabase.auth.getUser();
+  if (userErr || !userRes.user) {
     return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
   }
   const user = userRes.user;
 
-  // Resolve tenant from the subdomain of the current host
+  // Resolve tenant from the request host
   const host = getEffectiveHost(req.headers as unknown as Headers);
   const parsed = parseTenantHost(host);
   if (!parsed.subdomain) {
@@ -39,7 +54,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Tenant not found" }, { status: 404 });
   }
 
-  // Parse and validate body
   const body = (await req.json().catch(() => ({}))) as {
     title?: string;
     description?: string;
@@ -59,14 +73,12 @@ export async function POST(req: NextRequest) {
   if (description.length > 10000)
     return NextResponse.json({ ok: false, error: "Description must be 10,000 characters or fewer" }, { status: 400 });
 
-  // Profile for submitted_by display name
   const { data: profile } = await supabase
     .from("profiles")
     .select("full_name")
     .eq("id", user.id)
     .maybeSingle();
 
-  // Atomic sequential incident number — same counter used by the ITSM route
   const { data: counterData, error: counterErr } = await supabase.rpc(
     "next_tenant_counter",
     { p_tenant_id: tenant.id, p_counter_name: "incidents" }
@@ -74,10 +86,7 @@ export async function POST(req: NextRequest) {
 
   if (counterErr || counterData == null) {
     console.error("[selfservice/incident] counter error:", counterErr?.message);
-    return NextResponse.json(
-      { ok: false, error: "Failed to generate incident number" },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: "Failed to generate incident number" }, { status: 500 });
   }
 
   const number = `INC-${String(counterData).padStart(5, "0")}`;
