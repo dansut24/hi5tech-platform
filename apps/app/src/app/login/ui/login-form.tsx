@@ -41,10 +41,25 @@ export default function LoginForm() {
     setErr(message);
   }
 
-  function afterAuthRedirect() {
-    // ✅ ALWAYS run through callback on the *current tenant subdomain*
-    // so server can refresh and stamp cookies with Domain=.hi5tech.co.uk
-    window.location.href = "/auth/callback?next=/apps";
+  /**
+   * After a successful sign-in we have a live session in memory.
+   * We stamp it into shared-domain cookies HERE — while the access_token
+   * is available — before redirecting anywhere.
+   * This avoids the race condition where /auth/stamp loads a fresh Supabase
+   * browser client that hasn't hydrated from localStorage yet and gets null.
+   */
+  async function stampAndRedirect(accessToken: string, refreshToken: string, next = "/apps") {
+    try {
+      await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ access_token: accessToken, refresh_token: refreshToken }),
+      });
+    } catch {
+      // Even if stamping fails, proceed — the Bearer token flow is a fallback
+    }
+    window.location.href = next;
   }
 
   // ------------------------
@@ -61,16 +76,17 @@ export default function LoginForm() {
 
     try {
       const allowed = await checkAllowed(e);
-      if (!allowed) return doneErr("That email isn’t authorised for this tenant.");
+      if (!allowed) return doneErr("That email isn't authorised for this tenant.");
     } catch (ex: any) {
       return doneErr(ex?.message || "Auth check failed.");
     }
 
-    const { error } = await supabase.auth.signInWithPassword({ email: e, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email: e, password });
     if (error) return doneErr(error.message);
+    if (!data.session) return doneErr("Sign in succeeded but no session was returned.");
 
     setLoading(false);
-    afterAuthRedirect();
+    await stampAndRedirect(data.session.access_token, data.session.refresh_token, "/apps");
   }
 
   // ------------------------
@@ -86,7 +102,7 @@ export default function LoginForm() {
 
     try {
       const allowed = await checkAllowed(e);
-      if (!allowed) return doneErr("That email isn’t authorised for this tenant.");
+      if (!allowed) return doneErr("That email isn't authorised for this tenant.");
     } catch (ex: any) {
       return doneErr(ex?.message || "Auth check failed.");
     }
@@ -118,7 +134,7 @@ export default function LoginForm() {
     if (!data.session) return doneErr("Verified, but no session returned.");
 
     setLoading(false);
-    afterAuthRedirect();
+    await stampAndRedirect(data.session.access_token, data.session.refresh_token, "/apps");
   }
 
   // ------------------------
@@ -134,13 +150,12 @@ export default function LoginForm() {
 
     try {
       const allowed = await checkAllowed(e);
-      if (!allowed) return doneErr("That email isn’t authorised for this tenant.");
+      if (!allowed) return doneErr("That email isn't authorised for this tenant.");
     } catch (ex: any) {
       return doneErr(ex?.message || "Auth check failed.");
     }
 
     const redirectTo = `${window.location.origin}/auth/callback?next=/auth/reset`;
-
     const { error } = await supabase.auth.resetPasswordForEmail(e, { redirectTo });
     if (error) return doneErr(error.message);
 
