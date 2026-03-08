@@ -2,60 +2,47 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
 
-export async function POST(req: NextRequest) {
-  // The browser Supabase client stores the session as a base64-encoded JSON cookie.
-  // We decode it directly and extract the access_token to authenticate the request.
-  const allCookies = req.cookies.getAll();
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
+export async function POST(req: NextRequest) {
+  const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/$/, "");
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+
+  // Decode token from browser-format cookie
+  const allCookies = req.cookies.getAll();
   const rawCookie = allCookies.find(
     c => c.name.match(/sb-.+-auth-token$/) && !c.name.includes(".")
   );
 
-  // Also check chunked format (.0) as fallback
-  const chunkCookie = allCookies.find(c => c.name.endsWith(".0"));
-
   let accessToken: string | null = null;
-  let refreshToken: string | null = null;
-
-  // Try base64 browser cookie first
   if (rawCookie?.value?.startsWith("base64-")) {
     try {
       const raw = Buffer.from(rawCookie.value.slice(7), "base64").toString("utf8");
-      const session = JSON.parse(raw);
-      accessToken = session.access_token ?? null;
-      refreshToken = session.refresh_token ?? null;
-    } catch {
-      // fall through
-    }
-  }
-
-  // Try chunked cookie (.0 only may have full content if session is small enough)
-  if (!accessToken && chunkCookie?.value) {
-    try {
-      const session = JSON.parse(chunkCookie.value);
-      accessToken = session.access_token ?? null;
-      refreshToken = session.refresh_token ?? null;
-    } catch {
-      // fall through
-    }
+      accessToken = JSON.parse(raw).access_token ?? null;
+    } catch { /* ignore */ }
   }
 
   if (!accessToken) {
     return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
   }
 
-  // Validate the token with Supabase
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { global: { headers: { Authorization: `Bearer ${accessToken}` } } }
-  );
+  // Verify token directly via Supabase REST — same approach confirmed working
+  const authRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      apikey: supabaseKey,
+    },
+  });
 
-  const { data: userRes, error: userErr } = await supabase.auth.getUser(accessToken);
-  if (userErr || !userRes.user) {
+  if (!authRes.ok) {
     return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
   }
-  const user = userRes.user;
+
+  const user = await authRes.json();
+  if (!user?.id) {
+    return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
+  }
 
   // Tenant resolution
   const host = getEffectiveHost(req.headers as unknown as Headers);
@@ -63,6 +50,11 @@ export async function POST(req: NextRequest) {
   if (!parsed.subdomain) {
     return NextResponse.json({ ok: false, error: "No tenant context" }, { status: 400 });
   }
+
+  // Use createClient with the access token for all DB operations
+  const supabase = createClient(supabaseUrl, supabaseKey, {
+    global: { headers: { Authorization: `Bearer ${accessToken}` } },
+  });
 
   const { data: tenant } = await supabase
     .from("tenants")
