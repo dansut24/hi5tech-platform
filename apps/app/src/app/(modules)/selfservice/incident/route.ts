@@ -1,21 +1,35 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { headers } from "next/headers";
-import { supabaseRoute } from "@/lib/supabase/route";
+import { createClient } from "@supabase/supabase-js";
 import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
 
 export async function POST(req: NextRequest) {
-  const res = NextResponse.json({ ok: false }, { status: 500 });
-  const supabase = supabaseRoute(req, res);
+  // Use Bearer token auth — the client sends its access token explicitly.
+  // This avoids any dependency on cookies being set correctly across subdomains.
+  const authHeader = req.headers.get("authorization") || "";
+  const token = authHeader.match(/^Bearer\s+(.+)$/i)?.[1] || null;
 
-  // Auth (server-side)
+  if (!token) {
+    return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
+  }
+
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { global: { headers: { Authorization: `Bearer ${token}` } } }
+  );
+
   const { data: userRes } = await supabase.auth.getUser();
   const user = userRes.user;
-  if (!user) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  if (!user) {
+    return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
+  }
 
   // Tenant resolution
-  const host = getEffectiveHost(await headers());
+  const host = getEffectiveHost(req.headers as unknown as Headers);
   const parsed = parseTenantHost(host);
-  if (!parsed.subdomain) return NextResponse.json({ error: "No tenant context" }, { status: 400 });
+  if (!parsed.subdomain) {
+    return NextResponse.json({ ok: false, error: "No tenant context" }, { status: 400 });
+  }
 
   const { data: tenant } = await supabase
     .from("tenants")
@@ -24,39 +38,61 @@ export async function POST(req: NextRequest) {
     .eq("subdomain", parsed.subdomain)
     .maybeSingle();
 
-  if (!tenant?.id) return NextResponse.json({ error: "Tenant not found" }, { status: 404 });
-
-  // Body
-  const body = await req.json().catch(() => ({}));
-  const title = String(body?.title || "").trim();
-  const description = String(body?.description || "").trim();
-  const priority = String(body?.priority || "medium").toLowerCase();
-
-  if (!title || !description) {
-    return NextResponse.json({ error: "Missing title/description" }, { status: 400 });
+  if (!tenant?.id) {
+    return NextResponse.json({ ok: false, error: "Tenant not found" }, { status: 404 });
   }
 
-  // Reference
-  const number = `INC-${Date.now().toString().slice(-6)}`;
+  const body = await req.json().catch(() => ({}));
+  const title       = String(body?.title || "").trim();
+  const description = String(body?.description || "").trim();
+  const priority    = String(body?.priority || "Medium");
 
-  const { data: inserted, error } = await supabase
+  if (!title)       return NextResponse.json({ ok: false, error: "Title is required" }, { status: 400 });
+  if (!description) return NextResponse.json({ ok: false, error: "Description is required" }, { status: 400 });
+  if (title.length > 255)
+    return NextResponse.json({ ok: false, error: "Title must be 255 characters or fewer" }, { status: 400 });
+  if (description.length > 10000)
+    return NextResponse.json({ ok: false, error: "Description must be 10,000 characters or fewer" }, { status: 400 });
+
+  // Profile for submitted_by
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("full_name")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  // Atomic sequential number
+  const { data: counterData, error: counterErr } = await supabase.rpc(
+    "next_tenant_counter",
+    { p_tenant_id: tenant.id, p_counter_name: "incidents" }
+  );
+
+  if (counterErr || counterData == null) {
+    console.error("[selfservice/incident] counter error:", counterErr?.message);
+    return NextResponse.json({ ok: false, error: "Failed to generate incident number" }, { status: 500 });
+  }
+
+  const number = `INC-${String(counterData).padStart(5, "0")}`;
+
+  const { data: inserted, error: insertErr } = await supabase
     .from("incidents")
     .insert({
-      tenant_id: tenant.id,
+      tenant_id:     tenant.id,
       title,
       description,
       priority,
-      status: "new",
-      triage_status: "untriaged",
-      requester_id: user.id,
-      submitted_by: user.email,
+      status:        "Open",
+      triage_status: "triage",
+      requester_id:  user.id,
+      submitted_by:  (profile as { full_name?: string } | null)?.full_name ?? user.email,
       number,
     })
     .select("id")
     .single();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  if (insertErr) {
+    console.error("[selfservice/incident] insert error:", insertErr.message);
+    return NextResponse.json({ ok: false, error: "Failed to create incident" }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true, id: inserted.id });
