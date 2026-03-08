@@ -9,10 +9,25 @@ export default function NewSelfServiceIncidentPage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [priority, setPriority] = useState("Medium");
-
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+
+  function getTokenFromCookie(): string | null {
+    try {
+      const match = document.cookie
+        .split(";")
+        .map(c => c.trim())
+        .find(c => c.match(/^sb-.+-auth-token=base64-/));
+      if (!match) return null;
+      const base64 = match.split("=base64-")[1];
+      if (!base64) return null;
+      const session = JSON.parse(atob(base64));
+      return session?.access_token ?? null;
+    } catch {
+      return null;
+    }
+  }
 
   async function submit() {
     setLoading(true);
@@ -20,10 +35,20 @@ export default function NewSelfServiceIncidentPage() {
     setInfo(null);
 
     try {
+      const token = getTokenFromCookie();
+
+      if (!token) {
+        setErr("Session not found. Please sign out and sign back in.");
+        setLoading(false);
+        return;
+      }
+
       const r = await fetch("/api/selfservice/incident", {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        credentials: "include",
+        headers: {
+          "content-type": "application/json",
+          "x-supabase-token": token,
+        },
         body: JSON.stringify({ title, description, priority }),
       });
 
@@ -55,7 +80,6 @@ export default function NewSelfServiceIncidentPage() {
             Tell us what&apos;s broken, how it affects you, and any details that help us reproduce it.
           </p>
         </div>
-
         <div className="flex items-center gap-2">
           <Link href="/selfservice" className="hi5-btn-ghost text-sm">
             Back
@@ -81,7 +105,6 @@ export default function NewSelfServiceIncidentPage() {
             placeholder="e.g. Can't access email"
           />
         </div>
-
         <div>
           <label className="text-sm opacity-80">Description</label>
           <textarea
@@ -92,7 +115,6 @@ export default function NewSelfServiceIncidentPage() {
             placeholder="What happened? What did you expect? Any error messages?"
           />
         </div>
-
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label className="text-sm opacity-80">Priority</label>
@@ -107,7 +129,6 @@ export default function NewSelfServiceIncidentPage() {
               <option value="Critical">Critical</option>
             </select>
           </div>
-
           <div>
             <label className="text-sm opacity-80">Impact</label>
             <select className="hi5-input mt-2" defaultValue="just_me" disabled>
@@ -117,7 +138,6 @@ export default function NewSelfServiceIncidentPage() {
             </select>
           </div>
         </div>
-
         {info && <div className="text-sm opacity-80">{info}</div>}
         {err && (
           <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl p-3">
