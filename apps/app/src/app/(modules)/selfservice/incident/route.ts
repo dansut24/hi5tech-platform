@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
+import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -9,25 +9,14 @@ export async function POST(req: NextRequest) {
   const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "").replace(/\/$/, "");
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
 
-  // Decode token from browser-format cookie
-  const allCookies = req.cookies.getAll();
-  const rawCookie = allCookies.find(
-    c => c.name.match(/sb-.+-auth-token$/) && !c.name.includes(".")
-  );
-
-  let accessToken: string | null = null;
-  if (rawCookie?.value?.startsWith("base64-")) {
-    try {
-      const raw = Buffer.from(rawCookie.value.slice(7), "base64").toString("utf8");
-      accessToken = JSON.parse(raw).access_token ?? null;
-    } catch { /* ignore */ }
-  }
+  // Token extracted client-side from cookie and sent as custom header
+  const accessToken = req.headers.get("x-supabase-token");
 
   if (!accessToken) {
     return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
   }
 
-  // Verify token directly via Supabase REST — same approach confirmed working
+  // Verify token directly via Supabase REST
   const authRes = await fetch(`${supabaseUrl}/auth/v1/user`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -36,6 +25,8 @@ export async function POST(req: NextRequest) {
   });
 
   if (!authRes.ok) {
+    const body = await authRes.json().catch(() => ({}));
+    console.error("[selfservice] auth failed:", authRes.status, body);
     return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
   }
 
@@ -51,7 +42,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "No tenant context" }, { status: 400 });
   }
 
-  // Use createClient with the access token for all DB operations
   const supabase = createClient(supabaseUrl, supabaseKey, {
     global: { headers: { Authorization: `Bearer ${accessToken}` } },
   });
@@ -76,10 +66,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Title is required" }, { status: 400 });
   if (!description)
     return NextResponse.json({ ok: false, error: "Description is required" }, { status: 400 });
-  if (title.length > 255)
-    return NextResponse.json({ ok: false, error: "Title must be 255 characters or fewer" }, { status: 400 });
-  if (description.length > 10000)
-    return NextResponse.json({ ok: false, error: "Description must be 10,000 characters or fewer" }, { status: 400 });
 
   const { data: profile } = await supabase
     .from("profiles")
