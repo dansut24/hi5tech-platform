@@ -13,13 +13,14 @@ function getBearer(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  // ✅ Auth via Bearer token — works regardless of cookie domain/subdomain setup
   const token = getBearer(req);
   if (!token) {
-    return NextResponse.json({ ok: false, error: "Not authenticated — missing token" }, { status: 401 });
+    return NextResponse.json(
+      { ok: false, error: "Not authenticated — missing token" },
+      { status: 401 }
+    );
   }
 
-  // Validate token directly with Supabase (same pattern as /api/auth/whoami)
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -29,14 +30,13 @@ export async function POST(req: NextRequest) {
   const { data: userRes, error: userErr } = await supabase.auth.getUser();
   if (userErr || !userRes.user) {
     return NextResponse.json(
-      { ok: false, error: "Not authenticated — invalid token", details: userErr?.message },
+      { ok: false, error: "Not authenticated — invalid token" },
       { status: 401 }
     );
   }
   const user = userRes.user;
 
-  // Tenant resolution from host
-  const host = getEffectiveHost(req.headers as any);
+  const host = getEffectiveHost(req.headers as unknown as Headers);
   const parsed = parseTenantHost(host);
   if (!parsed.subdomain) {
     return NextResponse.json({ ok: false, error: "No tenant context" }, { status: 400 });
@@ -50,53 +50,70 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
 
   if (tenantErr) {
-    return NextResponse.json({ ok: false, error: "Tenant lookup failed", details: tenantErr.message }, { status: 500 });
+    return NextResponse.json({ ok: false, error: "Tenant lookup failed" }, { status: 500 });
   }
   if (!tenant?.id) {
     return NextResponse.json({ ok: false, error: "Tenant not found" }, { status: 404 });
   }
 
-  // Parse body
   const body = (await req.json().catch(() => ({}))) as {
     title?: string;
     description?: string;
     priority?: string;
   };
 
-  const title = String(body.title || "").trim();
+  const title       = String(body.title || "").trim();
   const description = String(body.description || "").trim();
-  const priority = String(body.priority || "medium").toLowerCase();
+  const priority    = String(body.priority || "Medium");
 
-  if (!title) return NextResponse.json({ ok: false, error: "Title is required" }, { status: 400 });
+  if (!title)       return NextResponse.json({ ok: false, error: "Title is required" }, { status: 400 });
   if (!description) return NextResponse.json({ ok: false, error: "Description is required" }, { status: 400 });
 
-  // Profile (for submitted_by)
+  if (title.length > 255)
+    return NextResponse.json({ ok: false, error: "Title must be 255 characters or fewer" }, { status: 400 });
+  if (description.length > 10000)
+    return NextResponse.json({ ok: false, error: "Description must be 10,000 characters or fewer" }, { status: 400 });
+
   const { data: profile } = await supabase
     .from("profiles")
     .select("full_name")
     .eq("id", user.id)
     .maybeSingle();
 
-  const number = `INC-${Date.now().toString().slice(-6)}`;
+  const { data: counterData, error: counterErr } = await supabase.rpc(
+    "next_tenant_counter",
+    { p_tenant_id: tenant.id, p_counter_name: "incidents" }
+  );
+
+  if (counterErr || counterData == null) {
+    console.error("[selfservice/incident] counter error:", counterErr?.message);
+    return NextResponse.json(
+      { ok: false, error: "Failed to generate incident number" },
+      { status: 500 }
+    );
+  }
+
+  const number = `INC-${String(counterData).padStart(5, "0")}`;
 
   const { data: inserted, error: insertErr } = await supabase
     .from("incidents")
     .insert({
-      tenant_id: tenant.id,
+      tenant_id:     tenant.id,
       title,
       description,
       priority,
-      status: "new",
-      triage_status: "untriaged",
-      requester_id: user.id,
-      submitted_by: profile?.full_name ?? user.email,
+      status:        "Open",
+      triage_status: "triage",
+      requester_id:  user.id,
+      submitted_by:  (profile as { full_name?: string } | null)?.full_name ?? user.email,
       number,
     })
     .select("id")
     .single();
 
   if (insertErr) {
-    return NextResponse.json({ ok: false, error: "Failed to create incident", details: insertErr.message }, { status: 500 });
+    console.error("[selfservice/incident] insert error:", insertErr.message);
+    return NextResponse.json({ ok: false, error: "Failed to create incident" }, { status: 500 });
   }
 
   return NextResponse.json({ ok: true, id: inserted.id }, { status: 200 });
