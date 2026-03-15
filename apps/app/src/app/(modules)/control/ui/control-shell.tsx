@@ -14,6 +14,7 @@ type Props = {
 const NAV: ShellNavItem[] = [
   { href: "/control", label: "Dashboard", icon: <LayoutDashboard size={16} />, exact: true },
   { href: "/control/devices", label: "Devices", icon: <Monitor size={16} /> },
+  { href: "/control/downloads", label: "Downloads", icon: <FolderOpen size={16} /> },
   { href: "/control/terminal", label: "Terminal", icon: <TerminalSquare size={16} /> },
   { href: "/control/files", label: "Files", icon: <FolderOpen size={16} /> },
   { href: "/control/settings", label: "Settings", icon: <Settings size={16} /> },
