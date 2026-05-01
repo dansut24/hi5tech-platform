@@ -19,9 +19,13 @@ type ConnectState = "idle" | "requesting" | "launching" | "done" | "not_installe
 export default function DeviceDetailsPanel({
   device,
   compact,
+  onDelete,
+  deleting,
 }: {
   device: DeviceRow | null;
   compact?: boolean;
+  onDelete?: (device: DeviceRow) => void;
+  deleting?: boolean;
 }) {
   const [shotTick, setShotTick] = useState(0);
   const [busy, setBusy] = useState(false);
@@ -217,6 +221,17 @@ export default function DeviceDetailsPanel({
               <button className="hi5-btn-ghost text-sm" type="button" title="Soon">
                 Reboot (soon)
               </button>
+              {onDelete && (
+                <button
+                  className="hi5-btn-ghost text-sm text-red-500 hover:text-red-600 disabled:opacity-50"
+                  type="button"
+                  disabled={deleting}
+                  onClick={() => onDelete(device)}
+                  title="Delete device"
+                >
+                  {deleting ? "Deleting…" : "Delete"}
+                </button>
+              )}
             </div>
 
             {/* Inline feedback for not_installed / error states */}

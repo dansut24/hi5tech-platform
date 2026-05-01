@@ -1,7 +1,7 @@
 // apps/app/src/app/(modules)/control/ui/devices-client.tsx
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import StatCards from "./stat-cards";
 import DeviceTable from "./device-table";
 import DeviceDetailsPanel from "./device-details-panel";
@@ -23,6 +23,32 @@ export default function DevicesClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const applyDevices = useCallback((arr: DeviceApiRow[]) => {
+    const mapped = arr.map(toDeviceRow);
+    setDevices(mapped);
+    setSelectedId((prev) => {
+      if (prev && mapped.some((d) => d.id === prev)) return prev;
+      return mapped[0]?.id ?? null;
+    });
+  }, []);
+
+  const reloadDevices = useCallback(async () => {
+    const res = await fetch("/api/control/devices", { cache: "no-store" });
+
+    if (res.status === 401) {
+      throw new Error("Session expired — please refresh the page.");
+    }
+
+    if (!res.ok) {
+      throw new Error(`Devices API responded with HTTP ${res.status}`);
+    }
+
+    const arr = (await res.json()) as DeviceApiRow[];
+    applyDevices(arr);
+  }, [applyDevices]);
 
   // Poll through our own authenticated Next.js API route — never hit the RMM
   // server directly from the browser. The API route validates the session and
@@ -47,12 +73,10 @@ export default function DevicesClient() {
         }
 
         const arr = (await res.json()) as DeviceApiRow[];
-        const mapped = arr.map(toDeviceRow);
 
         if (!cancelled) {
-          setDevices(mapped);
+          applyDevices(arr);
           setError(null);
-          setSelectedId((prev) => prev ?? mapped[0]?.id ?? null);
           setLoading(false);
         }
       } catch (err) {
@@ -69,7 +93,36 @@ export default function DevicesClient() {
       cancelled = true;
       clearInterval(t);
     };
-  }, []);
+  }, [applyDevices]);
+
+  const deleteDevice = useCallback(async (device: DeviceRow) => {
+    const ok = window.confirm(
+      `Delete ${device.name}?\n\nThis removes the device from Control. If the agent is still installed and able to enrol again, it may reappear.`
+    );
+    if (!ok) return;
+
+    setDeletingId(device.id);
+    setDeleteError(null);
+
+    try {
+      const res = await fetch(`/api/control/devices/${encodeURIComponent(device.id)}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error((body as any)?.error || `Delete failed with HTTP ${res.status}`);
+      }
+
+      setDevices((prev) => prev.filter((d) => d.id !== device.id));
+      setSelectedId((prev) => (prev === device.id ? null : prev));
+      await reloadDevices().catch(() => undefined);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "Failed to delete device");
+    } finally {
+      setDeletingId(null);
+    }
+  }, [reloadDevices]);
 
   const allTags = useMemo(
     () => uniq(devices.flatMap((d) => d.tags)).sort((a, b) => a.localeCompare(b)),
@@ -170,15 +223,36 @@ export default function DevicesClient() {
             </>
           )}
         </div>
+
+        {deleteError && (
+          <div className="mt-3 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-300">
+            {deleteError}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1.25fr_.75fr] gap-4">
-        <DeviceTable devices={filtered} selectedId={selectedId} onSelect={setSelectedId} />
+        <DeviceTable
+          devices={filtered}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          onDelete={deleteDevice}
+          deletingId={deletingId}
+        />
         <div className="hidden lg:block">
-          <DeviceDetailsPanel device={selected} />
+          <DeviceDetailsPanel
+            device={selected}
+            onDelete={deleteDevice}
+            deleting={!!selected && deletingId === selected.id}
+          />
         </div>
         <div className="lg:hidden">
-          <DeviceDetailsPanel device={selected} compact />
+          <DeviceDetailsPanel
+            device={selected}
+            compact
+            onDelete={deleteDevice}
+            deleting={!!selected && deletingId === selected.id}
+          />
         </div>
       </div>
     </div>

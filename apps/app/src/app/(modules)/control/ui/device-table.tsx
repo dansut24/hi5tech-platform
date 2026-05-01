@@ -26,10 +26,14 @@ export default function DeviceTable({
   devices,
   selectedId,
   onSelect,
+  onDelete,
+  deletingId,
 }: {
   devices: DeviceRow[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  onDelete?: (device: DeviceRow) => void;
+  deletingId?: string | null;
 }) {
   return (
     <div className="hi5-panel p-0 overflow-hidden">
@@ -58,7 +62,7 @@ export default function DeviceTable({
               <th className="px-4 py-3 hidden md:table-cell">OS</th>
               <th className="px-4 py-3 hidden lg:table-cell">User</th>
               <th className="px-4 py-3">Last seen</th>
-              <th className="px-4 py-3 text-right">Open</th>
+              <th className="px-4 py-3 text-right">Actions</th>
             </tr>
           </thead>
 
@@ -72,6 +76,7 @@ export default function DeviceTable({
             ) : (
               devices.map((d) => {
                 const isActive = selectedId === d.id;
+                const isDeleting = deletingId === d.id;
                 return (
                   <tr
                     key={d.id}
@@ -108,14 +113,30 @@ export default function DeviceTable({
                     <td className="px-4 py-3 opacity-80">{d.lastSeen}</td>
 
                     <td className="px-4 py-3 text-right">
-                      {/* IMPORTANT: correct route is /control/[id] */}
-                      <Link
-                        href={`/control/${encodeURIComponent(d.id)}?tab=overview`}
-                        className="hi5-btn-ghost text-sm inline-block"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        Details
-                      </Link>
+                      <div className="flex justify-end gap-2">
+                        <Link
+                          href={`/control/${encodeURIComponent(d.id)}?tab=overview`}
+                          className="hi5-btn-ghost text-sm inline-block"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          Details
+                        </Link>
+
+                        {onDelete && (
+                          <button
+                            type="button"
+                            className="hi5-btn-ghost text-sm text-red-500 hover:text-red-600 disabled:opacity-50"
+                            disabled={isDeleting}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onDelete(d);
+                            }}
+                            title="Delete device"
+                          >
+                            {isDeleting ? "Deleting…" : "Delete"}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 );
