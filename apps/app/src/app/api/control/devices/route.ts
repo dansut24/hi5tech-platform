@@ -1,69 +1,81 @@
-// apps/app/src/app/api/control/devices/route.ts
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
 import { getMemberTenantIds } from "@/lib/tenant";
 
 export const dynamic = "force-dynamic";
 
-const UPSTREAM = "https://rmm.hi5tech.co.uk/api/devices";
+const UPSTREAM_BASE = "https://rmm.hi5tech.co.uk/api/devices";
 
-export async function GET(req: Request) {
-  // 1. Require a valid authenticated session
+type RouteContext = {
+  params: Promise<{ deviceId: string }> | { deviceId: string };
+};
+
+async function resolveTenant(req: Request) {
   const supabase = await supabaseServer();
   const { data: userRes } = await supabase.auth.getUser();
   const user = userRes?.user;
 
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   }
 
-  // 2. Resolve which tenant to query.
-  //    Accepts an optional ?tenant_id= query param; falls back to the user's first membership.
   const url = new URL(req.url);
-  const requestedTenantId = url.searchParams.get("tenant_id") ?? null;
+  const requestedTenantId = url.searchParams.get("tenant_id") ?? req.headers.get("X-Tenant-ID");
 
   let memberTenantIds: string[];
   try {
     memberTenantIds = await getMemberTenantIds();
   } catch {
-    return NextResponse.json({ error: "Could not resolve tenant membership" }, { status: 403 });
+    return { error: NextResponse.json({ error: "Could not resolve tenant membership" }, { status: 403 }) };
   }
 
   if (!memberTenantIds.length) {
-    return NextResponse.json({ error: "No tenant membership found" }, { status: 403 });
+    return { error: NextResponse.json({ error: "No tenant membership found" }, { status: 403 }) };
   }
 
-  // Validate the requested tenant ID is one the user actually belongs to.
-  let tenantId: string;
-  if (requestedTenantId) {
-    if (!memberTenantIds.includes(requestedTenantId)) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-    tenantId = requestedTenantId;
-  } else {
-    tenantId = memberTenantIds[0];
+  if (requestedTenantId && !memberTenantIds.includes(requestedTenantId)) {
+    return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   }
 
-  // 3. Forward to the upstream Go RMM server with the validated tenant ID.
+  return {
+    user,
+    tenantId: requestedTenantId ?? memberTenantIds[0],
+  };
+}
+
+export async function DELETE(req: Request, context: RouteContext) {
+  const resolved = await resolveTenant(req);
+  if ("error" in resolved) return resolved.error;
+
+  const params = await context.params;
+  const deviceId = params.deviceId;
+
+  if (!deviceId) {
+    return NextResponse.json({ error: "Missing device ID" }, { status: 400 });
+  }
+
   let upstreamRes: Response;
   try {
-    upstreamRes = await fetch(UPSTREAM, {
-      method: "GET",
+    upstreamRes = await fetch(`${UPSTREAM_BASE}/${encodeURIComponent(deviceId)}`, {
+      method: "DELETE",
       headers: {
         Accept: "application/json",
-        "X-Tenant-ID": tenantId,
-        "X-User-ID": user.id,
+        "X-Tenant-ID": resolved.tenantId,
+        "X-User-ID": resolved.user.id,
       },
       cache: "no-store",
     });
   } catch (err) {
-    console.error("[control/devices] upstream fetch failed:", err);
+    console.error("[control/devices/delete] upstream fetch failed:", err);
     return NextResponse.json({ error: "Failed to reach device service" }, { status: 502 });
   }
 
-  const text = await upstreamRes.text();
+  if (upstreamRes.status === 204) {
+    return new NextResponse(null, { status: 204 });
+  }
 
-  return new NextResponse(text, {
+  const text = await upstreamRes.text();
+  return new NextResponse(text || JSON.stringify({ ok: upstreamRes.ok }), {
     status: upstreamRes.status,
     headers: {
       "Content-Type": upstreamRes.headers.get("content-type") ?? "application/json",
