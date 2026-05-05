@@ -21,9 +21,8 @@ export async function GET(req: Request) {
   const q = url.searchParams.get("q")?.trim() ?? "";
   const tenantId = url.searchParams.get("tenant_id")?.trim();
 
-  const allowedTenantIds = tenantId && tenantIds.includes(tenantId)
-    ? [tenantId]
-    : tenantIds;
+  const allowedTenantIds =
+    tenantId && tenantIds.includes(tenantId) ? [tenantId] : tenantIds;
 
   let query = supabase
     .from("devices")
@@ -44,5 +43,9 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
-  return NextResponse.json(data ?? []);
+  return NextResponse.json(data ?? [], {
+    headers: {
+      "Cache-Control": "no-store",
+    },
+  });
 }
