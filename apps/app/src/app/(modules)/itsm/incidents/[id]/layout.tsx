@@ -17,11 +17,30 @@ type Incident = {
   requester_id?: string | null;
   assignee_id?: string | null;
   assigned_team_id?: string | null;
+  device_id?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
 
 export const dynamic = "force-dynamic";
+
+const incidentSelect = [
+  "id",
+  "tenant_id",
+  "number",
+  "title",
+  "description",
+  "category",
+  "status",
+  "priority",
+  "triage_status",
+  "requester_id",
+  "assignee_id",
+  "assigned_team_id",
+  "device_id",
+  "created_at",
+  "updated_at",
+].join(",");
 
 export default async function Layout({
   children,
@@ -38,7 +57,6 @@ export default async function Layout({
   const tenantIds = await getMemberTenantIds();
   if (!tenantIds.length) redirect("/itsm/incidents");
 
-  // Try by UUID first, otherwise by (tenant_id, number)
   const isUuid =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
       raw
@@ -49,24 +67,7 @@ export default async function Layout({
   if (isUuid) {
     const { data } = await supabase
       .from("incidents")
-      .select(
-        [
-          "id",
-          "tenant_id",
-          "number",
-          "title",
-          "description",
-          "category",
-          "status",
-          "priority",
-          "triage_status",
-          "requester_id",
-          "assignee_id",
-          "assigned_team_id",
-          "created_at",
-          "updated_at",
-        ].join(",")
-      )
+      .select(incidentSelect)
       .eq("id", raw)
       .in("tenant_id", tenantIds)
       .maybeSingle();
@@ -74,28 +75,10 @@ export default async function Layout({
     incident = (data as any) ?? null;
   }
 
-  // If not found by UUID, try number across tenant memberships
   if (!incident) {
     const { data } = await supabase
       .from("incidents")
-      .select(
-        [
-          "id",
-          "tenant_id",
-          "number",
-          "title",
-          "description",
-          "category",
-          "status",
-          "priority",
-          "triage_status",
-          "requester_id",
-          "assignee_id",
-          "assigned_team_id",
-          "created_at",
-          "updated_at",
-        ].join(",")
-      )
+      .select(incidentSelect)
       .in("tenant_id", tenantIds)
       .eq("number", raw)
       .maybeSingle();
