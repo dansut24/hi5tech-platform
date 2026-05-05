@@ -97,7 +97,6 @@ export default function ControlHomeClient() {
       setErr(null);
       try {
         const res = await fetch("/api/control/devices", {
-          headers: { "X-Tenant-ID": "tnt_demo" },
           cache: "no-store",
         });
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
