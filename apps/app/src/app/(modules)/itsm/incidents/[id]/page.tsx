@@ -1,7 +1,9 @@
 import { supabaseServer } from "@/lib/supabase/server";
 import { getMemberTenantIds } from "@/lib/tenant";
+import { getTenantFeatures } from "@/lib/entitlements";
 import { addIncidentComment } from "./actions";
 import { uploadIncidentAttachment, deleteIncidentAttachment } from "./attachments.actions";
+import DeviceContextCard from "./DeviceContextCard";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +37,7 @@ export default async function IncidentDetailPage({
 
   const supabase = await supabaseServer();
   const tenantIds = await getMemberTenantIds();
+
   if (!tenantIds.length) {
     return <div className="hi5-card p-4 text-sm opacity-80">No tenant memberships found.</div>;
   }
@@ -56,6 +59,7 @@ export default async function IncidentDetailPage({
     "assigned_team_id",
     "requester_id",
     "asset_tag",
+    "device_id",
     "created_at",
     "updated_at",
     "sla_due",
@@ -72,6 +76,7 @@ export default async function IncidentDetailPage({
       .eq("id", raw)
       .in("tenant_id", tenantIds)
       .maybeSingle();
+
     incident = data ?? null;
   }
 
@@ -82,6 +87,7 @@ export default async function IncidentDetailPage({
       .in("tenant_id", tenantIds)
       .eq("number", raw)
       .maybeSingle();
+
     incident = data ?? null;
   }
 
@@ -89,7 +95,21 @@ export default async function IncidentDetailPage({
     return <div className="hi5-card p-4 text-sm opacity-80">Incident not found.</div>;
   }
 
-  // Updates (comments)
+  const features = await getTenantFeatures(incident.tenant_id);
+
+  let linkedDevice: any = null;
+
+  if (incident.device_id) {
+    const { data } = await supabase
+      .from("devices")
+      .select("device_id, tenant_id, hostname, os, arch, online, last_seen_at, updated_at")
+      .eq("tenant_id", incident.tenant_id)
+      .eq("device_id", incident.device_id)
+      .maybeSingle();
+
+    linkedDevice = data ?? null;
+  }
+
   const { data: comments } = await supabase
     .from("incident_comments")
     .select("id, message, author_id, created_at")
@@ -97,7 +117,6 @@ export default async function IncidentDetailPage({
     .eq("incident_id", incident.id)
     .order("created_at", { ascending: false });
 
-  // Files
   const { data: files } = await supabase
     .from("itsm_attachments")
     .select("id, file_name, mime_type, byte_size, storage_path, created_at")
@@ -141,9 +160,7 @@ export default async function IncidentDetailPage({
                 <div className="text-sm whitespace-pre-wrap">{c.message}</div>
               </div>
             ))}
-            {!comments?.length ? (
-              <div className="p-4 text-sm opacity-70">No updates yet.</div>
-            ) : null}
+            {!comments?.length ? <div className="p-4 text-sm opacity-70">No updates yet.</div> : null}
           </div>
         </div>
       </div>
@@ -160,12 +177,7 @@ export default async function IncidentDetailPage({
           <form action={uploadIncidentAttachment} className="mt-4 space-y-2">
             <input type="hidden" name="incident_id" value={incident.id} />
             <input type="hidden" name="tenant_id" value={incident.tenant_id} />
-            <input
-              type="file"
-              name="file"
-              className="block w-full text-sm"
-              required
-            />
+            <input type="file" name="file" className="block w-full text-sm" required />
             <div className="flex items-center justify-end">
               <button type="submit" className="hi5-btn-primary text-sm w-auto">
                 Upload
@@ -196,16 +208,13 @@ export default async function IncidentDetailPage({
                 </form>
               </div>
             ))}
-            {!files?.length ? (
-              <div className="p-4 text-sm opacity-70">No files uploaded.</div>
-            ) : null}
+            {!files?.length ? <div className="p-4 text-sm opacity-70">No files uploaded.</div> : null}
           </div>
         </div>
       </div>
     );
   }
 
-  // Overview
   return (
     <div className="space-y-3">
       <div className="hi5-panel p-5 space-y-3">
@@ -224,9 +233,7 @@ export default async function IncidentDetailPage({
 
         <div>
           <div className="text-xs opacity-70">Description</div>
-          <div className="text-sm whitespace-pre-wrap opacity-90">
-            {incident.description ?? "—"}
-          </div>
+          <div className="text-sm whitespace-pre-wrap opacity-90">{incident.description ?? "—"}</div>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
@@ -240,6 +247,18 @@ export default async function IncidentDetailPage({
           </div>
         </div>
       </div>
+
+      <DeviceContextCard
+        incidentId={incident.id}
+        tenantId={incident.tenant_id}
+        device={linkedDevice}
+        features={{
+          devices_inventory: features.devices_inventory,
+          remote_control: features.remote_control,
+          remote_terminal: features.remote_terminal,
+          remote_files: features.remote_files,
+        }}
+      />
 
       <div className="hi5-panel p-5">
         <div className="text-sm font-semibold">Quick update</div>
