@@ -1,19 +1,34 @@
-// apps/app/src/app/(modules)/control/[id]/page.tsx
-//
-// Device detail page. The "Connect" button launches the Electron viewer via
-// the hi5tech:// deep link. If the viewer is not installed, it shows an
-// install prompt instead of silently failing.
-
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import TerminalPanel from "./ui/terminal-panel";
 import FileBrowserPanel from "./ui/file-browser-panel";
 import ServicesPanel from "./ui/services-panel";
 import ActivityPanel from "./ui/activity-panel";
 import RemotePanel from "./ui/remote-panel";
+import { getActiveTenantId } from "@/lib/tenant";
+import { getTenantFeatures } from "@/lib/entitlements";
 
 export const dynamic = "force-dynamic";
 
-function TabLink({ href, active, label }: { href: string; active: boolean; label: string }) {
+function TabLink({
+  href,
+  active,
+  label,
+  locked,
+}: {
+  href: string;
+  active: boolean;
+  label: string;
+  locked?: boolean;
+}) {
+  if (locked) {
+    return (
+      <span className="rounded-2xl px-3 py-2 text-sm border hi5-border opacity-50 cursor-not-allowed">
+        {label} 🔒
+      </span>
+    );
+  }
+
   return (
     <Link
       href={href}
@@ -29,6 +44,19 @@ function TabLink({ href, active, label }: { href: string; active: boolean; label
   );
 }
 
+function LockedButton({ label }: { label: string }) {
+  return (
+    <button
+      className="hi5-btn-ghost text-sm opacity-60"
+      type="button"
+      disabled
+      title="Premium feature"
+    >
+      {label} 🔒
+    </button>
+  );
+}
+
 export default async function DevicePage({
   params,
   searchParams,
@@ -39,6 +67,30 @@ export default async function DevicePage({
   const { id } = await params;
   const sp = await searchParams;
   const tab = String(sp.tab || "overview");
+
+  const tenantId = await getActiveTenantId();
+  const features = await getTenantFeatures(tenantId);
+
+  const canInventory = features.devices_inventory === true;
+  const canRemote = features.remote_control === true;
+  const canTerminal = features.remote_terminal === true;
+  const canFiles = features.remote_files === true;
+
+  if (!canInventory) {
+    redirect("/itsm/incidents");
+  }
+
+  if (tab === "remote" && !canRemote) {
+    redirect(`/control/${id}?tab=overview`);
+  }
+
+  if (tab === "terminal" && !canTerminal) {
+    redirect(`/control/${id}?tab=overview`);
+  }
+
+  if (tab === "files" && !canFiles) {
+    redirect(`/control/${id}?tab=overview`);
+  }
 
   return (
     <div className="space-y-5">
@@ -53,25 +105,38 @@ export default async function DevicePage({
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {/* Connect launches the Electron viewer via hi5tech:// deep link */}
-            <Link
-              className="hi5-btn-primary text-sm"
-              href={`/control/${id}?tab=remote`}
-            >
-              Connect
-            </Link>
-            <Link className="hi5-btn-ghost text-sm" href={`/control/${id}?tab=terminal`}>
-              Terminal
-            </Link>
-            <Link className="hi5-btn-ghost text-sm" href={`/control/${id}?tab=files`}>
-              Files
-            </Link>
+            {canRemote ? (
+              <Link className="hi5-btn-primary text-sm" href={`/control/${id}?tab=remote`}>
+                Connect
+              </Link>
+            ) : (
+              <LockedButton label="Connect" />
+            )}
+
+            {canTerminal ? (
+              <Link className="hi5-btn-ghost text-sm" href={`/control/${id}?tab=terminal`}>
+                Terminal
+              </Link>
+            ) : (
+              <LockedButton label="Terminal" />
+            )}
+
+            {canFiles ? (
+              <Link className="hi5-btn-ghost text-sm" href={`/control/${id}?tab=files`}>
+                Files
+              </Link>
+            ) : (
+              <LockedButton label="Files" />
+            )}
+
             <Link className="hi5-btn-ghost text-sm" href={`/control/${id}?tab=services`}>
               Services
             </Link>
+
             <button className="hi5-btn-ghost text-sm" type="button" title="Coming soon">
               Reboot
             </button>
+
             <button className="hi5-btn-ghost text-sm" type="button" title="Coming soon">
               Screenshot
             </button>
@@ -80,9 +145,9 @@ export default async function DevicePage({
 
         <div className="mt-4 flex flex-wrap gap-2">
           <TabLink href={`/control/${id}?tab=overview`} active={tab === "overview"} label="Overview" />
-          <TabLink href={`/control/${id}?tab=remote`}   active={tab === "remote"}   label="Remote" />
-          <TabLink href={`/control/${id}?tab=terminal`} active={tab === "terminal"} label="Terminal" />
-          <TabLink href={`/control/${id}?tab=files`}    active={tab === "files"}    label="Files" />
+          <TabLink href={`/control/${id}?tab=remote`} active={tab === "remote"} label="Remote" locked={!canRemote} />
+          <TabLink href={`/control/${id}?tab=terminal`} active={tab === "terminal"} label="Terminal" locked={!canTerminal} />
+          <TabLink href={`/control/${id}?tab=files`} active={tab === "files"} label="Files" locked={!canFiles} />
           <TabLink href={`/control/${id}?tab=services`} active={tab === "services"} label="Services" />
           <TabLink href={`/control/${id}?tab=activity`} active={tab === "activity"} label="Activity" />
         </div>
@@ -92,39 +157,39 @@ export default async function DevicePage({
         {tab === "overview" && (
           <div className="space-y-4">
             <div className="text-lg font-semibold">Overview</div>
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div className="hi5-card p-4">
                 <div className="text-xs opacity-70">CPU</div>
                 <div className="text-2xl font-extrabold mt-1">—</div>
                 <div className="text-xs opacity-70 mt-1">wire to metrics later</div>
               </div>
+
               <div className="hi5-card p-4">
                 <div className="text-xs opacity-70">Memory</div>
                 <div className="text-2xl font-extrabold mt-1">—</div>
                 <div className="text-xs opacity-70 mt-1">wire to metrics later</div>
               </div>
+
               <div className="hi5-card p-4">
                 <div className="text-xs opacity-70">Disk</div>
                 <div className="text-2xl font-extrabold mt-1">—</div>
                 <div className="text-xs opacity-70 mt-1">wire to metrics later</div>
               </div>
             </div>
+
             <div className="hi5-card p-4">
-              <div className="text-sm font-semibold">Recent events</div>
-              <ul className="mt-2 text-sm opacity-80 space-y-2">
-                <li>• Device checked-in</li>
-                <li>• Policy applied</li>
-                <li>• Service restarted</li>
-              </ul>
+              <div className="text-sm font-semibold">Premium actions</div>
+              <p className="text-sm opacity-75 mt-2">
+                Remote control, terminal and file browser are controlled by tenant entitlements.
+              </p>
             </div>
           </div>
         )}
 
-        {/* Remote tab: shows the ConnectPanel which handles deep link launch */}
         {tab === "remote" && <RemotePanel deviceId={id} />}
-
         {tab === "terminal" && <TerminalPanel deviceId={id} />}
-        {tab === "files"    && <FileBrowserPanel deviceId={id} />}
+        {tab === "files" && <FileBrowserPanel deviceId={id} />}
         {tab === "services" && <ServicesPanel deviceId={id} />}
         {tab === "activity" && <ActivityPanel deviceId={id} />}
 
