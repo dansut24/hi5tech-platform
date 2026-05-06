@@ -4,6 +4,7 @@ import { getTenantFeatures } from "@/lib/entitlements";
 import { addIncidentComment } from "./actions";
 import { uploadIncidentAttachment, deleteIncidentAttachment } from "./attachments.actions";
 import DeviceContextCard from "./DeviceContextCard";
+import TicketTimeline from "./TicketTimeline";
 
 export const dynamic = "force-dynamic";
 
@@ -109,6 +110,15 @@ export default async function IncidentDetailPage({
 
     linkedDevice = data ?? null;
   }
+
+  const { data: activity } = await supabase
+    .from("itsm_activity")
+    .select("id, activity_type, title, body, created_at, created_by")
+    .eq("tenant_id", incident.tenant_id)
+    .eq("entity_type", "incident")
+    .eq("entity_id", incident.id)
+    .order("created_at", { ascending: false })
+    .limit(20);
 
   const { data: comments } = await supabase
     .from("incident_comments")
@@ -277,6 +287,8 @@ export default async function IncidentDetailPage({
           </div>
         </form>
       </div>
+
+      <TicketTimeline items={activity ?? []} />
     </div>
   );
 }
