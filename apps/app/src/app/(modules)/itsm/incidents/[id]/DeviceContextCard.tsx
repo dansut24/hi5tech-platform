@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { FolderOpen, Lock, Monitor, ScreenShare, Terminal } from "lucide-react";
+import { FolderOpen, Monitor, ScreenShare, Terminal } from "lucide-react";
 import DeviceLinkerClient from "./DeviceLinkerClient";
+import PremiumFeatureLock from "@/components/premium/PremiumFeatureLock";
 
 type Device = {
   device_id: string;
@@ -22,29 +23,6 @@ function fmt(ts?: string | null) {
   }
 }
 
-function LockedButton({
-  label,
-  icon,
-}: {
-  label: string;
-  icon: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      className="hi5-btn-ghost text-sm w-full flex items-center justify-between gap-2 opacity-75"
-      title="Premium feature"
-      disabled
-    >
-      <span className="flex items-center gap-2">
-        {icon}
-        {label}
-      </span>
-      <Lock className="h-4 w-4" />
-    </button>
-  );
-}
-
 export default function DeviceContextCard({
   incidentId,
   tenantId,
@@ -61,7 +39,6 @@ export default function DeviceContextCard({
     remote_files?: boolean;
   };
 }) {
-  const hasDevice = Boolean(device);
   const deviceId = device?.device_id ?? null;
   const name = device?.hostname || device?.device_id || "No linked device";
 
@@ -117,14 +94,20 @@ export default function DeviceContextCard({
         currentDeviceId={deviceId}
       />
 
-      {hasDevice ? (
+      {deviceId ? (
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {features.devices_inventory ? (
             <Link href={`/control/${deviceId}`} className="hi5-btn-ghost text-sm w-full">
               Full device
             </Link>
           ) : (
-            <LockedButton label="Full inventory" icon={<Monitor className="h-4 w-4" />} />
+            <PremiumFeatureLock
+              tenantId={tenantId}
+              incidentId={incidentId}
+              deviceId={deviceId}
+              featureKey="devices_inventory"
+              label="Full inventory"
+            />
           )}
 
           {features.remote_control ? (
@@ -132,7 +115,14 @@ export default function DeviceContextCard({
               Remote
             </Link>
           ) : (
-            <LockedButton label="Remote" icon={<ScreenShare className="h-4 w-4" />} />
+            <PremiumFeatureLock
+              tenantId={tenantId}
+              incidentId={incidentId}
+              deviceId={deviceId}
+              featureKey="remote_control"
+              label="Remote"
+              className="hi5-btn-primary text-sm w-full"
+            />
           )}
 
           {features.remote_terminal ? (
@@ -140,7 +130,13 @@ export default function DeviceContextCard({
               Terminal
             </Link>
           ) : (
-            <LockedButton label="Terminal" icon={<Terminal className="h-4 w-4" />} />
+            <PremiumFeatureLock
+              tenantId={tenantId}
+              incidentId={incidentId}
+              deviceId={deviceId}
+              featureKey="remote_terminal"
+              label="Terminal"
+            />
           )}
 
           {features.remote_files ? (
@@ -148,7 +144,13 @@ export default function DeviceContextCard({
               Files
             </Link>
           ) : (
-            <LockedButton label="Files" icon={<FolderOpen className="h-4 w-4" />} />
+            <PremiumFeatureLock
+              tenantId={tenantId}
+              incidentId={incidentId}
+              deviceId={deviceId}
+              featureKey="remote_files"
+              label="Files"
+            />
           )}
         </div>
       ) : null}
