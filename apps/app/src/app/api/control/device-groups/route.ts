@@ -65,13 +65,13 @@ async function getContext(): Promise<TenantContext> {
 async function ensureDefaultGroup(ctx: TenantContext) {
   if (!ctx.tenant) return;
 
+  // Keep this insert minimal so older schemas/schema-cache states do not fail on optional columns.
   await ctx.supabase.from("device_groups").upsert(
     {
       tenant_id: ctx.tenant.id,
       name: "Default",
       slug: "default",
       description: "Default device group",
-      created_by: ctx.user?.id ?? null,
     },
     { onConflict: "tenant_id,slug" }
   );
@@ -85,9 +85,11 @@ export async function GET() {
 
   await ensureDefaultGroup(ctx);
 
+  // Do not select updated_at/created_by here. Some existing deployments already had
+  // device_groups without those optional columns, and Supabase schema cache can lag after migration.
   const { data, error } = await ctx.supabase
     .from("device_groups")
-    .select("id, tenant_id, name, slug, description, created_at, updated_at, archived_at")
+    .select("id, tenant_id, name, slug, description, created_at, archived_at")
     .eq("tenant_id", ctx.tenant.id)
     .is("archived_at", null)
     .order("name", { ascending: true });
@@ -113,6 +115,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Group name required" }, { status: 400 });
   }
 
+  // Keep this insert minimal. created_by is optional and added by migration, but older
+  // projects may not have it yet or PostgREST may not have refreshed its schema cache.
   const { data, error } = await ctx.supabase
     .from("device_groups")
     .insert({
@@ -120,9 +124,8 @@ export async function POST(req: Request) {
       name,
       slug,
       description,
-      created_by: ctx.user.id,
     })
-    .select("id, tenant_id, name, slug, description, created_at, updated_at, archived_at")
+    .select("id, tenant_id, name, slug, description, created_at, archived_at")
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
