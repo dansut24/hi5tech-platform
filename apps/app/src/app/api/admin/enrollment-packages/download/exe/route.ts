@@ -10,7 +10,7 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "id required" }, { status: 400 });
   }
 
-  const filePath = path.join(process.cwd(), "public", "downloads", "Hi5TechAgentSetup.exe");
+  const filePath = path.join(process.cwd(), "public", "downloads", "agent", "Hi5TechAgentSetup.exe");
 
   try {
     const file = await fs.readFile(filePath);
