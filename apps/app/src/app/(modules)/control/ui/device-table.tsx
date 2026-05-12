@@ -60,7 +60,8 @@ export default function DeviceTable({
               <th className="px-4 py-3">Device</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3 hidden md:table-cell">OS</th>
-              <th className="px-4 py-3 hidden lg:table-cell">User</th>
+              <th className="px-4 py-3 hidden lg:table-cell">Group</th>
+              <th className="px-4 py-3 hidden xl:table-cell">User</th>
               <th className="px-4 py-3">Last seen</th>
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>
@@ -69,7 +70,7 @@ export default function DeviceTable({
           <tbody>
             {devices.length === 0 ? (
               <tr>
-                <td className="px-4 py-6 opacity-80" colSpan={6}>
+                <td className="px-4 py-6 opacity-80" colSpan={7}>
                   No devices match your filters.
                 </td>
               </tr>
@@ -107,7 +108,8 @@ export default function DeviceTable({
                     </td>
 
                     <td className="px-4 py-3 hidden md:table-cell opacity-90">{d.os}</td>
-                    <td className="px-4 py-3 hidden lg:table-cell opacity-90">
+                    <td className="px-4 py-3 hidden lg:table-cell opacity-90">{d.groupName}</td>
+                    <td className="px-4 py-3 hidden xl:table-cell opacity-90">
                       {d.user ? d.user : <span className="opacity-70">—</span>}
                     </td>
                     <td className="px-4 py-3 opacity-80">{d.lastSeen}</td>
@@ -115,7 +117,7 @@ export default function DeviceTable({
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-2">
                         <Link
-                          href={`/control/${encodeURIComponent(d.id)}?tab=overview`}
+                          href={`/control/devices/${encodeURIComponent(d.id)}?tab=overview`}
                           className="hi5-btn-ghost text-sm inline-block"
                           onClick={(e) => e.stopPropagation()}
                         >

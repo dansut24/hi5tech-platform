@@ -252,7 +252,7 @@ export default function ControlHomeClient() {
                 computed.flapping.map((d) => (
                   <Link
                     key={d.device_id}
-                    href={`/control/${encodeURIComponent(d.device_id)}?tab=overview`}
+                    href={`/control/devices/${encodeURIComponent(d.device_id)}?tab=overview`}
                     className="block hi5-panel p-3 hover:bg-black/5 dark:hover:bg-white/5 transition"
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -285,7 +285,7 @@ export default function ControlHomeClient() {
               computed.recent.map((d) => (
                 <Link
                   key={d.device_id}
-                  href={`/control/${encodeURIComponent(d.device_id)}?tab=overview`}
+                  href={`/control/devices/${encodeURIComponent(d.device_id)}?tab=overview`}
                   className="block hi5-panel p-3 hover:bg-black/5 dark:hover:bg-white/5 transition"
                 >
                   <div className="flex items-start justify-between gap-3">
