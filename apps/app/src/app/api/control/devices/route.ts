@@ -11,14 +11,31 @@ type UpstreamDevice = {
   device_id?: string;
   id?: string;
   tenant_id?: string;
-  group_id?: string;
-  enrollment_package_id?: string;
+  group_id?: string | null;
+  group_name?: string | null;
+  enrollment_package_id?: string | null;
   hostname?: string;
+  name?: string;
   os?: string;
   arch?: string;
   agent_version?: string;
+  user?: string;
+  ip?: string;
+  tags?: string[];
   last_seen_at?: string;
   online?: boolean;
+};
+
+type LocalDevice = {
+  device_id: string;
+  group_id: string | null;
+  enrollment_package_id?: string | null;
+};
+
+type GroupRow = {
+  id: string;
+  name: string;
+  slug?: string | null;
 };
 
 async function resolveTenant(req: Request) {
@@ -58,7 +75,7 @@ async function syncDevicesToSupabase(tenantId: string, devices: UpstreamDevice[]
       tenant_id: String(d.tenant_id || tenantId),
       group_id: d.group_id ?? null,
       enrollment_package_id: d.enrollment_package_id ?? null,
-      hostname: d.hostname ?? null,
+      hostname: d.hostname ?? d.name ?? null,
       os: d.os ?? null,
       arch: d.arch ?? null,
       agent_version: d.agent_version ?? null,
@@ -79,6 +96,61 @@ async function syncDevicesToSupabase(tenantId: string, devices: UpstreamDevice[]
   if (error) {
     console.error("[control/devices] Supabase sync failed:", error.message);
   }
+}
+
+async function loadLocalDeviceGroups(tenantId: string) {
+  const admin = supabaseAdmin();
+
+  const [{ data: localDevices }, { data: groups }] = await Promise.all([
+    admin
+      .from("devices")
+      .select("device_id, group_id, enrollment_package_id")
+      .eq("tenant_id", tenantId),
+    admin
+      .from("device_groups")
+      .select("id, name, slug")
+      .eq("tenant_id", tenantId)
+      .is("archived_at", null),
+  ]);
+
+  const deviceById = new Map<string, LocalDevice>();
+  for (const d of (localDevices ?? []) as LocalDevice[]) {
+    if (d.device_id) deviceById.set(d.device_id, d);
+  }
+
+  const groupById = new Map<string, GroupRow>();
+  for (const g of (groups ?? []) as GroupRow[]) {
+    groupById.set(g.id, g);
+    if (g.slug) groupById.set(g.slug, g);
+  }
+
+  return { deviceById, groupById };
+}
+
+function enrichDevices(
+  tenantId: string,
+  devices: UpstreamDevice[],
+  deviceById: Map<string, LocalDevice>,
+  groupById: Map<string, GroupRow>
+) {
+  return devices
+    .map((d) => {
+      const deviceId = String(d.device_id ?? d.id ?? "").trim();
+      const local = deviceById.get(deviceId);
+      const rawGroupId = d.group_id ?? local?.group_id ?? null;
+      const group = rawGroupId ? groupById.get(rawGroupId) : null;
+      const groupId = group?.slug === "default" ? null : rawGroupId;
+
+      return {
+        ...d,
+        device_id: deviceId,
+        tenant_id: d.tenant_id ?? tenantId,
+        group_id: groupId,
+        group_name: d.group_name ?? group?.name ?? (groupId ? "Unknown group" : "Default"),
+        enrollment_package_id: d.enrollment_package_id ?? local?.enrollment_package_id ?? null,
+      };
+    })
+    .filter((d) => d.device_id);
 }
 
 export async function GET(req: Request) {
@@ -112,7 +184,10 @@ export async function GET(req: Request) {
 
   await syncDevicesToSupabase(resolved.tenantId, devices);
 
-  return NextResponse.json(devices, {
+  const { deviceById, groupById } = await loadLocalDeviceGroups(resolved.tenantId);
+  const enriched = enrichDevices(resolved.tenantId, devices, deviceById, groupById);
+
+  return NextResponse.json(enriched, {
     headers: {
       "Cache-Control": "no-store",
     },
