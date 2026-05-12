@@ -96,6 +96,7 @@ function groupLabel(groups: DeviceGroup[], groupId: string | null | undefined) {
 }
 
 export default function AgentDownloadClient() {
+  const [requestedGroupId, setRequestedGroupId] = useState<string | null>(null);
   const [groups, setGroups] = useState<DeviceGroup[]>([]);
   const [packages, setPackages] = useState<EnrollmentPackage[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState("default");
@@ -158,7 +159,14 @@ export default function AgentDownloadClient() {
       setGroups(loadedGroups);
       setPackages(packagesJson?.packages ?? []);
 
-      if (loadedGroups.length > 0 && !loadedGroups.some((g: DeviceGroup) => g.id === selectedGroupId || g.slug === selectedGroupId)) {
+      if (requestedGroupId) {
+        const requested = loadedGroups.find((g: DeviceGroup) => g.id === requestedGroupId || g.slug === requestedGroupId);
+        if (requested) {
+          setSelectedGroupId(requested.id);
+        } else if (requestedGroupId === "default") {
+          setSelectedGroupId("default");
+        }
+      } else if (loadedGroups.length > 0 && !loadedGroups.some((g: DeviceGroup) => g.id === selectedGroupId || g.slug === selectedGroupId)) {
         setSelectedGroupId(loadedGroups[0].id);
       }
     } catch (err) {
@@ -169,9 +177,15 @@ export default function AgentDownloadClient() {
   }
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      setRequestedGroupId(new URLSearchParams(window.location.search).get("group_id"));
+    }
+  }, []);
+
+  useEffect(() => {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [requestedGroupId]);
 
   useEffect(() => {
     const label = selectedGroup?.name || (selectedGroupId === "default" ? "Default" : selectedGroupId);
