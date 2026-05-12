@@ -10,9 +10,13 @@ const UPSTREAM_BASE = "https://rmm.hi5tech.co.uk/api/devices";
 type UpstreamDevice = {
   device_id?: string;
   id?: string;
+  tenant_id?: string;
+  group_id?: string;
+  enrollment_package_id?: string;
   hostname?: string;
   os?: string;
   arch?: string;
+  agent_version?: string;
   last_seen_at?: string;
   online?: boolean;
 };
@@ -51,15 +55,18 @@ async function syncDevicesToSupabase(tenantId: string, devices: UpstreamDevice[]
   const rows = devices
     .map((d) => ({
       device_id: String(d.device_id ?? d.id ?? "").trim(),
-      tenant_id: tenantId,
+      tenant_id: String(d.tenant_id || tenantId),
+      group_id: d.group_id ?? null,
+      enrollment_package_id: d.enrollment_package_id ?? null,
       hostname: d.hostname ?? null,
       os: d.os ?? null,
       arch: d.arch ?? null,
+      agent_version: d.agent_version ?? null,
       online: d.online === true,
       last_seen_at: d.last_seen_at ?? null,
       updated_at: new Date().toISOString(),
     }))
-    .filter((d) => d.device_id.length > 0);
+    .filter((d) => d.device_id.length > 0 && d.tenant_id === tenantId);
 
   if (!rows.length) return;
 
@@ -81,7 +88,7 @@ export async function GET(req: Request) {
   let upstreamRes: Response;
 
   try {
-    upstreamRes = await fetch(UPSTREAM_BASE, {
+    upstreamRes = await fetch(`${UPSTREAM_BASE}?tenant_id=${encodeURIComponent(resolved.tenantId)}`, {
       method: "GET",
       headers: {
         Accept: "application/json",
