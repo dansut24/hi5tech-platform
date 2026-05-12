@@ -72,14 +72,15 @@ export default async function DevicePage({
   const tenantId = await getActiveTenantId();
   const features = await getTenantFeatures(tenantId);
 
-  const canInventory = features.devices_inventory === true;
+  // Device details must remain inside Control.
+  // Do not bounce to ITSM when the inventory entitlement is disabled/missing;
+  // Control can still show the read-only device record and lock only premium actions.
+  const canInventory = features.devices_inventory !== false;
   const canRemote = features.remote_control === true;
   const canTerminal = features.remote_terminal === true;
   const canFiles = features.remote_files === true;
 
-  if (!canInventory) {
-    redirect("/itsm/incidents");
-  }
+  void canInventory;
 
   if (tab === "remote" && !canRemote) {
     redirect(`/control/devices/${encodeURIComponent(id)}?tab=overview`);
