@@ -255,7 +255,7 @@ export default function JobsClient() {
                     </Link>
                     {j.targets?.[0]?.device_id ? (
                       <Link
-                        href={`/control/${encodeURIComponent(j.targets[0].device_id)}?tab=terminal`}
+                        href={`/control/devices/${encodeURIComponent(j.targets[0].device_id)}?tab=terminal`}
                         className="hi5-btn-ghost text-xs text-center"
                       >
                         Open device
