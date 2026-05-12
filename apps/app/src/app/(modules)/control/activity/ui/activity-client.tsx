@@ -147,7 +147,7 @@ export default function ActivityClient() {
                         <>
                           {" "}
                           ·{" "}
-                          <Link className="underline" href={`/control/${encodeURIComponent(r.device_id)}?tab=overview`}>
+                          <Link className="underline" href={`/control/devices/${encodeURIComponent(r.device_id)}?tab=overview`}>
                             {r.device_id}
                           </Link>
                         </>
@@ -157,7 +157,7 @@ export default function ActivityClient() {
 
                   {r.device_id ? (
                     <Link
-                      href={`/control/${encodeURIComponent(r.device_id)}?tab=activity`}
+                      href={`/control/devices/${encodeURIComponent(r.device_id)}?tab=activity`}
                       className="hi5-btn-ghost text-xs"
                     >
                       View device
