@@ -1,4 +1,5 @@
 // apps/app/src/app/(modules)/control/devices/page.tsx
+import Link from "next/link";
 import DevicesClient from "../ui/devices-client";
 
 export const dynamic = "force-dynamic";
@@ -15,12 +16,12 @@ export default function ControlDevicesPage() {
         </div>
 
         <div className="hidden md:flex items-center gap-2">
-          <button className="hi5-btn-ghost text-sm" type="button" title="Coming soon">
-            Quick actions (soon)
-          </button>
-          <button className="hi5-btn-primary text-sm" type="button" title="Demo">
-            New policy
-          </button>
+          <Link className="hi5-btn-ghost text-sm" href="/control/downloads">
+            Agent downloads
+          </Link>
+          <Link className="hi5-btn-primary text-sm" href="/control/downloads">
+            Add device
+          </Link>
         </div>
       </div>
 
