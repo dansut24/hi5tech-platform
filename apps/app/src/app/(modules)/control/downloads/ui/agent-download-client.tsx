@@ -1,8 +1,17 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Check, Clipboard, Download, Plus, RotateCcw, ShieldCheck } from "lucide-react";
+import { Check, Clipboard, Download, Plus, RefreshCw, ShieldCheck, XCircle } from "lucide-react";
+
+type DeviceGroup = {
+  id: string;
+  tenant_id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  created_at: string;
+};
 
 type EnrollmentPackage = {
   id: string;
@@ -12,12 +21,17 @@ type EnrollmentPackage = {
   name: string;
   status: "active" | "revoked";
   secret_hint?: string | null;
+  package_type?: string | null;
+  install_source?: string | null;
   created_at: string;
+  revoked_at?: string | null;
+  last_synced_at?: string | null;
 };
 
 type CreatePackageResponse = {
   package: EnrollmentPackage;
   bootstrap_secret: string;
+  sync_warning?: string | null;
 };
 
 const AGENT_FILE_NAME = "Hi5TechAgentSetup.exe";
@@ -30,8 +44,6 @@ function psSingleQuote(value: string) {
 }
 
 function createEnrollmentToken(pkg: EnrollmentPackage, bootstrapSecret: string) {
-  // Keep this opaque for the agent/control server. Later, the control server can validate
-  // this as package_id.bootstrap_secret without changing installer arguments.
   return `${pkg.id}.${bootstrapSecret}`;
 }
 
@@ -77,18 +89,41 @@ function downloadText(filename: string, text: string) {
   URL.revokeObjectURL(url);
 }
 
+function groupLabel(groups: DeviceGroup[], groupId: string | null | undefined) {
+  if (!groupId || groupId === "default") return "Default";
+  const group = groups.find((g) => g.id === groupId || g.slug === groupId);
+  return group ? group.name : groupId;
+}
+
 export default function AgentDownloadClient() {
+  const [groups, setGroups] = useState<DeviceGroup[]>([]);
+  const [packages, setPackages] = useState<EnrollmentPackage[]>([]);
+  const [selectedGroupId, setSelectedGroupId] = useState("default");
+  const [newGroupName, setNewGroupName] = useState("");
   const [name, setName] = useState("Windows Agent - Default Group");
-  const [groupId, setGroupId] = useState("default");
   const [apiBaseUrl, setApiBaseUrl] = useState(DEFAULT_RMM_API_BASE_URL);
   const [agentWsBaseUrl, setAgentWsBaseUrl] = useState(DEFAULT_AGENT_WS_BASE_URL);
 
+  const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [creatingGroup, setCreatingGroup] = useState(false);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [created, setCreated] = useState<CreatePackageResponse | null>(null);
   const [copied, setCopied] = useState(false);
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
+
+  const selectedGroup = useMemo(
+    () => groups.find((g) => g.id === selectedGroupId || g.slug === selectedGroupId),
+    [groups, selectedGroupId]
+  );
+
+  const activePackages = useMemo(
+    () => packages.filter((pkg) => pkg.status === "active"),
+    [packages]
+  );
 
   const installCommand = useMemo(() => {
     if (!created) return "";
@@ -104,9 +139,74 @@ export default function AgentDownloadClient() {
     });
   }, [agentWsBaseUrl, apiBaseUrl, created, origin]);
 
+  async function refresh() {
+    setLoading(true);
+    setError(null);
+    try {
+      const [groupsRes, packagesRes] = await Promise.all([
+        fetch("/api/control/device-groups", { cache: "no-store" }),
+        fetch("/api/admin/enrollment-packages", { cache: "no-store" }),
+      ]);
+
+      const groupsJson = await groupsRes.json().catch(() => null);
+      const packagesJson = await packagesRes.json().catch(() => null);
+
+      if (!groupsRes.ok) throw new Error(groupsJson?.error || "Failed to load device groups");
+      if (!packagesRes.ok) throw new Error(packagesJson?.error || "Failed to load enrollment packages");
+
+      const loadedGroups = groupsJson?.groups ?? [];
+      setGroups(loadedGroups);
+      setPackages(packagesJson?.packages ?? []);
+
+      if (loadedGroups.length > 0 && !loadedGroups.some((g: DeviceGroup) => g.id === selectedGroupId || g.slug === selectedGroupId)) {
+        setSelectedGroupId(loadedGroups[0].id);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load agent download data");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const label = selectedGroup?.name || (selectedGroupId === "default" ? "Default" : selectedGroupId);
+    setName(`Windows Agent - ${label}`);
+  }, [selectedGroup?.name, selectedGroupId]);
+
+  async function createGroup() {
+    const trimmed = newGroupName.trim();
+    if (!trimmed) return;
+
+    setCreatingGroup(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/control/device-groups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.error || `Failed to create group (${res.status})`);
+
+      setNewGroupName("");
+      await refresh();
+      if (json?.group?.id) setSelectedGroupId(json.group.id);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to create group");
+    } finally {
+      setCreatingGroup(false);
+    }
+  }
+
   async function createPackage() {
     setCreating(true);
     setError(null);
+    setWarning(null);
     setCopied(false);
 
     try {
@@ -115,7 +215,9 @@ export default function AgentDownloadClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim() || "Windows Agent Enrollment",
-          group_id: groupId.trim() || "default",
+          group_id: selectedGroupId || "default",
+          package_type: "windows-x64",
+          install_source: "rmm-portal",
         }),
       });
 
@@ -125,11 +227,33 @@ export default function AgentDownloadClient() {
         throw new Error(json?.error || `Failed to create package (${res.status})`);
       }
 
-      setCreated(json as CreatePackageResponse);
+      const createdResponse = json as CreatePackageResponse;
+      setCreated(createdResponse);
+      if (createdResponse.sync_warning) setWarning(createdResponse.sync_warning);
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create enrollment package");
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function revokePackage(id: string) {
+    setRevokingId(id);
+    setError(null);
+    setWarning(null);
+    try {
+      const res = await fetch(`/api/admin/enrollment-packages/revoke?id=${encodeURIComponent(id)}`, {
+        method: "POST",
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.error || `Failed to revoke package (${res.status})`);
+      if (json?.sync_warning) setWarning(json.sync_warning);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to revoke package");
+    } finally {
+      setRevokingId(null);
     }
   }
 
@@ -142,7 +266,7 @@ export default function AgentDownloadClient() {
 
   function downloadCommand() {
     if (!installCommand || !created) return;
-    const safeGroup = (created.package.group_id || "default").replace(/[^a-z0-9_-]+/gi, "-");
+    const safeGroup = groupLabel(groups, created.package.group_id).replace(/[^a-z0-9_-]+/gi, "-");
     downloadText(`Install-Hi5TechAgent-${safeGroup}.ps1`, installCommand);
   }
 
@@ -157,8 +281,48 @@ export default function AgentDownloadClient() {
             <div>
               <div className="text-lg font-bold">Generate Windows agent install command</div>
               <p className="text-sm opacity-70 mt-1">
-                Create a tenant-scoped enrollment package, choose the target group, then copy the generated PowerShell command.
+                Create a long-lived tenant package. It remains active until revoked and enrolls devices straight into the selected group.
               </p>
+            </div>
+          </div>
+
+          {loading ? <div className="text-sm opacity-70">Loading groups and packages…</div> : null}
+
+          <div className="rounded-2xl border hi5-border p-4 space-y-3">
+            <div className="text-sm font-semibold">Device group</div>
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
+              <select
+                className="hi5-input"
+                value={selectedGroupId}
+                onChange={(e) => setSelectedGroupId(e.target.value)}
+              >
+                {groups.map((group) => (
+                  <option key={group.id} value={group.id}>
+                    {group.name}
+                  </option>
+                ))}
+                {groups.length === 0 ? <option value="default">Default</option> : null}
+              </select>
+              <button type="button" className="hi5-btn-ghost text-sm inline-flex items-center gap-2" onClick={refresh}>
+                <RefreshCw size={15} /> Refresh
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
+              <input
+                className="hi5-input"
+                value={newGroupName}
+                onChange={(e) => setNewGroupName(e.target.value)}
+                placeholder="Create a new group, e.g. Laptops"
+              />
+              <button
+                type="button"
+                className="hi5-btn-primary text-sm inline-flex items-center gap-2"
+                onClick={createGroup}
+                disabled={creatingGroup || !newGroupName.trim()}
+              >
+                <Plus size={15} /> {creatingGroup ? "Creating…" : "Create group"}
+              </button>
             </div>
           </div>
 
@@ -174,18 +338,13 @@ export default function AgentDownloadClient() {
             </label>
 
             <label className="block text-sm">
-              <div className="text-xs opacity-70 mb-1">Group ID</div>
-              <input
-                className="hi5-input"
-                value={groupId}
-                onChange={(e) => setGroupId(e.target.value)}
-                placeholder="default"
-              />
+              <div className="text-xs opacity-70 mb-1">Install package</div>
+              <input className="hi5-input" value="windows-x64" readOnly />
             </label>
 
             <label className="block text-sm">
-              <div className="text-xs opacity-70 mb-1">Install package</div>
-              <input className="hi5-input" value="windows-x64" readOnly />
+              <div className="text-xs opacity-70 mb-1">Package lifetime</div>
+              <input className="hi5-input" value="Always active until revoked" readOnly />
             </label>
 
             <label className="block text-sm sm:col-span-2">
@@ -213,6 +372,12 @@ export default function AgentDownloadClient() {
             </div>
           ) : null}
 
+          {warning ? (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-700 dark:text-amber-200">
+              Control server sync warning: {warning}
+            </div>
+          ) : null}
+
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -220,7 +385,7 @@ export default function AgentDownloadClient() {
               onClick={createPackage}
               disabled={creating}
             >
-              {creating ? <RotateCcw size={16} className="animate-spin" /> : <Plus size={16} />}
+              {creating ? <RefreshCw size={16} className="animate-spin" /> : <Plus size={16} />}
               {creating ? "Generating…" : created ? "Generate new command" : "Generate command"}
             </button>
 
@@ -241,13 +406,11 @@ export default function AgentDownloadClient() {
         </section>
 
         <section className="hi5-panel p-5 space-y-4">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="text-lg font-bold">PowerShell install command</div>
-              <p className="text-sm opacity-70 mt-1">
-                Run this from the target Windows device. It downloads the installer, asks for admin, installs the service, and enrolls into the selected group.
-              </p>
-            </div>
+          <div>
+            <div className="text-lg font-bold">PowerShell install command</div>
+            <p className="text-sm opacity-70 mt-1">
+              Run this from the target Windows device. It downloads the installer, asks for admin, installs the service, and enrolls into the selected group.
+            </p>
           </div>
 
           {created ? (
@@ -259,7 +422,7 @@ export default function AgentDownloadClient() {
                 </div>
                 <div className="rounded-2xl border hi5-border p-3">
                   <div className="text-xs opacity-60">Group</div>
-                  <div className="font-mono text-xs mt-1 break-all">{created.package.group_id || "default"}</div>
+                  <div className="font-mono text-xs mt-1 break-all">{groupLabel(groups, created.package.group_id)}</div>
                 </div>
                 <div className="rounded-2xl border hi5-border p-3">
                   <div className="text-xs opacity-60">Package</div>
@@ -282,7 +445,7 @@ export default function AgentDownloadClient() {
               </div>
 
               <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-200">
-                Save this command now. The enrollment secret is only shown at creation time. If you lose it, generate a new package/command.
+                Save this command now. The enrollment secret is only shown at creation time. The package remains active until revoked.
               </div>
             </>
           ) : (
@@ -294,24 +457,63 @@ export default function AgentDownloadClient() {
       </div>
 
       <section className="hi5-panel p-5">
-        <div className="text-base font-bold">How this enrollment works</div>
-        <div className="mt-3 grid grid-cols-1 md:grid-cols-4 gap-3 text-sm">
-          <div className="rounded-2xl border hi5-border p-3">
-            <div className="font-semibold">1. Package</div>
-            <p className="opacity-70 mt-1">A tenant-scoped package is created with your selected group ID.</p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-base font-bold">Active enrollment packages</div>
+            <p className="text-sm opacity-70 mt-1">These packages are valid until revoked. Revoking blocks future installs with that command.</p>
           </div>
-          <div className="rounded-2xl border hi5-border p-3">
-            <div className="font-semibold">2. Download</div>
-            <p className="opacity-70 mt-1">The target device downloads the generic EXE from the tenant domain.</p>
-          </div>
-          <div className="rounded-2xl border hi5-border p-3">
-            <div className="font-semibold">3. Install</div>
-            <p className="opacity-70 mt-1">The installer writes config.ini and starts the Windows service as admin.</p>
-          </div>
-          <div className="rounded-2xl border hi5-border p-3">
-            <div className="font-semibold">4. Enroll</div>
-            <p className="opacity-70 mt-1">The agent sends tenant, group, package, and enrollment token to the RMM API.</p>
-          </div>
+          <button type="button" className="hi5-btn-ghost text-sm inline-flex items-center gap-2" onClick={refresh}>
+            <RefreshCw size={15} /> Refresh
+          </button>
+        </div>
+
+        <div className="mt-4 overflow-auto rounded-2xl border hi5-border">
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs opacity-70 border-b hi5-border">
+              <tr>
+                <th className="px-3 py-2">Name</th>
+                <th className="px-3 py-2">Group</th>
+                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Secret</th>
+                <th className="px-3 py-2">Created</th>
+                <th className="px-3 py-2 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activePackages.length === 0 ? (
+                <tr>
+                  <td className="px-3 py-6 text-center opacity-70" colSpan={6}>No active enrollment packages yet.</td>
+                </tr>
+              ) : (
+                activePackages.map((pkg) => (
+                  <tr key={pkg.id} className="border-b hi5-border last:border-b-0">
+                    <td className="px-3 py-3">
+                      <div className="font-semibold">{pkg.name}</div>
+                      <div className="font-mono text-[11px] opacity-60 break-all">{pkg.id}</div>
+                    </td>
+                    <td className="px-3 py-3">{groupLabel(groups, pkg.group_id)}</td>
+                    <td className="px-3 py-3">
+                      <span className="rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 px-2 py-1 text-xs font-semibold">
+                        Active until revoked
+                      </span>
+                    </td>
+                    <td className="px-3 py-3 font-mono text-xs opacity-75">{pkg.secret_hint || "—"}</td>
+                    <td className="px-3 py-3 text-xs opacity-75">{new Date(pkg.created_at).toLocaleString()}</td>
+                    <td className="px-3 py-3 text-right">
+                      <button
+                        type="button"
+                        className="hi5-btn-ghost text-xs inline-flex items-center gap-1"
+                        onClick={() => revokePackage(pkg.id)}
+                        disabled={revokingId === pkg.id}
+                      >
+                        <XCircle size={14} /> {revokingId === pkg.id ? "Revoking…" : "Revoke"}
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </section>
     </div>
