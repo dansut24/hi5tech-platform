@@ -15,6 +15,7 @@ const API_BASE =
   process.env.NEXT_PUBLIC_RMM_API_BASE?.replace(/\/+$/, "") || "https://rmm.hi5tech.co.uk";
 
 type ConnectState = "idle" | "requesting" | "launching" | "done" | "not_installed" | "error";
+type LaunchMode = "console" | "backstage";
 
 export default function DeviceDetailsPanel({
   device,
@@ -31,6 +32,7 @@ export default function DeviceDetailsPanel({
   const [busy, setBusy] = useState(false);
   const [connectState, setConnectState] = useState<ConnectState>("idle");
   const [connectErr, setConnectErr] = useState("");
+  const [connectMode, setConnectMode] = useState<LaunchMode | null>(null);
   const didBlur = useRef(false);
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -55,14 +57,15 @@ export default function DeviceDetailsPanel({
     }
   }
 
-  const handleConnect = useCallback(async () => {
+  const handleConnect = useCallback(async (mode: LaunchMode) => {
     if (!device?.id) return;
     setConnectState("requesting");
     setConnectErr("");
+    setConnectMode(mode);
     didBlur.current = false;
 
     // 1. Fetch session token
-    let sessionData: { session_id: string; token: string; device_id: string; wss_url: string };
+    let sessionData: { session_id: string; token: string; device_id: string; wss_url: string; mode?: LaunchMode };
     try {
       const res = await fetch("/api/control/session", {
         method: "POST",
@@ -70,7 +73,7 @@ export default function DeviceDetailsPanel({
           "Content-Type": "application/json",
           "X-Tenant-ID": "tnt_demo",
         },
-        body: JSON.stringify({ device_id: device.id }),
+        body: JSON.stringify({ device_id: device.id, mode }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -89,6 +92,7 @@ export default function DeviceDetailsPanel({
       token: sessionData.token,
       device_id: sessionData.device_id,
       wss_url: sessionData.wss_url,
+      mode: sessionData.mode === "backstage" ? "backstage" : mode,
     });
     const deepLink = `hi5tech://connect?${params.toString()}`;
 
@@ -110,14 +114,17 @@ export default function DeviceDetailsPanel({
     }, 2500);
   }, [device?.id]);
 
-  const connectLabel = {
-    idle: "Connect",
-    requesting: "Requesting…",
-    launching: "Launching…",
-    done: "Opened ✓",
-    not_installed: "Not installed",
-    error: "Failed",
-  }[connectState];
+  const connectLabel = (mode: LaunchMode) => {
+    if (connectMode && connectMode !== mode && (connectState === "requesting" || connectState === "launching")) {
+      return mode === "backstage" ? "Background Mode" : "Remote Control";
+    }
+    if (connectState === "requesting" && connectMode === mode) return "Requesting…";
+    if (connectState === "launching" && connectMode === mode) return "Launching…";
+    if (connectState === "done" && connectMode === mode) return "Opened ✓";
+    if (connectState === "not_installed" && connectMode === mode) return "Not installed";
+    if (connectState === "error" && connectMode === mode) return "Failed";
+    return mode === "backstage" ? "Background Mode" : "Remote Control";
+  };
 
   return (
     <div className="hi5-panel p-5">
@@ -191,12 +198,11 @@ export default function DeviceDetailsPanel({
             <div className="text-sm font-semibold">Quick actions</div>
 
             <div className="mt-3 grid grid-cols-2 gap-2">
-              {/* Connect button — fires deep link */}
               <button
                 className={[
                   "hi5-btn-primary text-sm",
-                  connectState === "done" ? "opacity-80" : "",
-                  connectState === "not_installed" || connectState === "error"
+                  connectState === "done" && connectMode === "console" ? "opacity-80" : "",
+                  (connectState === "not_installed" || connectState === "error") && connectMode === "console"
                     ? "hi5-btn-ghost border-rose-500/40 text-rose-300"
                     : "",
                 ].join(" ")}
@@ -206,10 +212,30 @@ export default function DeviceDetailsPanel({
                   connectState === "requesting" ||
                   connectState === "launching"
                 }
-                onClick={handleConnect}
-                title={device.status !== "online" ? "Device must be online" : "Launch remote viewer"}
+                onClick={() => handleConnect("console")}
+                title={device.status !== "online" ? "Device must be online" : "Launch remote control in console mode"}
               >
-                {connectLabel}
+                {connectLabel("console")}
+              </button>
+
+              <button
+                className={[
+                  "hi5-btn-ghost text-sm",
+                  connectState === "done" && connectMode === "backstage" ? "opacity-80" : "",
+                  (connectState === "not_installed" || connectState === "error") && connectMode === "backstage"
+                    ? "border-rose-500/40 text-rose-300"
+                    : "",
+                ].join(" ")}
+                type="button"
+                disabled={
+                  device.status !== "online" ||
+                  connectState === "requesting" ||
+                  connectState === "launching"
+                }
+                onClick={() => handleConnect("backstage")}
+                title={device.status !== "online" ? "Device must be online" : "Launch private Backstage Desktop only"}
+              >
+                {connectLabel("backstage")}
               </button>
 
               <Link className="hi5-btn-ghost text-sm text-center" href={`/control/${device.id}?tab=terminal`}>
@@ -237,7 +263,7 @@ export default function DeviceDetailsPanel({
             {/* Inline feedback for not_installed / error states */}
             {connectState === "not_installed" && (
               <div className="mt-3 text-xs text-amber-300">
-                Viewer not detected.{" "}
+                Viewer not detected for {connectMode === "backstage" ? "Background Mode" : "Remote Control"}.{" "}
                 <a
                   href="https://rmm.hi5tech.co.uk/downloads/Hi5TechViewer-Setup.exe"
                   className="underline"
@@ -254,7 +280,7 @@ export default function DeviceDetailsPanel({
 
           {!compact && (
             <div className="text-xs opacity-50 leading-relaxed">
-              Connect launches the Hi5Tech Viewer on your computer via the{" "}
+              Remote Control and Background Mode launch the Hi5Tech Viewer on your computer via the{" "}
               <code className="font-mono">hi5tech://</code> protocol. Video streams
               direct device-to-viewer over WebRTC — only the signalling handshake
               goes through our servers.
