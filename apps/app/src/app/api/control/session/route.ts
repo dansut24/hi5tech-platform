@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 const RMM_API = (process.env.NEXT_PUBLIC_RMM_API_BASE ?? "https://rmm.hi5tech.co.uk").replace(/\/+$/, "");
 
 export async function POST(req: Request) {
-  let body: { device_id?: string };
+  let body: { device_id?: string; mode?: string };
   try {
     body = await req.json();
   } catch {
@@ -28,13 +28,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "device_id required" }, { status: 400 });
   }
 
+  const requestedMode = typeof body?.mode === "string" ? body.mode.toLowerCase() : "console";
+  const mode = requestedMode === "backstage" ? "backstage" : "console";
+
   // Call the Go server's existing remote-sessions endpoint
   let upstream: Response;
   try {
     upstream = await fetch(`${RMM_API}/api/remote-sessions`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ device_id: deviceId }),
+      body: JSON.stringify({ device_id: deviceId, mode }),
       cache: "no-store",
     });
   } catch (e: any) {
@@ -59,6 +62,7 @@ export async function POST(req: Request) {
     device_id: string;
     server: string;
     expires_at: string;
+    mode?: string;
   };
 
   // The "server" field from Go is the base URL (e.g. https://rmm.hi5tech.co.uk).
@@ -75,5 +79,6 @@ export async function POST(req: Request) {
     device_id:  data.device_id,
     wss_url:    `${wssBase}/ws/viewer`,
     expires_at: data.expires_at,
+    mode:       data.mode === "backstage" ? "backstage" : mode,
   });
 }
