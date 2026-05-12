@@ -35,7 +35,7 @@ type CreatePackageResponse = {
 };
 
 const AGENT_FILE_NAME = "Hi5TechAgentSetup.exe";
-const AGENT_DOWNLOAD_PATH = `/downloads/agent/${AGENT_FILE_NAME}`;
+const AGENT_DOWNLOAD_PATH = `/downloads/${AGENT_FILE_NAME}`;
 const DEFAULT_RMM_API_BASE_URL = "https://rmm.hi5tech.co.uk";
 const DEFAULT_AGENT_WS_BASE_URL = "wss://rmm.hi5tech.co.uk/agent/ws";
 
