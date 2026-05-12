@@ -2,6 +2,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import StatCards from "../../ui/stat-cards";
 import DeviceTable from "../../ui/device-table";
 import DeviceDetailsPanel from "../../ui/device-details-panel";
@@ -180,9 +181,9 @@ export default function DevicesClient() {
                 <button type="button" className="hi5-btn-ghost text-sm flex-1" title="Soon">
                   Export
                 </button>
-                <button type="button" className="hi5-btn-primary text-sm flex-1" title="Soon">
+                <Link href="/control/downloads" className="hi5-btn-primary text-sm flex-1 inline-flex items-center justify-center">
                   Add device
-                </button>
+                </Link>
               </div>
             </div>
           </div>
