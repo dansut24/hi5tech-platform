@@ -16,27 +16,26 @@
   color-scheme: light;
 
   /* Base */
-  --hi5-bg: 255 255 255;          /* white */
-  --hi5-fg: 12 14 18;             /* near black */
+  --hi5-bg: 255 255 255;
+  --hi5-fg: 12 14 18;
   --hi5-muted: 90 98 110;
 
   /* Brand accents */
-  --hi5-accent: 0 193 255;        /* cyan */
-  --hi5-accent-2: 255 79 225;     /* pink */
-  --hi5-accent-3: 255 196 45;     /* yellow */
+  --hi5-accent: 0 193 255;
+  --hi5-accent-2: 255 79 225;
+  --hi5-accent-3: 255 196 45;
 
   /* Borders */
   --hi5-border: 12 14 18;
   --hi5-border-alpha: 0.12;
   --hi5-divider-alpha: 0.10;
 
-  /* Cards / Panels
-     Key fix: make surfaces more opaque so text is readable */
+  /* Cards / Panels */
   --hi5-card: 255 255 255;
-  --hi5-card-alpha: 0.78;         /* was too low */
-  --hi5-panel-alpha: 0.84;        /* panel slightly stronger */
+  --hi5-card-alpha: 0.78;
+  --hi5-panel-alpha: 0.84;
 
-  /* Inner scrim to "neutralise" the blobs behind content */
+  /* Inner scrim to neutralise blobs behind content */
   --hi5-scrim-light: 255 255 255;
   --hi5-scrim-alpha: 0.55;
 
@@ -47,7 +46,7 @@
   /* Background base */
   --hi5-backdrop-base: linear-gradient(180deg, rgb(255 255 255 / 1), rgb(255 255 255 / 1));
 
-  /* Exactly 3 spheres (positions tuned to feel like your reference) */
+  /* Exactly 3 spheres */
   --hi5-sphere-1:
     radial-gradient(circle at 32% 28%,
       rgb(var(--hi5-accent) / 0.95) 0%,
@@ -64,7 +63,6 @@
       rgb(var(--hi5-accent-3) / 0.28) 32%,
       transparent 66%);
 
-  /* A subtle "wash" to blend spheres */
   --hi5-wash:
     radial-gradient(900px 520px at 18% 10%,
       rgb(var(--hi5-accent) / 0.12),
@@ -76,7 +74,6 @@
       rgb(var(--hi5-accent-3) / 0.10),
       transparent 64%);
 
-  /* Controls background strength (light mode needs lighter blobs) */
   --hi5-spheres-opacity: 0.55;
   --hi5-spheres-blur: 64px;
 
@@ -90,7 +87,6 @@
     rgb(var(--hi5-accent-2) / 1)
   );
 
-  /* ✅ Solid mode toggle (0 = gradient buttons, 1 = solid buttons) */
   --hi5-btn-solid: 0;
 
   /* Grain */
@@ -111,10 +107,9 @@
   --hi5-divider-alpha: 0.12;
 
   --hi5-card: 12 14 18;
-  --hi5-card-alpha: 0.40;      /* darker but still readable */
+  --hi5-card-alpha: 0.40;
   --hi5-panel-alpha: 0.48;
 
-  /* Dark scrim */
   --hi5-scrim-light: 0 0 0;
   --hi5-scrim-alpha: 0.46;
 
@@ -123,7 +118,6 @@
 
   --hi5-backdrop-base: linear-gradient(180deg, rgb(0 0 0 / 1), rgb(0 0 0 / 1));
 
-  /* Dark mode can handle stronger spheres */
   --hi5-spheres-opacity: 0.78;
   --hi5-spheres-blur: 72px;
 
@@ -142,25 +136,33 @@
 }
 
 /* Base */
-html, body {
+html {
   margin: 0;
   height: 100%;
   min-height: 100%;
+  background: rgb(var(--hi5-bg));
+  overscroll-behavior-y: none;
 }
 
 body {
   margin: 0;
-  min-height: 100%;
+  min-height: 100dvh;
   color: rgb(var(--hi5-fg));
   background: transparent !important;
+  overscroll-behavior-y: none;
+}
+
+/* Helps mobile Safari avoid showing plain black/white past content */
+body > * {
+  min-height: 100dvh;
+}
+
+#__next {
+  min-height: 100dvh;
 }
 
 /* ----------------------------------------------------------
-   BACKDROP (fixed behind everything)
-   - base layer
-   - wash layer
-   - spheres layer (exactly 3)
-   - grain layer
+   BACKDROP
 ---------------------------------------------------------- */
 
 html::before {
@@ -172,7 +174,6 @@ html::before {
   pointer-events: none;
 }
 
-/* Wash */
 html::after {
   content: "";
   position: fixed;
@@ -182,25 +183,20 @@ html::after {
   pointer-events: none;
 }
 
-/* 3 Spheres */
 body::before {
   content: "";
   position: fixed;
   inset: -120px;
   z-index: -2;
   pointer-events: none;
-
-  /* Exactly 3 spheres layered */
   background:
     var(--hi5-sphere-1),
     var(--hi5-sphere-2),
     var(--hi5-sphere-3);
-
   filter: blur(var(--hi5-spheres-blur)) saturate(1.15);
   opacity: var(--hi5-spheres-opacity);
 }
 
-/* Grain */
 body::after {
   content: "";
   position: fixed;
@@ -212,8 +208,10 @@ body::after {
   background-size: 240px 240px;
 }
 
-/* helper */
-.hi5-bg { min-height: 100dvh; width: 100%; }
+.hi5-bg {
+  min-height: 100dvh;
+  width: 100%;
+}
 
 /* ----------------------------------------------------------
    Surfaces
@@ -222,11 +220,11 @@ body::after {
 .hi5-border {
   border-color: rgb(var(--hi5-border) / var(--hi5-border-alpha));
 }
+
 .hi5-divider {
   border-color: rgb(var(--hi5-border) / var(--hi5-divider-alpha));
 }
 
-/* Card */
 .hi5-card {
   background: rgb(var(--hi5-card) / var(--hi5-card-alpha));
   border: 1px solid rgb(var(--hi5-border) / var(--hi5-border-alpha));
@@ -237,7 +235,6 @@ body::after {
   position: relative;
 }
 
-/* Panel (stronger surface) */
 .hi5-panel {
   background: rgb(var(--hi5-card) / var(--hi5-panel-alpha));
   border: 1px solid rgb(var(--hi5-border) / calc(var(--hi5-border-alpha) * 0.95));
@@ -249,7 +246,6 @@ body::after {
   overflow: hidden;
 }
 
-/* Inner scrim: the KEY fix so content doesn't get washed out */
 .hi5-card::before,
 .hi5-panel::before {
   content: "";
@@ -260,15 +256,15 @@ body::after {
   z-index: 0;
 }
 
-/* make children render above scrim */
 .hi5-card > *,
-.hi5-panel > * { position: relative; z-index: 1; }
+.hi5-panel > * {
+  position: relative;
+  z-index: 1;
+}
 
-/* ----------------------------------------------------------
-   Text defaults (don't rely on opacity)
----------------------------------------------------------- */
-
-.hi5-accent { color: rgb(var(--hi5-accent)); }
+.hi5-accent {
+  color: rgb(var(--hi5-accent));
+}
 
 /* ----------------------------------------------------------
    Inputs
@@ -278,18 +274,13 @@ body::after {
   width: 100%;
   border-radius: 18px;
   padding: 10px 12px;
-
   color: rgb(var(--hi5-fg));
   outline: none;
-
-  /* More solid input background */
   background: rgb(255 255 255 / 0.88);
   border: 1px solid rgb(var(--hi5-border) / 0.14) !important;
-
   box-shadow:
     0 1px 0 rgb(255 255 255 / 0.55) inset,
     0 10px 24px rgb(0 0 0 / 0.05);
-
   transition: box-shadow 160ms ease, border-color 160ms ease, transform 160ms ease, filter 160ms ease;
 }
 
@@ -309,7 +300,7 @@ body::after {
 }
 
 /* ----------------------------------------------------------
-   Buttons (vibrant + 3D) - supports solid mode
+   Buttons
 ---------------------------------------------------------- */
 
 .hi5-btn-primary,
@@ -319,11 +310,7 @@ body::after {
   padding: 11px 14px;
   font-weight: 900;
   letter-spacing: 0.2px;
-
-  /* Strong contrast label */
   color: #0b0d12;
-
-  /* ✅ Solid-first layer (enabled when --hi5-btn-solid: 1), falls back to gradient */
   background:
     linear-gradient(
       0deg,
@@ -331,19 +318,14 @@ body::after {
       rgb(var(--hi5-accent) / var(--hi5-btn-solid))
     ),
     var(--hi5-btn-grad);
-
   border: 1px solid rgb(255 255 255 / 0.34);
-
-  /* 3D: highlight + drop shadow + "lift" */
   box-shadow:
     0 18px 40px rgb(0 0 0 / 0.14),
     0 14px 34px rgb(var(--hi5-accent) / 0.18),
     0 12px 28px rgb(var(--hi5-accent-2) / 0.14),
     0 1px 0 rgb(255 255 255 / 0.55) inset,
     0 -10px 18px rgb(0 0 0 / 0.10) inset;
-
   text-shadow: 0 1px 0 rgb(255 255 255 / 0.35);
-
   transition: transform 140ms ease, filter 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
 }
 
@@ -351,14 +333,12 @@ body::after {
 .dark .hi5-accent-btn {
   color: #ffffff;
   border: 1px solid rgb(255 255 255 / 0.16);
-
   box-shadow:
     0 22px 55px rgb(0 0 0 / 0.65),
     0 16px 44px rgb(var(--hi5-accent) / 0.22),
     0 14px 40px rgb(var(--hi5-accent-2) / 0.18),
     0 1px 0 rgb(255 255 255 / 0.08) inset,
     0 -12px 18px rgb(0 0 0 / 0.28) inset;
-
   text-shadow: 0 1px 0 rgb(0 0 0 / 0.35);
 }
 
@@ -382,23 +362,18 @@ body::after {
   box-shadow: none;
 }
 
-/* Secondary / glass button */
 .hi5-btn-ghost {
   border-radius: 18px;
   padding: 10px 14px;
   font-weight: 800;
-
   color: rgb(var(--hi5-fg));
   border: 1px solid rgb(var(--hi5-border) / 0.14);
-
   background: rgb(255 255 255 / 0.78);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-
   box-shadow:
     0 12px 26px rgb(0 0 0 / 0.08),
     0 1px 0 rgb(255 255 255 / 0.55) inset;
-
   transition: transform 140ms ease, background 140ms ease, filter 140ms ease;
 }
 
@@ -416,7 +391,9 @@ body::after {
   filter: brightness(1.03) saturate(1.03);
 }
 
-.hi5-btn-ghost:active { transform: translateY(0px); }
+.hi5-btn-ghost:active {
+  transform: translateY(0px);
+}
 
 /* ----------------------------------------------------------
    Bars / overlay
@@ -451,7 +428,9 @@ body::after {
 }
 
 /* Selection */
-::selection { background: rgb(var(--hi5-accent) / 0.25); }
+::selection {
+  background: rgb(var(--hi5-accent) / 0.25);
+}
 
 /* Reduce motion */
 @media (prefers-reduced-motion: reduce) {
@@ -468,16 +447,25 @@ body::after {
   margin-inline: auto;
   padding-inline: 14px;
 }
+
 @media (min-width: 640px) {
-  .hi5-container { padding-inline: 24px; }
+  .hi5-container {
+    padding-inline: 24px;
+  }
 }
 
 /* Scrollbar utilities */
-.no-scrollbar::-webkit-scrollbar { display: none; }
-.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
 
 /* ----------------------------------------------------------
-   Focus rings - keyboard accessibility
+   Focus rings
 ---------------------------------------------------------- */
 
 :focus-visible {
@@ -486,7 +474,6 @@ body::after {
   border-radius: 8px;
 }
 
-/* Suppress focus ring for mouse clicks, keep for keyboard */
 :focus:not(:focus-visible) {
   outline: none;
 }
@@ -512,7 +499,7 @@ body::after {
 }
 
 /* ----------------------------------------------------------
-   Safe area padding (notches / home bar on iOS)
+   Safe areas
 ---------------------------------------------------------- */
 
 .safe-bottom {
@@ -524,7 +511,7 @@ body::after {
 }
 
 /* ----------------------------------------------------------
-   Slide-in animation for dropdowns
+   Slide-in animation
 ---------------------------------------------------------- */
 
 @keyframes slideInFromTop {
@@ -543,7 +530,7 @@ body::after {
 }
 
 /* ----------------------------------------------------------
-   Line clamp utility
+   Line clamp
 ---------------------------------------------------------- */
 
 .line-clamp-2 {
@@ -554,17 +541,19 @@ body::after {
 }
 
 /* ----------------------------------------------------------
-   Touch target minimum size (mobile accessibility)
+   Touch target minimum size
 ---------------------------------------------------------- */
 
 @media (pointer: coarse) {
-  button, [role="button"], a {
+  button,
+  [role="button"],
+  a {
     min-height: 44px;
     min-width: 44px;
   }
-  
-  /* Exception for inline/badge-style elements */
-  .hi5-badge, .no-min-touch {
+
+  .hi5-badge,
+  .no-min-touch {
     min-height: unset;
     min-width: unset;
   }
