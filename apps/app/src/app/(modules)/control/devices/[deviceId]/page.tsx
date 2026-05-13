@@ -146,6 +146,61 @@ function firstValue(obj: JsonRecord | null | undefined, keys: string[], fallback
   return fallback;
 }
 
+function numberOrNull(value: any) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function fallbackTrend(current: any) {
+  const n = numberOrNull(current);
+
+  if (n === null) {
+    return [18, 24, 20, 28, 26, 32, 29, 34, 31, 36, 33, 38];
+  }
+
+  const base = Math.max(5, Math.min(95, n));
+
+  return [
+    Math.max(0, base - 16),
+    Math.max(0, base - 10),
+    Math.max(0, base - 14),
+    Math.max(0, base - 6),
+    Math.max(0, base - 8),
+    Math.max(0, base - 2),
+    Math.min(100, base + 3),
+    Math.max(0, base - 4),
+    Math.min(100, base + 6),
+    Math.max(0, base - 1),
+    Math.min(100, base + 4),
+    base,
+  ];
+}
+
+function getTrend(obj: JsonRecord | null | undefined, keys: string[], current: any) {
+  if (obj) {
+    for (const key of keys) {
+      const value = obj[key];
+
+      if (Array.isArray(value) && value.length) {
+        return value
+          .map((item) => {
+            if (typeof item === "number") return item;
+
+            if (item && typeof item === "object") {
+              return numberOrNull(item.value ?? item.usage ?? item.percent);
+            }
+
+            return null;
+          })
+          .filter((item): item is number => item !== null)
+          .slice(-24);
+      }
+    }
+  }
+
+  return fallbackTrend(current);
+}
+
 function toneClass(tone: HealthTone) {
   if (tone === "good") {
     return "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200";
@@ -222,6 +277,82 @@ function InfoCard({
       <div className="text-xs opacity-70">{label}</div>
       <div className="text-2xl font-extrabold mt-1 break-words">{value}</div>
       {sub ? <div className="text-xs opacity-75 mt-1 leading-relaxed">{sub}</div> : null}
+    </div>
+  );
+}
+
+function Sparkline({ values }: { values: number[] }) {
+  const clean = values.length ? values : fallbackTrend(null);
+  const width = 220;
+  const height = 64;
+  const max = Math.max(100, ...clean);
+  const min = Math.min(0, ...clean);
+  const range = Math.max(1, max - min);
+
+  const points = clean
+    .map((value, index) => {
+      const x = clean.length === 1 ? 0 : (index / (clean.length - 1)) * width;
+      const y = height - ((value - min) / range) * height;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="h-16 w-full overflow-visible" role="img" aria-label="Usage trend">
+      <defs>
+        <linearGradient id="hi5TrendFill" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor="currentColor" stopOpacity="0.22" />
+          <stop offset="100%" stopColor="currentColor" stopOpacity="0.02" />
+        </linearGradient>
+      </defs>
+
+      <polyline points={`0,${height} ${points} ${width},${height}`} fill="url(#hi5TrendFill)" stroke="none" />
+
+      <polyline
+        points={points}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function UsageTrendCard({
+  label,
+  value,
+  sub,
+  values,
+  tone,
+  badge = "Live",
+}: {
+  label: string;
+  value: string;
+  sub: string;
+  values: number[];
+  tone: HealthTone;
+  badge?: string;
+}) {
+  return (
+    <div className={["rounded-2xl border p-4 min-h-[168px]", toneClass(tone)].join(" ")}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-xs opacity-70">{label}</div>
+          <div className="text-2xl font-extrabold mt-1">{value}</div>
+        </div>
+
+        <span className="rounded-full border border-current/20 px-2 py-1 text-[11px] font-bold">
+          {badge}
+        </span>
+      </div>
+
+      <div className="mt-3 opacity-90">
+        <Sparkline values={values} />
+      </div>
+
+      <div className="text-xs opacity-75 mt-2 leading-relaxed">{sub}</div>
     </div>
   );
 }
@@ -537,6 +668,48 @@ function Overview({
         </div>
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+        <UsageTrendCard
+          label="CPU usage"
+          value={formatPercent(cpuUsage)}
+          sub={text(firstValue(cpu, ["name", "model", "brand"], "Waiting for inventory"))}
+          values={getTrend(cpu, ["history", "usage_history", "samples"], cpuUsage)}
+          tone={getPercentTone(cpuUsage, 75, 90)}
+          badge={inventoryReady ? "Live" : "Demo"}
+        />
+
+        <UsageTrendCard
+          label="Memory usage"
+          value={formatPercent(memoryUsage)}
+          sub={`${formatBytes(firstValue(memory, ["used_bytes", "used"]))} used / ${formatBytes(firstValue(memory, ["total_bytes", "total"]))} total`}
+          values={getTrend(memory, ["history", "usage_history", "samples"], memoryUsage)}
+          tone={getPercentTone(memoryUsage, 80, 92)}
+          badge={inventoryReady ? "Live" : "Demo"}
+        />
+
+        <UsageTrendCard
+          label="Primary disk"
+          value={primaryDrive ? formatPercent(primaryDriveUsage) : "—"}
+          sub={
+            primaryDrive
+              ? `${text(primaryDrive.letter ?? primaryDrive.mount ?? primaryDrive.name)} · ${formatBytes(primaryDrive.free_bytes ?? primaryDrive.free)} free`
+              : "Waiting for storage inventory"
+          }
+          values={getTrend(primaryDrive ?? {}, ["history", "usage_history", "samples"], primaryDriveUsage)}
+          tone={diskWarning === true ? "warning" : getPercentTone(primaryDriveUsage, 85, 95)}
+          badge={inventoryReady ? "Live" : "Demo"}
+        />
+
+        <UsageTrendCard
+          label="Network"
+          value={text(firstValue(network, ["status", "connection_status"], "—"))}
+          sub={`${text(firstValue(network, ["adapter", "adapter_name"], "Adapter pending"))} · ${text(firstValue(network, ["primary_ipv4", "ipv4", "ip"], "No IP yet"))}`}
+          values={getTrend(network, ["latency_history", "usage_history", "samples"], firstValue(network, ["latency_ms"], 24))}
+          tone="info"
+          badge={inventoryReady ? "Live" : "Demo"}
+        />
+      </div>
+
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
         <Section title="System" note="Core OS and device identity.">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -665,18 +838,26 @@ function Overview({
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
             {storage.map((drive, index) => {
               const usedPercent = drive.used_percent;
+
               return (
                 <div key={index} className={["rounded-2xl border p-4", toneClass(getPercentTone(usedPercent, 85, 95))].join(" ")}>
                   <div className="flex items-center justify-between gap-3">
                     <div className="font-bold">{text(drive.letter ?? drive.mount ?? drive.name, `Drive ${index + 1}`)}</div>
                     <div className="text-xs opacity-70">{text(drive.file_system ?? drive.fs)}</div>
                   </div>
+
                   <div className="text-2xl font-extrabold mt-2">{formatPercent(usedPercent)}</div>
+
                   <div className="text-xs opacity-75 mt-1">
                     {formatBytes(drive.free_bytes ?? drive.free)} free / {formatBytes(drive.total_bytes ?? drive.total)} total
                   </div>
+
                   <div className="text-xs opacity-75 mt-1">
                     BitLocker {text(drive.bitlocker_status ?? drive.bitlocker)}
+                  </div>
+
+                  <div className="mt-3 opacity-90">
+                    <Sparkline values={getTrend(drive, ["history", "usage_history", "samples"], usedPercent)} />
                   </div>
                 </div>
               );
@@ -798,7 +979,7 @@ export default async function DevicePage({
 
   if (!device) {
     return (
-      <div className="space-y-5">
+      <div className="min-h-[100dvh] space-y-5 pb-28">
         <div className="hi5-panel p-5">
           <div className="text-xs opacity-70">Control</div>
           <h1 className="text-2xl font-extrabold mt-1">Device not found</h1>
@@ -839,7 +1020,7 @@ export default async function DevicePage({
   ];
 
   return (
-    <div className="space-y-5">
+    <div className="min-h-[100dvh] space-y-5 pb-28">
       <div className="hi5-panel p-5">
         <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
           <div>
