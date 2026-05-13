@@ -66,6 +66,8 @@ type ActiveSessionResponse = {
   error?: string;
 };
 
+type HealthTone = "good" | "warning" | "bad" | "info" | "neutral";
+
 function text(value: any, fallback = "—") {
   if (value === null || value === undefined || value === "") return fallback;
   return String(value);
@@ -74,6 +76,12 @@ function text(value: any, fallback = "—") {
 function boolText(value: any) {
   if (value === true) return "Enabled";
   if (value === false) return "Disabled";
+  return "—";
+}
+
+function yesNo(value: any) {
+  if (value === true) return "Yes";
+  if (value === false) return "No";
   return "—";
 }
 
@@ -138,38 +146,82 @@ function firstValue(obj: JsonRecord | null | undefined, keys: string[], fallback
   return fallback;
 }
 
-function statusClass(status: "good" | "warning" | "bad" | "neutral") {
-  if (status === "good") {
+function toneClass(tone: HealthTone) {
+  if (tone === "good") {
     return "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200";
   }
 
-  if (status === "warning") {
+  if (tone === "warning") {
     return "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-200";
   }
 
-  if (status === "bad") {
+  if (tone === "bad") {
     return "border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-200";
   }
 
+  if (tone === "info") {
+    return "border-sky-500/25 bg-sky-500/10 text-sky-700 dark:text-sky-200";
+  }
+
   return "hi5-border bg-black/5 dark:bg-white/5";
+}
+
+function getPercentTone(value: any, warning = 80, bad = 92): HealthTone {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "neutral";
+  if (n >= bad) return "bad";
+  if (n >= warning) return "warning";
+  return "good";
+}
+
+function Badge({
+  children,
+  tone = "neutral",
+}: {
+  children: ReactNode;
+  tone?: HealthTone;
+}) {
+  return (
+    <span className={["inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold", toneClass(tone)].join(" ")}>
+      {children}
+    </span>
+  );
+}
+
+function EmptyState({
+  title,
+  description,
+  action,
+}: {
+  title: string;
+  description: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border hi5-border bg-black/5 dark:bg-white/5 p-5">
+      <div className="text-sm font-bold">{title}</div>
+      <div className="text-sm opacity-70 mt-1">{description}</div>
+      {action ? <div className="mt-3">{action}</div> : null}
+    </div>
+  );
 }
 
 function InfoCard({
   label,
   value,
   sub,
-  status = "neutral",
+  tone = "neutral",
 }: {
   label: string;
   value: string;
   sub?: string;
-  status?: "good" | "warning" | "bad" | "neutral";
+  tone?: HealthTone;
 }) {
   return (
-    <div className={["rounded-2xl border p-4", statusClass(status)].join(" ")}>
+    <div className={["rounded-2xl border p-4 min-h-[112px]", toneClass(tone)].join(" ")}>
       <div className="text-xs opacity-70">{label}</div>
-      <div className="text-xl font-extrabold mt-1 break-words">{value}</div>
-      {sub ? <div className="text-xs opacity-75 mt-1">{sub}</div> : null}
+      <div className="text-2xl font-extrabold mt-1 break-words">{value}</div>
+      {sub ? <div className="text-xs opacity-75 mt-1 leading-relaxed">{sub}</div> : null}
     </div>
   );
 }
@@ -187,16 +239,21 @@ function Section({
   title,
   children,
   note,
+  right,
 }: {
   title: string;
   children: ReactNode;
   note?: string;
+  right?: ReactNode;
 }) {
   return (
     <section className="hi5-card p-4 space-y-3">
-      <div>
-        <div className="text-sm font-bold">{title}</div>
-        {note ? <div className="text-xs opacity-70 mt-1">{note}</div> : null}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-sm font-bold">{title}</div>
+          {note ? <div className="text-xs opacity-70 mt-1">{note}</div> : null}
+        </div>
+        {right ? <div className="shrink-0">{right}</div> : null}
       </div>
       {children}
     </section>
@@ -208,11 +265,13 @@ function TabLink({
   active,
   label,
   locked,
+  badge,
 }: {
   href: string;
   active: boolean;
   label: string;
   locked?: boolean;
+  badge?: string;
 }) {
   if (locked) {
     return (
@@ -226,13 +285,14 @@ function TabLink({
     <Link
       href={href}
       className={[
-        "rounded-2xl px-3 py-2 text-sm border hi5-border transition",
+        "rounded-2xl px-3 py-2 text-sm border hi5-border transition inline-flex items-center gap-2",
         active
           ? "bg-[rgba(var(--hi5-accent),0.10)] border-[rgba(var(--hi5-accent),0.28)]"
           : "hover:bg-black/5 dark:hover:bg-white/5",
       ].join(" ")}
     >
-      {label}
+      <span>{label}</span>
+      {badge ? <span className="rounded-full bg-black/10 dark:bg-white/10 px-1.5 py-0.5 text-[10px]">{badge}</span> : null}
     </Link>
   );
 }
@@ -242,6 +302,34 @@ function LockedButton({ label }: { label: string }) {
     <button className="hi5-btn-ghost text-sm opacity-60" type="button" disabled title="Premium feature">
       {label} 🔒
     </button>
+  );
+}
+
+function ComingSoonTab({
+  title,
+  description,
+  items,
+}: {
+  title: string;
+  description: string;
+  items: string[];
+}) {
+  return (
+    <div className="hi5-panel p-5 space-y-4">
+      <div>
+        <div className="text-lg font-extrabold">{title}</div>
+        <p className="text-sm opacity-75 mt-1">{description}</p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        {items.map((item) => (
+          <div key={item} className="rounded-2xl border hi5-border bg-black/5 dark:bg-white/5 p-4">
+            <div className="text-sm font-semibold">{item}</div>
+            <div className="text-xs opacity-65 mt-1">Planned for a future Control pass.</div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -347,11 +435,25 @@ function Overview({
   const defenderOk = firstValue(security, ["defender_enabled", "defender_realtime_enabled", "antivirus_enabled"]);
   const bitlocker = firstValue(security, ["bitlocker_status", "bitlocker", "bitlocker_enabled"]);
   const tpmEnabled = firstValue(security, ["tpm_enabled", "tpmActivated", "tpm_activated"]);
+  const tpmPresent = firstValue(security, ["tpm_present", "tpmPresent"]);
   const secureBoot = firstValue(security, ["secure_boot_enabled", "secureBoot"]);
+  const cpuUsage = firstValue(cpu, ["usage_percent", "usage", "load_percent"]);
+  const memoryUsage = firstValue(memory, ["usage_percent", "used_percent"]);
+
+  const primaryDrive = storage[0];
+  const primaryDriveUsage = primaryDrive?.used_percent;
+  const inventoryReady = Boolean(inventory?.collected_at);
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-6 gap-3">
+      {!inventoryReady ? (
+        <EmptyState
+          title="Waiting for detailed inventory"
+          description="The device page is ready, but the agent has not uploaded detailed CPU, memory, storage, security and hardware inventory yet. These fields will populate after the agent inventory upload pass."
+        />
+      ) : null}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-7 gap-3">
         <InfoCard
           label="Remote session"
           value={remoteActive ? "Active" : "Inactive"}
@@ -359,72 +461,78 @@ function Overview({
             remoteActive
               ? activeModes.map((m) => (m === "backstage" ? "Background" : "Console")).join(" + ")
               : activeSessions.error
-                ? "Unable to check"
+                ? "Endpoint unavailable"
                 : "No viewer connected"
           }
-          status={remoteActive ? "good" : "neutral"}
+          tone={remoteActive ? "good" : activeSessions.error ? "warning" : "neutral"}
         />
 
         <InfoCard
           label="CPU"
-          value={formatPercent(firstValue(cpu, ["usage_percent", "usage", "load_percent"]))}
+          value={formatPercent(cpuUsage)}
           sub={text(firstValue(cpu, ["name", "model", "brand"], "Waiting for inventory"))}
+          tone={getPercentTone(cpuUsage, 75, 90)}
         />
 
         <InfoCard
           label="Memory"
-          value={formatPercent(firstValue(memory, ["usage_percent", "used_percent"]))}
+          value={formatPercent(memoryUsage)}
           sub={`${formatBytes(firstValue(memory, ["used_bytes", "used"]))} used / ${formatBytes(firstValue(memory, ["total_bytes", "total"]))} total`}
+          tone={getPercentTone(memoryUsage, 80, 92)}
         />
 
         <InfoCard
           label="Disk"
-          value={diskWarning === true ? "Warning" : text(firstValue(health, ["disk_status"], "—"))}
+          value={primaryDrive ? formatPercent(primaryDriveUsage) : diskWarning === true ? "Warning" : "—"}
           sub={
-            storage[0]
-              ? `${text(storage[0].letter ?? storage[0].mount ?? storage[0].name)} ${formatPercent(storage[0].used_percent)}`
+            primaryDrive
+              ? `${text(primaryDrive.letter ?? primaryDrive.mount ?? primaryDrive.name)} · ${formatBytes(primaryDrive.free_bytes ?? primaryDrive.free)} free`
               : "Waiting for inventory"
           }
-          status={diskWarning === true ? "warning" : "neutral"}
+          tone={diskWarning === true ? "warning" : getPercentTone(primaryDriveUsage, 85, 95)}
         />
 
         <InfoCard
           label="Security"
           value={defenderOk === false || tpmEnabled === false ? "Attention" : defenderOk === true ? "Good" : "—"}
           sub={`TPM ${boolText(tpmEnabled)} · Secure Boot ${boolText(secureBoot)}`}
-          status={defenderOk === false || tpmEnabled === false ? "warning" : defenderOk === true ? "good" : "neutral"}
+          tone={defenderOk === false || tpmEnabled === false ? "warning" : defenderOk === true ? "good" : "neutral"}
         />
 
         <InfoCard
           label="Reboot"
           value={rebootRequired === true ? "Required" : rebootRequired === false ? "No" : "—"}
           sub="Pending reboot state"
-          status={rebootRequired === true ? "warning" : rebootRequired === false ? "good" : "neutral"}
+          tone={rebootRequired === true ? "warning" : rebootRequired === false ? "good" : "neutral"}
+        />
+
+        <InfoCard
+          label="Agent"
+          value={device?.online ? "Online" : "Offline"}
+          sub={`Last seen ${formatDate(device?.last_seen_at)}`}
+          tone={device?.online ? "good" : "bad"}
         />
       </div>
 
       <div className="hi5-card p-4">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+        <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
           <div>
             <div className="text-sm font-bold">Technician summary</div>
-            <div className="text-sm opacity-75 mt-1">
-              {remoteActive ? "A remote viewer is currently connected. " : "No active remote viewer is currently connected. "}
+            <div className="text-sm opacity-75 mt-1 leading-relaxed">
+              {remoteActive ? "A technician is currently connected to this device. " : "No active remote viewer is currently connected. "}
               {inventory?.collected_at
                 ? `Inventory last collected ${formatDate(inventory.collected_at)}.`
-                : "Detailed inventory has not been reported by the agent yet."}
+                : "Detailed inventory has not been reported yet."}
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2 text-xs">
-            <span className={["rounded-full border px-3 py-1", device?.online ? statusClass("good") : statusClass("bad")].join(" ")}>
-              {device?.online ? "Online" : "Offline"}
-            </span>
-            <span className={["rounded-full border px-3 py-1", remoteActive ? statusClass("good") : statusClass("neutral")].join(" ")}>
-              {remoteActive ? "Remote active" : "Remote idle"}
-            </span>
-            <span className={["rounded-full border px-3 py-1", rebootRequired === true ? statusClass("warning") : statusClass("neutral")].join(" ")}>
-              {rebootRequired === true ? "Reboot required" : "No reboot flag"}
-            </span>
+          <div className="flex flex-wrap gap-2">
+            <Badge tone={device?.online ? "good" : "bad"}>{device?.online ? "Online" : "Offline"}</Badge>
+            <Badge tone={remoteActive ? "good" : "neutral"}>{remoteActive ? "Remote active" : "Remote idle"}</Badge>
+            <Badge tone={rebootRequired === true ? "warning" : rebootRequired === false ? "good" : "neutral"}>
+              {rebootRequired === true ? "Reboot required" : rebootRequired === false ? "No reboot" : "Reboot unknown"}
+            </Badge>
+            <Badge tone={inventoryReady ? "good" : "warning"}>{inventoryReady ? "Inventory ready" : "Inventory pending"}</Badge>
           </div>
         </div>
       </div>
@@ -437,9 +545,9 @@ function Overview({
             <Field label="OS version" value={firstValue(osInfo, ["version", "display_version"])} />
             <Field label="OS build" value={firstValue(osInfo, ["build", "build_number"])} />
             <Field label="Architecture" value={firstValue(osInfo, ["architecture", "arch"], device?.arch)} />
+            <Field label="Install date" value={formatDate(firstValue(osInfo, ["install_date", "installed_at"]))} />
             <Field label="Last boot" value={formatDate(firstValue(osInfo, ["last_boot", "last_boot_time"]))} />
             <Field label="Uptime" value={firstValue(osInfo, ["uptime", "uptime_text"])} />
-            <Field label="Timezone" value={firstValue(osInfo, ["timezone"])} />
           </div>
         </Section>
 
@@ -459,7 +567,7 @@ function Overview({
         <Section title="CPU and memory" note="Performance snapshot and installed resource totals.">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Field label="CPU" value={firstValue(cpu, ["name", "model", "brand"])} />
-            <Field label="CPU usage" value={formatPercent(firstValue(cpu, ["usage_percent", "usage"]))} />
+            <Field label="CPU usage" value={formatPercent(cpuUsage)} />
             <Field label="Cores" value={firstValue(cpu, ["cores", "physical_cores"])} />
             <Field label="Logical processors" value={firstValue(cpu, ["logical_processors", "threads"])} />
             <Field label="Virtualisation" value={boolText(firstValue(cpu, ["virtualization_enabled", "virtualisation_enabled"]))} />
@@ -471,9 +579,21 @@ function Overview({
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        <Section title="Security posture" note="Core Windows security and compliance checks.">
+        <Section
+          title="Security posture"
+          note="Core Windows security and compliance checks."
+          right={
+            defenderOk === false || tpmEnabled === false || secureBoot === false ? (
+              <Badge tone="warning">Attention</Badge>
+            ) : defenderOk === true ? (
+              <Badge tone="good">Good</Badge>
+            ) : (
+              <Badge tone="neutral">Unknown</Badge>
+            )
+          }
+        >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <Field label="TPM present" value={boolText(firstValue(security, ["tpm_present", "tpmPresent"]))} />
+            <Field label="TPM present" value={yesNo(tpmPresent)} />
             <Field label="TPM enabled" value={boolText(tpmEnabled)} />
             <Field label="TPM version" value={firstValue(security, ["tpm_version", "tpm_spec_version"])} />
             <Field label="Secure Boot" value={boolText(secureBoot)} />
@@ -543,24 +663,30 @@ function Overview({
       <Section title="Storage" note="Disk capacity and protection state.">
         {storage.length ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
-            {storage.map((drive, index) => (
-              <div key={index} className="rounded-2xl border hi5-border bg-black/5 dark:bg-white/5 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="font-bold">{text(drive.letter ?? drive.mount ?? drive.name, `Drive ${index + 1}`)}</div>
-                  <div className="text-xs opacity-70">{text(drive.file_system ?? drive.fs)}</div>
+            {storage.map((drive, index) => {
+              const usedPercent = drive.used_percent;
+              return (
+                <div key={index} className={["rounded-2xl border p-4", toneClass(getPercentTone(usedPercent, 85, 95))].join(" ")}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="font-bold">{text(drive.letter ?? drive.mount ?? drive.name, `Drive ${index + 1}`)}</div>
+                    <div className="text-xs opacity-70">{text(drive.file_system ?? drive.fs)}</div>
+                  </div>
+                  <div className="text-2xl font-extrabold mt-2">{formatPercent(usedPercent)}</div>
+                  <div className="text-xs opacity-75 mt-1">
+                    {formatBytes(drive.free_bytes ?? drive.free)} free / {formatBytes(drive.total_bytes ?? drive.total)} total
+                  </div>
+                  <div className="text-xs opacity-75 mt-1">
+                    BitLocker {text(drive.bitlocker_status ?? drive.bitlocker)}
+                  </div>
                 </div>
-                <div className="text-2xl font-extrabold mt-2">{formatPercent(drive.used_percent)}</div>
-                <div className="text-xs opacity-75 mt-1">
-                  {formatBytes(drive.free_bytes ?? drive.free)} free / {formatBytes(drive.total_bytes ?? drive.total)} total
-                </div>
-                <div className="text-xs opacity-75 mt-1">
-                  BitLocker {text(drive.bitlocker_status ?? drive.bitlocker)}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
-          <div className="text-sm opacity-75">No storage inventory reported yet.</div>
+          <EmptyState
+            title="No storage inventory yet"
+            description="Drive capacity, free space, filesystem and BitLocker status will appear here once the agent uploads inventory."
+          />
         )}
       </Section>
 
@@ -588,7 +714,7 @@ function Overview({
           )}
         </Section>
 
-        <Section title="Software and services summary" note="Detailed software/services tabs can be added later.">
+        <Section title="Software and services summary" note="Detailed tabs are prepared below for later inventory expansion.">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <Field label="Installed apps" value={firstValue(softwareSummary, ["installed_count", "apps_count"])} />
             <Field label="Recently installed" value={firstValue(softwareSummary, ["recently_installed_count"])} />
@@ -598,7 +724,11 @@ function Overview({
         </Section>
       </div>
 
-      <Section title="Active remote sessions" note="Shows whether a viewer is connected in Console or Background Mode.">
+      <Section
+        title="Active remote sessions"
+        note="This will show Console or Background Mode once the control-server active-session endpoint is wired in."
+        right={remoteActive ? <Badge tone="good">Live</Badge> : <Badge tone="neutral">Idle</Badge>}
+      >
         {remoteActive ? (
           <div className="space-y-2">
             {(activeSessions.sessions ?? []).map((session) => (
@@ -616,14 +746,14 @@ function Overview({
             ))}
           </div>
         ) : (
-          <div className="text-sm opacity-75">
-            No active remote sessions reported for this device.
-            {activeSessions.error ? (
-              <span className="block mt-1 text-xs opacity-60">
-                Session status endpoint is not available yet: {activeSessions.error}
-              </span>
-            ) : null}
-          </div>
+          <EmptyState
+            title="No active remote session"
+            description={
+              activeSessions.error
+                ? `The page is ready, but the control-server active-session endpoint is not available yet: ${activeSessions.error}`
+                : "No technician is currently connected to this device."
+            }
+          />
         )}
       </Section>
     </div>
@@ -666,7 +796,27 @@ export default async function DevicePage({
     loadActiveSessions(deviceId),
   ]);
 
-  const displayName = device?.hostname || deviceId;
+  if (!device) {
+    return (
+      <div className="space-y-5">
+        <div className="hi5-panel p-5">
+          <div className="text-xs opacity-70">Control</div>
+          <h1 className="text-2xl font-extrabold mt-1">Device not found</h1>
+          <p className="text-sm opacity-75 mt-2">
+            This device either does not exist, belongs to another tenant, or has not enrolled successfully.
+          </p>
+
+          <div className="mt-4">
+            <Link href="/control/devices" className="hi5-btn-primary text-sm">
+              Back to devices
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const displayName = device.hostname || deviceId;
   const remoteActive = activeSessions.active === true && (activeSessions.sessions?.length ?? 0) > 0;
   const remoteLabel = remoteActive
     ? (activeSessions.sessions ?? []).some((session) => session.mode === "backstage")
@@ -674,46 +824,57 @@ export default async function DevicePage({
       : "Remote active"
     : "No active session";
 
+  const tabs = [
+    { key: "overview", label: "Overview" },
+    { key: "remote", label: "Remote", locked: !canRemote },
+    { key: "terminal", label: "Terminal", locked: !canTerminal },
+    { key: "files", label: "Files", locked: !canFiles },
+    { key: "software", label: "Software", badge: "Soon" },
+    { key: "services", label: "Services" },
+    { key: "processes", label: "Processes", badge: "Soon" },
+    { key: "patching", label: "Patching", badge: "Soon" },
+    { key: "events", label: "Events", badge: "Soon" },
+    { key: "jobs", label: "Jobs", badge: "Soon" },
+    { key: "activity", label: "Activity" },
+  ];
+
   return (
     <div className="space-y-5">
       <div className="hi5-panel p-5">
-        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+        <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-4">
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <div className="text-xs opacity-70">Device</div>
-              <span
-                className={[
-                  "rounded-full border px-2 py-0.5 text-xs font-semibold",
-                  device?.online ? statusClass("good") : statusClass("bad"),
-                ].join(" ")}
-              >
-                {device?.online ? "Online" : "Offline"}
-              </span>
-              <span
-                className={[
-                  "rounded-full border px-2 py-0.5 text-xs font-semibold",
-                  remoteActive ? statusClass("good") : statusClass("neutral"),
-                ].join(" ")}
-              >
-                {remoteLabel}
-              </span>
+              <Badge tone={device.online ? "good" : "bad"}>{device.online ? "Online" : "Offline"}</Badge>
+              <Badge tone={remoteActive ? "good" : "neutral"}>{remoteLabel}</Badge>
+              <Badge tone={inventory?.collected_at ? "good" : "warning"}>
+                {inventory?.collected_at ? "Inventory ready" : "Inventory pending"}
+              </Badge>
             </div>
 
-            <h1 className="text-2xl font-extrabold mt-1 break-words">{displayName}</h1>
+            <h1 className="text-2xl font-extrabold mt-2 break-words">{displayName}</h1>
 
             <p className="text-sm opacity-75 mt-2">
-              {text(device?.os, "Unknown OS")} · Last seen {formatDate(device?.last_seen_at)} · Agent{" "}
-              {text(device?.agent_version)}
+              {text(device.os, "Unknown OS")} · Last seen {formatDate(device.last_seen_at)} · Agent{" "}
+              {text(device.agent_version)}
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 xl:justify-end">
             {canRemote ? (
               <Link className="hi5-btn-primary text-sm" href={`/control/devices/${encodeURIComponent(deviceId)}?tab=remote`}>
-                Connect
+                Remote Control
               </Link>
             ) : (
-              <LockedButton label="Connect" />
+              <LockedButton label="Remote Control" />
+            )}
+
+            {canRemote ? (
+              <Link className="hi5-btn-ghost text-sm" href={`/control/devices/${encodeURIComponent(deviceId)}?tab=remote&mode=backstage`}>
+                Background Mode
+              </Link>
+            ) : (
+              <LockedButton label="Background Mode" />
             )}
 
             {canTerminal ? (
@@ -732,54 +893,27 @@ export default async function DevicePage({
               <LockedButton label="Files" />
             )}
 
-            <Link className="hi5-btn-ghost text-sm" href={`/control/devices/${encodeURIComponent(deviceId)}?tab=services`}>
-              Services
-            </Link>
-
             <button className="hi5-btn-ghost text-sm" type="button" title="Coming soon">
-              Reboot
+              Refresh inventory
             </button>
 
             <button className="hi5-btn-ghost text-sm" type="button" title="Coming soon">
-              Refresh inventory
+              Create ticket
             </button>
           </div>
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          <TabLink
-            href={`/control/devices/${encodeURIComponent(deviceId)}?tab=overview`}
-            active={tab === "overview"}
-            label="Overview"
-          />
-          <TabLink
-            href={`/control/devices/${encodeURIComponent(deviceId)}?tab=remote`}
-            active={tab === "remote"}
-            label="Remote"
-            locked={!canRemote}
-          />
-          <TabLink
-            href={`/control/devices/${encodeURIComponent(deviceId)}?tab=terminal`}
-            active={tab === "terminal"}
-            label="Terminal"
-            locked={!canTerminal}
-          />
-          <TabLink
-            href={`/control/devices/${encodeURIComponent(deviceId)}?tab=files`}
-            active={tab === "files"}
-            label="Files"
-            locked={!canFiles}
-          />
-          <TabLink
-            href={`/control/devices/${encodeURIComponent(deviceId)}?tab=services`}
-            active={tab === "services"}
-            label="Services"
-          />
-          <TabLink
-            href={`/control/devices/${encodeURIComponent(deviceId)}?tab=activity`}
-            active={tab === "activity"}
-            label="Activity"
-          />
+          {tabs.map((item) => (
+            <TabLink
+              key={item.key}
+              href={`/control/devices/${encodeURIComponent(deviceId)}?tab=${item.key}`}
+              active={tab === item.key}
+              label={item.label}
+              locked={item.locked}
+              badge={item.badge}
+            />
+          ))}
         </div>
       </div>
 
@@ -790,7 +924,94 @@ export default async function DevicePage({
       {tab === "services" ? <ServicesPanel deviceId={deviceId} /> : null}
       {tab === "activity" ? <ActivityPanel deviceId={deviceId} /> : null}
 
-      {!["overview", "remote", "terminal", "files", "services", "activity"].includes(tab) ? (
+      {tab === "software" ? (
+        <ComingSoonTab
+          title="Software inventory"
+          description="This will show installed software, publishers, versions, install dates, and uninstall actions."
+          items={[
+            "Installed applications",
+            "Recently installed software",
+            "Version distribution",
+            "Publisher summary",
+            "Uninstall jobs",
+            "Software search",
+          ]}
+        />
+      ) : null}
+
+      {tab === "processes" ? (
+        <ComingSoonTab
+          title="Processes"
+          description="This will show running processes, CPU/memory usage, owners, and safe terminate actions."
+          items={[
+            "Top CPU processes",
+            "Top memory processes",
+            "Process owner",
+            "Executable path",
+            "Start time",
+            "Terminate process",
+          ]}
+        />
+      ) : null}
+
+      {tab === "patching" ? (
+        <ComingSoonTab
+          title="Patching"
+          description="This will show Windows Update status, missing patches, install history and reboot requirements."
+          items={[
+            "Pending updates",
+            "Installed updates",
+            "Failed updates",
+            "Last scan",
+            "Reboot required",
+            "Patch policy",
+          ]}
+        />
+      ) : null}
+
+      {tab === "events" ? (
+        <ComingSoonTab
+          title="Events"
+          description="This will highlight recent Windows events that matter to technicians."
+          items={[
+            "Unexpected shutdowns",
+            "Application crashes",
+            "Service failures",
+            "Windows Update failures",
+            "Blue screen signals",
+            "Agent errors",
+          ]}
+        />
+      ) : null}
+
+      {tab === "jobs" ? (
+        <ComingSoonTab
+          title="Device jobs"
+          description="This will show commands and automation tasks sent to this device."
+          items={[
+            "Refresh inventory jobs",
+            "Script runs",
+            "Patch jobs",
+            "Restart jobs",
+            "Service actions",
+            "File transfer jobs",
+          ]}
+        />
+      ) : null}
+
+      {![
+        "overview",
+        "remote",
+        "terminal",
+        "files",
+        "services",
+        "activity",
+        "software",
+        "processes",
+        "patching",
+        "events",
+        "jobs",
+      ].includes(tab) ? (
         <div className="hi5-panel p-5">
           <div className="text-lg font-semibold capitalize">{tab}</div>
           <p className="text-sm opacity-75 mt-2">This tab is coming soon.</p>
