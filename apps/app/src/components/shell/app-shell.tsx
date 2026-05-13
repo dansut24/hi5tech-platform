@@ -46,40 +46,37 @@ function NavItem({
       ].join(" ")}
     >
       {item.icon ? <span className="shrink-0">{item.icon}</span> : null}
+
       {!collapsed ? (
         <span className="truncate font-medium flex-1">{item.label}</span>
       ) : null}
-      {!collapsed && item.badge ? <span className="shrink-0">{item.badge}</span> : null}
+
+      {!collapsed && item.badge ? (
+        <span className="shrink-0">{item.badge}</span>
+      ) : null}
     </Link>
   );
 }
 
 export type AppShellProps = {
-  // header
   title: string;
   homeHref: string;
 
-  // nav
   navItems: ShellNavItem[];
   sidebarDefaultCollapsed?: boolean;
   sidebarMode?: "visible" | "hidden";
 
-  // header slots
-  headerLeftSlot?: React.ReactNode;   // e.g. module switcher
-  headerRightSlot?: React.ReactNode;  // e.g. account dropdown, notifications
+  headerLeftSlot?: React.ReactNode;
+  headerRightSlot?: React.ReactNode;
 
-  // optional 2nd row under header (tabs / filters / etc)
   topBarSlot?: React.ReactNode;
 
-  // body
   children: React.ReactNode;
 
-  // content chrome
   showBreadcrumbs?: boolean;
   contentClassName?: string;
   headerClassName?: string;
 
-  // optional: hide desktop collapse button
   allowDesktopCollapse?: boolean;
 };
 
@@ -107,10 +104,10 @@ export default function AppShell({
   const containerPad = useMemo(() => (hasTopBar ? "border-t hi5-border" : ""), [hasTopBar]);
 
   return (
-    <div className="min-h-dvh flex flex-col">
-      {/* ===== Sticky header ===== */}
-      <header className={["sticky top-0 z-40 shrink-0 isolate", headerClassName].join(" ")}>
-        <div className="hi5-panel border-b hi5-border">
+    <div className="h-[100dvh] max-h-[100dvh] min-h-[100dvh] overflow-hidden flex flex-col">
+      {/* ===== Fixed app header ===== */}
+      <header className={["z-40 shrink-0 isolate", headerClassName].join(" ")}>
+        <div className="hi5-panel border-b hi5-border rounded-none">
           <div className="h-14 px-3 sm:px-4 flex items-center gap-2">
             {/* Hamburger - mobile */}
             {showSidebar ? (
@@ -141,14 +138,21 @@ export default function AppShell({
               {title}
             </Link>
 
-            {headerLeftSlot ? <div className="ml-2 hidden sm:flex items-center">{headerLeftSlot}</div> : null}
+            {headerLeftSlot ? (
+              <div className="ml-2 hidden sm:flex items-center">
+                {headerLeftSlot}
+              </div>
+            ) : null}
 
             <div className="flex-1" />
 
-            {headerRightSlot ? <div className="flex items-center gap-1.5">{headerRightSlot}</div> : null}
+            {headerRightSlot ? (
+              <div className="flex items-center gap-1.5">
+                {headerRightSlot}
+              </div>
+            ) : null}
           </div>
 
-          {/* Optional top bar row (tabs/filters/whatever) */}
           {hasTopBar ? (
             <div className={["px-2", containerPad].join(" ")}>
               {topBarSlot}
@@ -157,14 +161,15 @@ export default function AppShell({
         </div>
       </header>
 
-      {/* ===== Body ===== */}
-      <div className="flex flex-1 min-h-0">
+      {/* ===== Body: sidebar fixed in shell, content scrolls independently ===== */}
+      <div className="flex flex-1 min-h-0 overflow-hidden">
         {/* Desktop sidebar */}
         {showSidebar ? (
           <aside
             className={[
               "hidden md:flex flex-col border-r hi5-border shrink-0 transition-all duration-200",
-              sidebarCollapsed ? "w-[60px]" : "w-64",
+              "overflow-y-auto overscroll-contain no-scrollbar",
+              sidebarCollapsed ? "w-[64px]" : "w-64",
             ].join(" ")}
           >
             <div className="p-2 space-y-0.5">
@@ -184,9 +189,11 @@ export default function AppShell({
               aria-label="Close navigation"
               onClick={() => setDrawerOpen(false)}
             />
-            <div className="absolute top-0 left-0 h-full w-[85vw] max-w-[320px] hi5-panel border-r hi5-border">
-              <div className="flex items-center justify-between p-4 border-b hi5-border">
+
+            <div className="absolute top-0 left-0 h-full w-[85vw] max-w-[320px] hi5-panel border-r hi5-border rounded-none overflow-hidden flex flex-col">
+              <div className="flex items-center justify-between p-4 border-b hi5-border shrink-0">
                 <div className="font-semibold text-sm">Navigation</div>
+
                 <button
                   type="button"
                   className="h-9 w-9 rounded-xl border hi5-border flex items-center justify-center hover:bg-black/5 dark:hover:bg-white/5 transition"
@@ -196,7 +203,8 @@ export default function AppShell({
                   <X size={16} />
                 </button>
               </div>
-              <div className="p-2 space-y-0.5">
+
+              <div className="p-2 space-y-0.5 overflow-y-auto overscroll-contain no-scrollbar">
                 {navItems.map((item) => (
                   <NavItem
                     key={item.href}
@@ -210,8 +218,15 @@ export default function AppShell({
           </div>
         ) : null}
 
-        {/* Main */}
-        <main className={["flex-1 min-w-0 p-3 sm:p-4 md:p-5", contentClassName].join(" ")}>
+        {/* Main content scroll container */}
+        <main
+          className={[
+            "flex-1 min-w-0 min-h-0 overflow-y-auto overscroll-contain",
+            "p-3 sm:p-4 md:p-5",
+            "pb-[calc(7rem+env(safe-area-inset-bottom,0px))]",
+            contentClassName,
+          ].join(" ")}
+        >
           {showBreadcrumbs ? <ShellBreadcrumbs className="mb-3" /> : null}
           {children}
         </main>
