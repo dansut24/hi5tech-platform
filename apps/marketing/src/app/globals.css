@@ -7,65 +7,74 @@
 :root {
   color-scheme: light;
 
-  --hi5-bg: 246 248 252;
-  --hi5-fg: 10 15 28;
-  --hi5-muted: 88 101 124;
+  --hi5-bg: 246 250 255;
+  --hi5-fg: 8 18 35;
+  --hi5-muted: 82 101 128;
 
   --hi5-card: 255 255 255;
-  --hi5-card-alpha: 0.78;
+  --hi5-card-alpha: 0.80;
 
-  --hi5-border: 20 27 44;
+  --hi5-border: 15 45 75;
   --hi5-border-alpha: 0.12;
 
-  --hi5-accent: 124 58 237;
+  --hi5-accent: 0 122 255;
   --hi5-accent-2: 0 193 255;
-  --hi5-accent-3: 255 79 225;
+  --hi5-accent-3: 59 130 246;
 
   --site-bg:
-    radial-gradient(900px 500px at 10% -5%, rgba(var(--hi5-accent), 0.16), transparent 60%),
-    radial-gradient(900px 500px at 90% 5%, rgba(var(--hi5-accent-2), 0.13), transparent 55%),
+    radial-gradient(900px 500px at 8% -5%, rgba(var(--hi5-accent), 0.16), transparent 60%),
+    radial-gradient(900px 500px at 92% 4%, rgba(var(--hi5-accent-2), 0.18), transparent 58%),
+    radial-gradient(760px 460px at 50% 105%, rgba(var(--hi5-accent-3), 0.10), transparent 60%),
     linear-gradient(180deg, rgb(var(--hi5-bg)), rgb(var(--hi5-bg)));
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
 
-  --hi5-bg: 3 7 18;
-  --hi5-fg: 244 247 255;
-  --hi5-muted: 154 166 190;
+  --hi5-bg: 2 8 23;
+  --hi5-fg: 244 249 255;
+  --hi5-muted: 155 174 199;
 
-  --hi5-card: 12 18 32;
-  --hi5-card-alpha: 0.62;
+  --hi5-card: 8 20 38;
+  --hi5-card-alpha: 0.64;
 
-  --hi5-border: 225 232 255;
+  --hi5-border: 220 238 255;
   --hi5-border-alpha: 0.14;
 
+  --hi5-accent: 0 122 255;
+  --hi5-accent-2: 0 193 255;
+  --hi5-accent-3: 96 165 250;
+
   --site-bg:
-    radial-gradient(900px 520px at 10% -5%, rgba(var(--hi5-accent), 0.28), transparent 60%),
-    radial-gradient(900px 520px at 88% 8%, rgba(var(--hi5-accent-2), 0.18), transparent 58%),
-    radial-gradient(760px 520px at 55% 105%, rgba(var(--hi5-accent-3), 0.12), transparent 60%),
-    linear-gradient(180deg, #030712 0%, #07101f 50%, #030712 100%);
+    radial-gradient(900px 520px at 10% -5%, rgba(var(--hi5-accent), 0.30), transparent 60%),
+    radial-gradient(900px 520px at 88% 8%, rgba(var(--hi5-accent-2), 0.20), transparent 58%),
+    radial-gradient(760px 520px at 55% 105%, rgba(var(--hi5-accent-3), 0.13), transparent 60%),
+    linear-gradient(180deg, #020817 0%, #07172d 48%, #020817 100%);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
 
-    --hi5-bg: 3 7 18;
-    --hi5-fg: 244 247 255;
-    --hi5-muted: 154 166 190;
+    --hi5-bg: 2 8 23;
+    --hi5-fg: 244 249 255;
+    --hi5-muted: 155 174 199;
 
-    --hi5-card: 12 18 32;
-    --hi5-card-alpha: 0.62;
+    --hi5-card: 8 20 38;
+    --hi5-card-alpha: 0.64;
 
-    --hi5-border: 225 232 255;
+    --hi5-border: 220 238 255;
     --hi5-border-alpha: 0.14;
 
+    --hi5-accent: 0 122 255;
+    --hi5-accent-2: 0 193 255;
+    --hi5-accent-3: 96 165 250;
+
     --site-bg:
-      radial-gradient(900px 520px at 10% -5%, rgba(var(--hi5-accent), 0.28), transparent 60%),
-      radial-gradient(900px 520px at 88% 8%, rgba(var(--hi5-accent-2), 0.18), transparent 58%),
-      radial-gradient(760px 520px at 55% 105%, rgba(var(--hi5-accent-3), 0.12), transparent 60%),
-      linear-gradient(180deg, #030712 0%, #07101f 50%, #030712 100%);
+      radial-gradient(900px 520px at 10% -5%, rgba(var(--hi5-accent), 0.30), transparent 60%),
+      radial-gradient(900px 520px at 88% 8%, rgba(var(--hi5-accent-2), 0.20), transparent 58%),
+      radial-gradient(760px 520px at 55% 105%, rgba(var(--hi5-accent-3), 0.13), transparent 60%),
+      linear-gradient(180deg, #020817 0%, #07172d 48%, #020817 100%);
   }
 }
 
@@ -133,12 +142,12 @@ button {
 
 .hi5-panel {
   border-radius: 28px;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 24px 80px rgba(0, 64, 128, 0.12);
 }
 
 .hi5-card {
   border-radius: 24px;
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 18px 50px rgba(0, 64, 128, 0.08);
 }
 
 .hi5-muted {
@@ -184,14 +193,14 @@ button {
 .hi5-btn-primary {
   color: white;
   border-color: rgba(255, 255, 255, 0.18);
-  background: linear-gradient(135deg, rgb(var(--hi5-accent)), rgb(var(--hi5-accent-3)));
+  background: linear-gradient(135deg, rgb(var(--hi5-accent)), rgb(var(--hi5-accent-2)));
   box-shadow: 0 18px 42px rgba(var(--hi5-accent), 0.28);
 }
 
 .hi5-btn-dark {
   color: white;
-  background: rgb(10 15 28);
-  border-color: rgb(10 15 28);
+  background: rgb(8 18 35);
+  border-color: rgb(8 18 35);
 }
 
 [data-theme="dark"] .hi5-btn-dark {
@@ -245,7 +254,7 @@ button {
   background:
     radial-gradient(600px 280px at 80% 0%, rgba(var(--hi5-accent), 0.25), transparent 60%),
     rgba(var(--hi5-card), 0.48);
-  box-shadow: 0 26px 80px rgba(0, 0, 0, 0.22);
+  box-shadow: 0 26px 80px rgba(0, 64, 128, 0.22);
 }
 
 .metric-card {
@@ -264,8 +273,8 @@ button {
   place-items: center;
   color: white;
   font-weight: 950;
-  background: linear-gradient(135deg, rgb(var(--hi5-accent)), rgb(var(--hi5-accent-3)));
-  box-shadow: 0 14px 32px rgba(var(--hi5-accent), 0.26);
+  background: linear-gradient(135deg, rgb(0 122 255), rgb(0 193 255));
+  box-shadow: 0 14px 32px rgba(0, 122, 255, 0.28);
 }
 
 .no-scrollbar::-webkit-scrollbar {
