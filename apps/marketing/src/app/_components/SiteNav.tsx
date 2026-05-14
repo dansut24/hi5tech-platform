@@ -103,35 +103,38 @@ export default function SiteNav({ appUrl }: { appUrl: string }) {
             type="button"
             aria-label="Close menu"
             onClick={closeMenu}
-            className="absolute inset-0 bg-black/35 backdrop-blur-xl"
+            className="absolute inset-0 bg-black/45 backdrop-blur-2xl"
           />
 
-          <div className="absolute left-[5%] right-[5%] top-[100px] h-[calc(90dvh-100px)] overflow-hidden rounded-[34px] border border-white/20 bg-white/70 shadow-2xl backdrop-blur-[36px] dark:bg-slate-950/70">
-            <div className="absolute -left-20 -top-20 h-64 w-64 rounded-full bg-purple-500/30 blur-3xl" />
-            <div className="absolute -right-20 -bottom-20 h-64 w-64 rounded-full bg-cyan-500/25 blur-3xl" />
+          <div className="absolute left-4 right-4 top-[104px] max-h-[calc(100dvh-128px)] overflow-hidden rounded-[32px] border border-white/20 bg-white/78 shadow-2xl backdrop-blur-[38px] dark:bg-slate-950/78">
+            <div className="absolute -left-16 -top-16 h-56 w-56 rounded-full bg-sky-400/30 blur-3xl" />
+            <div className="absolute -right-16 -bottom-16 h-56 w-56 rounded-full bg-cyan-400/25 blur-3xl" />
 
-            <div className="relative z-10 flex h-full flex-col items-center justify-center px-6 py-10 text-center">
+            <div className="relative z-10 flex flex-col items-center px-6 py-8 text-center">
               <div className="flex items-center justify-center gap-3">
                 <span className="logo-mark">H</span>
                 <span className="text-2xl font-extrabold tracking-tight">Hi5Tech</span>
               </div>
 
-              <nav className="mt-10 grid w-full gap-3">
-                <Link onClick={closeMenu} href="/features" className="text-5xl font-black tracking-[-0.06em]">
-                  Features
-                </Link>
-                <Link onClick={closeMenu} href="/pricing" className="text-5xl font-black tracking-[-0.06em]">
-                  Pricing
-                </Link>
-                <Link onClick={closeMenu} href="/security" className="text-5xl font-black tracking-[-0.06em]">
-                  Security
-                </Link>
-                <Link onClick={closeMenu} href="/contact" className="text-5xl font-black tracking-[-0.06em]">
-                  Contact
-                </Link>
+              <nav className="mt-8 grid w-full gap-2">
+                {[
+                  ["Features", "/features"],
+                  ["Pricing", "/pricing"],
+                  ["Security", "/security"],
+                  ["Contact", "/contact"],
+                ].map(([label, href]) => (
+                  <Link
+                    key={href}
+                    onClick={closeMenu}
+                    href={href}
+                    className="rounded-3xl py-3 text-4xl font-black tracking-[-0.06em] transition hover:bg-sky-500/10 active:scale-[0.98]"
+                  >
+                    {label}
+                  </Link>
+                ))}
               </nav>
 
-              <div className="mt-10 grid w-full max-w-sm gap-3">
+              <div className="mt-8 grid w-full max-w-sm gap-3">
                 <a onClick={closeMenu} href={`${appUrl}/login`} className="hi5-btn">
                   Sign in
                 </a>
