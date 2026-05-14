@@ -37,12 +37,14 @@ export default function SignupForm() {
     setBusy(true);
 
     try {
-      const res = await fetch("/api/trial-signup", {
+      const cleanSubdomain = slugifySubdomain(subdomain || companyName);
+
+      const res = await fetch("/api/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           companyName: companyName.trim(),
-          subdomain: slugifySubdomain(subdomain || companyName),
+          subdomain: cleanSubdomain,
           email: email.trim().toLowerCase(),
         }),
       });
@@ -55,7 +57,9 @@ export default function SignupForm() {
         return;
       }
 
-      router.push(`/signup/success?company=${encodeURIComponent(companyName.trim())}`);
+      router.push(
+        `/signup/success?company=${encodeURIComponent(companyName.trim())}&tenant=${encodeURIComponent(cleanSubdomain)}`
+      );
     } catch (err: any) {
       setError(String(err?.message ?? err) || "Something went wrong.");
       setBusy(false);
@@ -65,9 +69,9 @@ export default function SignupForm() {
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <div>
-        <label className="text-sm font-medium">Company name</label>
+        <label className="text-sm font-bold">Company name</label>
         <input
-          className="mt-1 w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2 outline-none focus:ring-2 focus:ring-white/20"
+          className="mt-2 w-full rounded-2xl border border-[rgba(var(--hi5-border),var(--hi5-border-alpha))] bg-[rgba(var(--hi5-card),0.55)] px-4 py-3 outline-none focus:ring-2 focus:ring-[rgba(var(--hi5-accent),0.25)]"
           placeholder="Acme Ltd"
           value={companyName}
           onChange={(e) => setCompanyName(e.target.value)}
@@ -76,23 +80,23 @@ export default function SignupForm() {
       </div>
 
       <div>
-        <label className="text-sm font-medium">Desired subdomain</label>
+        <label className="text-sm font-bold">Tenant subdomain</label>
         <input
-          className="mt-1 w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2 outline-none focus:ring-2 focus:ring-white/20"
+          className="mt-2 w-full rounded-2xl border border-[rgba(var(--hi5-border),var(--hi5-border-alpha))] bg-[rgba(var(--hi5-card),0.55)] px-4 py-3 outline-none focus:ring-2 focus:ring-[rgba(var(--hi5-accent),0.25)]"
           placeholder="acme"
           value={subdomain}
           onChange={(e) => setSubdomain(e.target.value)}
         />
-        <div className="mt-1 text-xs opacity-75">
-          Preview: <span className="font-medium">{preview}</span>
+        <div className="mt-2 text-xs hi5-muted">
+          Preview: <span className="font-bold">{preview}</span>
         </div>
       </div>
 
       <div>
-        <label className="text-sm font-medium">Work email</label>
+        <label className="text-sm font-bold">Work email</label>
         <input
           type="email"
-          className="mt-1 w-full rounded-xl border border-white/15 bg-white/5 px-3 py-2 outline-none focus:ring-2 focus:ring-white/20"
+          className="mt-2 w-full rounded-2xl border border-[rgba(var(--hi5-border),var(--hi5-border-alpha))] bg-[rgba(var(--hi5-card),0.55)] px-4 py-3 outline-none focus:ring-2 focus:ring-[rgba(var(--hi5-accent),0.25)]"
           placeholder="you@acme.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -101,21 +105,17 @@ export default function SignupForm() {
       </div>
 
       {error ? (
-        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-100">
+        <div className="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-500">
           {error}
         </div>
       ) : null}
 
-      <button
-        type="submit"
-        disabled={busy}
-        className="w-full rounded-xl bg-white text-black px-4 py-2 font-semibold hover:bg-white/90 disabled:opacity-60"
-      >
-        {busy ? "Creating trial…" : "Start 14‑day free trial"}
+      <button type="submit" disabled={busy} className="hi5-btn hi5-btn-primary w-full">
+        {busy ? "Creating tenant…" : "Start 14-day free trial"}
       </button>
 
-      <p className="text-xs opacity-75">
-        By continuing you agree to our Terms. No card required for the trial.
+      <p className="text-xs hi5-muted">
+        No card required. We will create your tenant and send your owner invite by email.
       </p>
     </form>
   );
