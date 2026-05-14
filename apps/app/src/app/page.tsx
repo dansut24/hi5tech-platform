@@ -12,7 +12,7 @@ const MODULES: Array<{
   title: string;
   description: string;
   href: string;
-  gradient: string; // used for subtle glow
+  gradient: string;
   icon: React.ReactNode;
 }> = [
   {
@@ -21,7 +21,7 @@ const MODULES: Array<{
     description: "Incidents, requests, changes, and service desk workflows.",
     href: "/itsm",
     gradient:
-      "radial-gradient(700px 180px at 15% 0%, rgba(0,193,255,0.45), transparent 55%), radial-gradient(700px 180px at 85% 100%, rgba(255,79,225,0.35), transparent 55%)",
+      "radial-gradient(700px 220px at 15% 0%, rgba(0,193,255,0.45), transparent 58%), radial-gradient(700px 220px at 85% 100%, rgba(255,79,225,0.35), transparent 58%)",
     icon: (
       <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
         <path
@@ -37,7 +37,7 @@ const MODULES: Array<{
     description: "Remote tools, device access, live actions, and inventory.",
     href: "/control",
     gradient:
-      "radial-gradient(700px 180px at 10% 10%, rgba(255,196,45,0.40), transparent 55%), radial-gradient(700px 180px at 90% 90%, rgba(0,193,255,0.32), transparent 55%)",
+      "radial-gradient(700px 220px at 10% 10%, rgba(255,196,45,0.40), transparent 58%), radial-gradient(700px 220px at 90% 90%, rgba(0,193,255,0.32), transparent 58%)",
     icon: (
       <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
         <path
@@ -53,7 +53,7 @@ const MODULES: Array<{
     description: "End-user portal for requests, updates, and knowledge base.",
     href: "/selfservice",
     gradient:
-      "radial-gradient(700px 180px at 20% 0%, rgba(255,79,225,0.35), transparent 55%), radial-gradient(700px 180px at 80% 100%, rgba(255,196,45,0.32), transparent 55%)",
+      "radial-gradient(700px 220px at 20% 0%, rgba(255,79,225,0.35), transparent 58%), radial-gradient(700px 220px at 80% 100%, rgba(255,196,45,0.32), transparent 58%)",
     icon: (
       <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
         <path
@@ -69,7 +69,7 @@ const MODULES: Array<{
     description: "Users, tenant settings, access control, and billing setup.",
     href: "/admin",
     gradient:
-      "radial-gradient(700px 180px at 15% 0%, rgba(0,193,255,0.35), transparent 55%), radial-gradient(700px 180px at 85% 100%, rgba(255,79,225,0.32), transparent 55%)",
+      "radial-gradient(700px 220px at 15% 0%, rgba(0,193,255,0.35), transparent 58%), radial-gradient(700px 220px at 85% 100%, rgba(255,79,225,0.32), transparent 58%)",
     icon: (
       <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
         <path
@@ -83,23 +83,129 @@ const MODULES: Array<{
 
 function initials(name?: string | null, email?: string | null) {
   const n = (name || "").trim();
+
   if (n) {
     const parts = n.split(/\s+/).slice(0, 2);
     return parts.map((p) => p[0]?.toUpperCase() ?? "").join("");
   }
+
   const e = (email || "").trim();
   return e ? e[0].toUpperCase() : "U";
+}
+
+function ModuleTile({
+  module,
+  enabled,
+  myRole,
+}: {
+  module: (typeof MODULES)[number];
+  enabled: boolean;
+  myRole: string;
+}) {
+  const rolePill =
+    module.key === "itsm" ? (
+      <span className="rounded-full border hi5-border px-2 py-1 text-[11px] bg-white/45 dark:bg-black/25">
+        Your role: <span className="font-semibold">{myRole}</span>
+      </span>
+    ) : null;
+
+  return (
+    <div
+      className={[
+        "hi5-card group min-h-[260px] sm:min-h-[280px] p-0",
+        "flex flex-col",
+        enabled ? "opacity-100" : "opacity-60",
+      ].join(" ")}
+    >
+      <div className="absolute inset-0 opacity-80 pointer-events-none" style={{ background: module.gradient }} />
+      <div
+        className="absolute inset-0 pointer-events-none opacity-60 dark:opacity-35"
+        style={{
+          background:
+            "linear-gradient(135deg, rgba(255,255,255,0.30), rgba(255,255,255,0.00))",
+        }}
+      />
+
+      <div className="relative z-10 flex h-full flex-col p-5 sm:p-6">
+        <div className="flex items-start gap-3">
+          <div className="h-11 w-11 shrink-0 rounded-2xl border hi5-border bg-white/55 dark:bg-black/30 backdrop-blur flex items-center justify-center">
+            {module.icon}
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-lg sm:text-xl font-extrabold leading-tight">{module.title}</h3>
+              {rolePill}
+              {!enabled ? (
+                <span className="rounded-full border hi5-border px-2 py-1 text-[11px] bg-white/40 dark:bg-black/25">
+                  Not enabled
+                </span>
+              ) : null}
+            </div>
+
+            <p className="mt-2 text-sm opacity-80 leading-relaxed">
+              {module.description}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex-1" />
+
+        {enabled ? (
+          <div className="mt-5 flex flex-col gap-3">
+            {module.key === "itsm" ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <Link className="hi5-btn-ghost text-xs text-center" href="/itsm">
+                  Dashboard
+                </Link>
+                <Link className="hi5-btn-ghost text-xs text-center" href="/itsm/incidents/new">
+                  New incident
+                </Link>
+              </div>
+            ) : null}
+
+            {module.key === "admin" ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <Link className="hi5-btn-ghost text-xs text-center" href="/admin/users">
+                  Users
+                </Link>
+                <Link className="hi5-btn-ghost text-xs text-center" href="/admin/settings">
+                  Settings
+                </Link>
+              </div>
+            ) : null}
+
+            <Link href={module.href} className="hi5-btn-primary text-sm text-center">
+              Open
+            </Link>
+          </div>
+        ) : (
+          <div className="mt-5 flex flex-col gap-3">
+            <p className="text-xs opacity-70">
+              Ask your tenant admin to enable this module.
+            </p>
+            <button
+              type="button"
+              className="hi5-btn-ghost text-sm opacity-70"
+              disabled
+              title="Not enabled for your account"
+            >
+              Locked
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 export default async function ModulesPage() {
   const supabase = await supabaseServer();
 
-  // Auth
   const { data: userRes } = await supabase.auth.getUser();
   const user = userRes.user;
   if (!user) redirect("/login");
 
-  // Tenant from host
   const host = getEffectiveHost(await headers());
   const parsed = parseTenantHost(host);
   if (!parsed.subdomain) notFound();
@@ -113,7 +219,6 @@ export default async function ModulesPage() {
 
   if (!tenant) notFound();
 
-  // My membership (tenant role)
   const { data: membership } = await supabase
     .from("memberships")
     .select("id, role, created_at")
@@ -123,7 +228,6 @@ export default async function ModulesPage() {
 
   const myRole = String(membership?.role || "user");
 
-  // My profile
   const { data: profile } = await supabase
     .from("profiles")
     .select("full_name, avatar_url, email")
@@ -133,8 +237,8 @@ export default async function ModulesPage() {
   const fullName = profile?.full_name ?? "";
   const email = profile?.email ?? user.email ?? "";
 
-  // Which modules are enabled for me?
-  let enabled = new Set<ModuleKey>();
+  const enabled = new Set<ModuleKey>();
+
   if (membership?.id) {
     const { data: mods } = await supabase
       .from("module_assignments")
@@ -143,14 +247,18 @@ export default async function ModulesPage() {
 
     (mods ?? []).forEach((m: any) => {
       const k = String(m.module || "") as ModuleKey;
-      if (k === "itsm" || k === "control" || k === "selfservice" || k === "admin") enabled.add(k);
+      if (k === "itsm" || k === "control" || k === "selfservice" || k === "admin") {
+        enabled.add(k);
+      }
     });
   }
 
-  if (myRole === "owner" || myRole === "admin") enabled.add("admin");
+  if (myRole === "owner" || myRole === "admin") {
+    enabled.add("admin");
+  }
 
-  // Trial banner info
   let trialText: string | null = null;
+
   if (tenant?.status === "trial" && tenant?.trial_ends_at) {
     const end = new Date(tenant.trial_ends_at);
     const days = Math.max(0, Math.ceil((end.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
@@ -158,42 +266,38 @@ export default async function ModulesPage() {
   }
 
   return (
-    <div className="min-h-dvh">
-      {/* Wider container on desktop, still comfy */}
-      <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-10 py-6 sm:py-10">
-        {/* Desktop-aware layout: left profile panel + right modules grid */}
-        <div className="grid gap-6 lg:gap-8 lg:grid-cols-[360px_1fr]">
-          {/* Left panel (desktop). On mobile it just stacks on top. */}
-          <div className="relative overflow-hidden rounded-3xl border hi5-border bg-white/45 dark:bg-black/28 backdrop-blur-xl shadow-[0_18px_50px_rgba(0,0,0,0.12)] dark:shadow-[0_24px_70px_rgba(0,0,0,0.55)]">
+    <div className="min-h-[100dvh] pb-[calc(4rem+env(safe-area-inset-bottom,0px))]">
+      <div className="mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-6 sm:py-8 lg:px-8 xl:px-10">
+        <div className="grid grid-cols-1 gap-5 lg:gap-7 2xl:grid-cols-[360px_1fr]">
+          <div className="hi5-panel p-5 sm:p-6">
             <div
               className="absolute inset-0 opacity-70 pointer-events-none"
               style={{
                 background:
-                  "radial-gradient(900px 220px at 20% 0%, rgba(0,193,255,0.35), transparent 60%)," +
-                  "radial-gradient(900px 220px at 80% 100%, rgba(255,79,225,0.28), transparent 60%)",
+                  "radial-gradient(900px 260px at 20% 0%, rgba(0,193,255,0.35), transparent 60%)," +
+                  "radial-gradient(900px 260px at 80% 100%, rgba(255,79,225,0.28), transparent 60%)",
               }}
             />
-            <div className="relative p-5 sm:p-6">
-              <div className="flex items-start justify-between gap-4">
+
+            <div className="relative z-10">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between 2xl:flex-col 2xl:justify-start">
                 <div className="flex items-center gap-3">
-                  <div className="relative">
-                    <div className="h-12 w-12 rounded-2xl border hi5-border bg-white/50 dark:bg-black/30 backdrop-blur-md flex items-center justify-center font-bold">
-                      {profile?.avatar_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={profile.avatar_url}
-                          alt="Profile"
-                          className="h-12 w-12 rounded-2xl object-cover"
-                        />
-                      ) : (
-                        <span>{initials(fullName, email)}</span>
-                      )}
-                    </div>
+                  <div className="h-12 w-12 shrink-0 rounded-2xl border hi5-border bg-white/50 dark:bg-black/30 backdrop-blur-md flex items-center justify-center font-bold">
+                    {profile?.avatar_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={profile.avatar_url}
+                        alt="Profile"
+                        className="h-12 w-12 rounded-2xl object-cover"
+                      />
+                    ) : (
+                      <span>{initials(fullName, email)}</span>
+                    )}
                   </div>
 
-                  <div>
-                    <h1 className="text-xl sm:text-2xl font-semibold leading-tight">Hi5Tech</h1>
-                    <p className="text-sm opacity-80">
+                  <div className="min-w-0">
+                    <h1 className="text-xl sm:text-2xl font-extrabold leading-tight">Hi5Tech</h1>
+                    <p className="text-sm opacity-80 break-words">
                       {fullName ? (
                         <>
                           {fullName} <span className="opacity-60">•</span>{" "}
@@ -206,7 +310,7 @@ export default async function ModulesPage() {
                   </div>
                 </div>
 
-                <form action="/auth/signout" method="post">
+                <form action="/auth/signout" method="post" className="shrink-0">
                   <button type="submit" className="hi5-btn-ghost text-sm">
                     Logout
                   </button>
@@ -217,9 +321,11 @@ export default async function ModulesPage() {
                 <span className="rounded-full border hi5-border px-2 py-1 bg-white/40 dark:bg-black/25">
                   Tenant: <span className="font-medium">{tenant.subdomain}</span>
                 </span>
+
                 <span className="rounded-full border hi5-border px-2 py-1 bg-white/40 dark:bg-black/25">
                   Role: <span className="font-medium">{myRole}</span>
                 </span>
+
                 {trialText ? (
                   <span className="rounded-full border hi5-border px-2 py-1 bg-white/40 dark:bg-black/25">
                     {trialText}
@@ -229,7 +335,7 @@ export default async function ModulesPage() {
 
               <div className="mt-5">
                 <h2 className="text-sm uppercase tracking-wide opacity-70">Choose a module</h2>
-                <p className="mt-1 text-sm opacity-75 leading-relaxed">
+                <p className="mt-1 text-sm opacity-75 leading-relaxed max-w-2xl 2xl:max-w-none">
                   Pick where you want to work. Your access is controlled by your tenant admin.
                 </p>
               </div>
@@ -240,114 +346,16 @@ export default async function ModulesPage() {
             </div>
           </div>
 
-          {/* Right: Modules grid (desktop-friendly) */}
-          <div>
-            <div className="grid gap-4 sm:gap-5 md:grid-cols-2 xl:grid-cols-4">
-              {MODULES.map((m) => {
-                const isEnabled = enabled.has(m.key);
-
-                const rolePill =
-                  m.key === "itsm" ? (
-                    <span className="rounded-full border hi5-border px-2 py-1 text-xs bg-white/45 dark:bg-black/25">
-                      Your role: <span className="font-semibold">{myRole}</span>
-                    </span>
-                  ) : null;
-
-                return (
-                  <div
-                    key={m.key}
-                    className={[
-                      "relative overflow-hidden rounded-3xl border hi5-border",
-                      "bg-white/45 dark:bg-black/28 backdrop-blur-xl",
-                      "shadow-[0_18px_50px_rgba(0,0,0,0.12)] dark:shadow-[0_24px_70px_rgba(0,0,0,0.55)]",
-                      "flex flex-col", // tile layout
-                      isEnabled ? "opacity-100" : "opacity-60",
-                    ].join(" ")}
-                  >
-                    <div className="absolute inset-0 opacity-80 pointer-events-none" style={{ background: m.gradient }} />
-                    <div
-                      className="absolute inset-0 pointer-events-none opacity-60 dark:opacity-35"
-                      style={{
-                        background:
-                          "linear-gradient(135deg, rgba(255,255,255,0.30), rgba(255,255,255,0.00))",
-                      }}
-                    />
-
-                    <div className="relative p-5 sm:p-6 flex flex-col h-full">
-                      <div className="flex items-start gap-3">
-                        <div className="h-10 w-10 rounded-2xl border hi5-border bg-white/55 dark:bg-black/30 backdrop-blur flex items-center justify-center">
-                          {m.icon}
-                        </div>
-
-                        <div className="min-w-0">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="text-lg font-semibold">{m.title}</h3>
-                            {rolePill}
-                            {!isEnabled ? (
-                              <span className="rounded-full border hi5-border px-2 py-1 text-xs bg-white/40 dark:bg-black/25">
-                                Not enabled
-                              </span>
-                            ) : null}
-                          </div>
-
-                          <p className="mt-1 text-sm opacity-80 leading-relaxed">
-                            {m.description}
-                          </p>
-                        </div>
-                      </div>
-
-                      {/* Spacer pushes actions to bottom for nice tiles */}
-                      <div className="flex-1" />
-
-                      {isEnabled ? (
-                        <div className="mt-4 flex items-center justify-between gap-2">
-                          <div className="flex flex-wrap gap-2">
-                            {m.key === "itsm" ? (
-                              <>
-                                <Link className="hi5-btn-ghost text-xs" href="/itsm">
-                                  Dashboard
-                                </Link>
-                                <Link className="hi5-btn-ghost text-xs" href="/itsm/incidents/new">
-                                  New incident
-                                </Link>
-                              </>
-                            ) : null}
-
-                            {m.key === "admin" ? (
-                              <>
-                                <Link className="hi5-btn-ghost text-xs" href="/admin/users">
-                                  Users
-                                </Link>
-                                <Link className="hi5-btn-ghost text-xs" href="/admin/settings">
-                                  Settings
-                                </Link>
-                              </>
-                            ) : null}
-                          </div>
-
-                          <Link href={m.href} className="hi5-btn-primary text-sm">
-                            Open
-                          </Link>
-                        </div>
-                      ) : (
-                        <div className="mt-4 flex items-center justify-between gap-3">
-                          <p className="text-xs opacity-70">
-                            Ask your tenant admin to enable this module.
-                          </p>
-                          <button
-                            type="button"
-                            className="hi5-btn-ghost text-sm opacity-70"
-                            disabled
-                            title="Not enabled for your account"
-                          >
-                            Locked
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
+          <div className="min-w-0">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+              {MODULES.map((module) => (
+                <ModuleTile
+                  key={module.key}
+                  module={module}
+                  enabled={enabled.has(module.key)}
+                  myRole={myRole}
+                />
+              ))}
             </div>
           </div>
         </div>
