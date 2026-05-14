@@ -233,6 +233,7 @@ body::after {
   -webkit-backdrop-filter: blur(18px);
   box-shadow: var(--hi5-shadow-soft);
   position: relative;
+  overflow: hidden;
 }
 
 .hi5-panel {
@@ -251,6 +252,7 @@ body::after {
   content: "";
   position: absolute;
   inset: 0;
+  border-radius: inherit;
   background: rgb(var(--hi5-scrim-light) / var(--hi5-scrim-alpha));
   pointer-events: none;
   z-index: 0;
@@ -258,6 +260,32 @@ body::after {
 
 .hi5-card > *,
 .hi5-panel > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Smaller nested cards used inside panels/device widgets */
+.hi5-soft-card {
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid rgb(var(--hi5-border) / var(--hi5-border-alpha));
+  background: rgb(var(--hi5-card) / 0.46);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  position: relative;
+}
+
+.hi5-soft-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgb(var(--hi5-scrim-light) / calc(var(--hi5-scrim-alpha) * 0.55));
+  pointer-events: none;
+  z-index: 0;
+}
+
+.hi5-soft-card > * {
   position: relative;
   z-index: 1;
 }
