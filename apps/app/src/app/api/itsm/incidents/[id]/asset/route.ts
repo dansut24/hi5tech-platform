@@ -105,7 +105,10 @@ async function loadAssetWithDevice(tenantId: string, assetId: string | null) {
     linkedDevice = data ?? null;
   }
 
-  return { asset: asset ?? null, linkedDevice };
+  return {
+    asset: asset ?? null,
+    linkedDevice,
+  };
 }
 
 export async function GET(
@@ -127,7 +130,10 @@ export async function GET(
     return NextResponse.json({ error: "Incident not found" }, { status: 404 });
   }
 
-  const { asset, linkedDevice } = await loadAssetWithDevice(tenantId, incident.asset_id ?? null);
+  const { asset, linkedDevice } = await loadAssetWithDevice(
+    tenantId,
+    incident.asset_id ?? null
+  );
 
   const { data: candidates, error: candidatesError } = await admin
     .from("assets")
@@ -150,7 +156,12 @@ export async function GET(
     linkedDevice,
     candidates: candidates ?? [],
     features: {
-      control_enabled: features?.control === true || features?.remote_control === true,
+      control_enabled:
+        features?.devices_inventory === true ||
+        features?.remote_control === true ||
+        features?.remote_terminal === true ||
+        features?.remote_files === true,
+      devices_inventory: features?.devices_inventory === true,
       remote_control: features?.remote_control === true,
       remote_terminal: features?.remote_terminal === true,
       remote_files: features?.remote_files === true,
