@@ -5,11 +5,13 @@ import { addIncidentComment } from "./actions";
 import { uploadIncidentAttachment, deleteIncidentAttachment } from "./attachments.actions";
 import DeviceContextCard from "./DeviceContextCard";
 import TicketTimeline from "./TicketTimeline";
+import IncidentAssetPanel from "../ui/incident-asset-panel";
 
 export const dynamic = "force-dynamic";
 
 function fmt(ts?: string | null) {
   if (!ts) return "—";
+
   try {
     return new Date(ts).toLocaleString();
   } catch {
@@ -29,12 +31,14 @@ export default async function IncidentDetailPage({
   params,
   searchParams,
 }: {
-  params: any;
-  searchParams?: { tab?: string };
+  params: Promise<{ id: string }>;
+  searchParams?: Promise<{ tab?: string }>;
 }) {
   const p = await params;
+  const sp = searchParams ? await searchParams : undefined;
+
   const raw = String(p?.id ?? "").trim();
-  const tab = searchParams?.tab ?? "overview";
+  const tab = sp?.tab ?? "overview";
 
   const supabase = await supabaseServer();
   const tenantIds = await getMemberTenantIds();
@@ -59,6 +63,7 @@ export default async function IncidentDetailPage({
     "assignee_id",
     "assigned_team_id",
     "requester_id",
+    "asset_id",
     "asset_tag",
     "device_id",
     "created_at",
@@ -170,6 +175,7 @@ export default async function IncidentDetailPage({
                 <div className="text-sm whitespace-pre-wrap">{c.message}</div>
               </div>
             ))}
+
             {!comments?.length ? <div className="p-4 text-sm opacity-70">No updates yet.</div> : null}
           </div>
         </div>
@@ -218,6 +224,7 @@ export default async function IncidentDetailPage({
                 </form>
               </div>
             ))}
+
             {!files?.length ? <div className="p-4 text-sm opacity-70">No files uploaded.</div> : null}
           </div>
         </div>
@@ -251,12 +258,15 @@ export default async function IncidentDetailPage({
             <div className="text-xs opacity-70">Created</div>
             <div className="text-sm">{fmt(incident.created_at)}</div>
           </div>
+
           <div>
             <div className="text-xs opacity-70">Updated</div>
             <div className="text-sm">{fmt(incident.updated_at)}</div>
           </div>
         </div>
       </div>
+
+      <IncidentAssetPanel incidentId={incident.id} />
 
       <DeviceContextCard
         incidentId={incident.id}
