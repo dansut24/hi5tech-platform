@@ -6,6 +6,7 @@ import FileBrowserPanel from "../../[id]/ui/file-browser-panel";
 import ServicesPanel from "../../[id]/ui/services-panel";
 import ActivityPanel from "../../[id]/ui/activity-panel";
 import RemotePanel from "../../[id]/ui/remote-panel";
+import AssetLinkPanel from "../../ui/asset-link-panel";
 import { getActiveTenantId } from "@/lib/tenant";
 import { getTenantFeatures } from "@/lib/entitlements";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -237,7 +238,12 @@ function Badge({
   tone?: HealthTone;
 }) {
   return (
-    <span className={["inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold", toneClass(tone)].join(" ")}>
+    <span
+      className={[
+        "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold",
+        toneClass(tone),
+      ].join(" ")}
+    >
       {children}
     </span>
   );
@@ -528,10 +534,12 @@ async function loadActiveSessions(deviceId: string): Promise<ActiveSessionRespon
 }
 
 function Overview({
+  deviceId,
   device,
   inventory,
   activeSessions,
 }: {
+  deviceId: string;
   device: DeviceRecord | null;
   inventory: DeviceInventory | null;
   activeSessions: ActiveSessionResponse;
@@ -667,6 +675,8 @@ function Overview({
           </div>
         </div>
       </div>
+
+      <AssetLinkPanel deviceId={deviceId} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
         <UsageTrendCard
@@ -1098,7 +1108,15 @@ export default async function DevicePage({
         </div>
       </div>
 
-      {tab === "overview" ? <Overview device={device} inventory={inventory} activeSessions={activeSessions} /> : null}
+      {tab === "overview" ? (
+        <Overview
+          deviceId={deviceId}
+          device={device}
+          inventory={inventory}
+          activeSessions={activeSessions}
+        />
+      ) : null}
+
       {tab === "remote" ? <RemotePanel deviceId={deviceId} /> : null}
       {tab === "terminal" ? <TerminalPanel deviceId={deviceId} /> : null}
       {tab === "files" ? <FileBrowserPanel deviceId={deviceId} /> : null}
