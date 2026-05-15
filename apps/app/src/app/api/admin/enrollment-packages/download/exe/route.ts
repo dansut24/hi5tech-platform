@@ -3,6 +3,7 @@ import path from "node:path";
 import fs from "node:fs/promises";
 import { headers } from "next/headers";
 import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +35,10 @@ async function getContext(): Promise<TenantContext> {
 
   const { data: userRes } = await supabase.auth.getUser();
   const me = userRes.user ? { id: userRes.user.id } : null;
-  if (!me) return { supabase, me: null, tenant: null };
+
+  if (!me) {
+    return { supabase, me: null, tenant: null };
+  }
 
   const host = getEffectiveHost(await headers());
   const parsed = parseTenantHost(host);
@@ -47,7 +51,9 @@ async function getContext(): Promise<TenantContext> {
       .eq("subdomain", parsed.subdomain)
       .maybeSingle();
 
-    if (tenant) return { supabase, me, tenant };
+    if (tenant) {
+      return { supabase, me, tenant };
+    }
   }
 
   const { data: membership } = await supabase
@@ -58,7 +64,9 @@ async function getContext(): Promise<TenantContext> {
     .limit(1)
     .maybeSingle();
 
-  if (!membership?.tenant_id) return { supabase, me, tenant: null };
+  if (!membership?.tenant_id) {
+    return { supabase, me, tenant: null };
+  }
 
   const { data: tenant } = await supabase
     .from("tenants")
@@ -69,7 +77,7 @@ async function getContext(): Promise<TenantContext> {
   return { supabase, me, tenant: tenant ?? null };
 }
 
-async function readInstaller() {
+async function readGenericInstaller() {
   const candidates = [
     path.join(process.cwd(), "public", "downloads", "Hi5TechAgentSetup.exe"),
     path.join(process.cwd(), "public", "downloads", "agent", "Hi5TechAgentSetup.exe"),
@@ -96,6 +104,7 @@ export async function GET(req: Request) {
 
   const url = new URL(req.url);
   const id = url.searchParams.get("id");
+  const allowGeneric = url.searchParams.get("generic") === "1";
 
   if (!id) {
     return NextResponse.json({ error: "id required" }, { status: 400 });
@@ -103,7 +112,9 @@ export async function GET(req: Request) {
 
   const { data: pkg, error: pkgError } = await supabase
     .from("enrollment_packages")
-    .select("id, tenant_id, group_id, name, status, package_type")
+    .select(
+      "id, tenant_id, group_id, name, status, package_type, installer_status, installer_file_path, installer_filename"
+    )
     .eq("id", id)
     .eq("tenant_id", tenant.id)
     .maybeSingle();
@@ -118,6 +129,47 @@ export async function GET(req: Request) {
 
   if (pkg.status !== "active") {
     return NextResponse.json({ error: "Package has been revoked" }, { status: 410 });
+  }
+
+  if (pkg.installer_status === "ready" && pkg.installer_file_path) {
+    const admin = supabaseAdmin();
+
+    const { data, error } = await admin.storage
+      .from("agent-installers")
+      .download(pkg.installer_file_path);
+
+    if (error || !data) {
+      return NextResponse.json(
+        { error: error?.message || "Provisioned installer file not found" },
+        { status: 404 }
+      );
+    }
+
+    const bytes = await data.arrayBuffer();
+    const filename =
+      pkg.installer_filename ||
+      `${safeFilePart(tenant.subdomain || tenant.company_name || tenant.name || "Tenant")}-Hi5TechAgentSetup.exe`;
+
+    return new NextResponse(bytes, {
+      headers: {
+        "Content-Type": "application/vnd.microsoft.portable-executable",
+        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Cache-Control": "no-store",
+        "X-Hi5Tech-Package-Id": pkg.id,
+        "X-Hi5Tech-Provisioned": "true",
+        "X-Hi5Tech-Provisioning-Mode": "github-actions-wrapper",
+      },
+    });
+  }
+
+  if (!allowGeneric) {
+    return NextResponse.json(
+      {
+        error: "Provisioned installer is not ready",
+        installer_status: pkg.installer_status || "not_requested",
+      },
+      { status: 409 }
+    );
   }
 
   let groupName = "Default";
@@ -135,13 +187,13 @@ export async function GET(req: Request) {
     }
   }
 
-  const installer = await readInstaller();
+  const installer = await readGenericInstaller();
 
   if (!installer) {
     return NextResponse.json(
       {
         error:
-          "Installer not found. Expected public/downloads/Hi5TechAgentSetup.exe or public/downloads/agent/Hi5TechAgentSetup.exe",
+          "Generic installer not found. Expected public/downloads/Hi5TechAgentSetup.exe or public/downloads/agent/Hi5TechAgentSetup.exe",
       },
       { status: 404 }
     );
