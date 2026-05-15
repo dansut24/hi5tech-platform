@@ -27,6 +27,8 @@ type DeviceGroup = {
   created_at: string;
 };
 
+type InstallerStatus = "not_requested" | "building" | "ready" | "failed" | string;
+
 type EnrollmentPackage = {
   id: string;
   tenant_id: string;
@@ -40,6 +42,12 @@ type EnrollmentPackage = {
   created_at: string;
   revoked_at?: string | null;
   last_synced_at?: string | null;
+  installer_status?: InstallerStatus | null;
+  installer_file_path?: string | null;
+  installer_filename?: string | null;
+  installer_requested_at?: string | null;
+  installer_generated_at?: string | null;
+  installer_error?: string | null;
 };
 
 type CreatePackageResponse = {
@@ -132,15 +140,15 @@ function buildInstallCommand(input: {
   ].join("\n");
 }
 
-function buildNamedExeDownloadUrl(packageId: string) {
+function buildProvisionedDownloadUrl(packageId: string) {
   return `/api/admin/enrollment-packages/download/exe?id=${encodeURIComponent(packageId)}`;
 }
 
-function buildSilentCommand() {
-  return `${AGENT_FILE_NAME} /VERYSILENT /NORESTART /SUPPRESSMSGBOXES`;
+function buildGenericNamedDownloadUrl(packageId: string) {
+  return `/api/admin/enrollment-packages/download/exe?id=${encodeURIComponent(packageId)}&generic=1`;
 }
 
-function buildIntuneInstallCommand() {
+function buildSilentCommand() {
   return `${AGENT_FILE_NAME} /VERYSILENT /NORESTART /SUPPRESSMSGBOXES`;
 }
 
@@ -279,6 +287,20 @@ function StatusPill({
   );
 }
 
+function installerStatusTone(status?: InstallerStatus | null) {
+  if (status === "ready") return "good";
+  if (status === "building") return "info";
+  if (status === "failed") return "bad";
+  return "warning";
+}
+
+function installerStatusLabel(status?: InstallerStatus | null) {
+  if (status === "ready") return "Ready";
+  if (status === "building") return "Building";
+  if (status === "failed") return "Failed";
+  return "Not built";
+}
+
 export default function AgentDownloadClient() {
   const [requestedGroupId, setRequestedGroupId] = useState<string | null>(null);
   const [groups, setGroups] = useState<DeviceGroup[]>([]);
@@ -292,6 +314,7 @@ export default function AgentDownloadClient() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [creatingGroup, setCreatingGroup] = useState(false);
+  const [buildingId, setBuildingId] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
@@ -309,11 +332,12 @@ export default function AgentDownloadClient() {
     [packages]
   );
 
+  const anyBuilding = activePackages.some((pkg) => pkg.installer_status === "building");
+
   const tenantSlug = getTenantSlugFromOrigin(origin || "https://tenant.hi5tech.co.uk");
   const selectedGroupName = selectedGroup?.name || (selectedGroupId === "default" ? "Default" : selectedGroupId);
   const tenantAwareDownloadUrl = `${origin || "https://tenant.hi5tech.co.uk"}${AGENT_DOWNLOAD_PATH}`;
   const silentCommand = buildSilentCommand();
-  const intuneInstallCommand = buildIntuneInstallCommand();
   const intuneUninstallCommand = buildIntuneUninstallCommand();
 
   const previewFileName = `${safeFilePart(tenantSlug)}-${safeFilePart(selectedGroupName)}-Hi5TechAgentSetup.exe`;
@@ -349,9 +373,17 @@ export default function AgentDownloadClient() {
       if (!packagesRes.ok) throw new Error(packagesJson?.error || "Failed to load enrollment packages");
 
       const loadedGroups = groupsJson?.groups ?? [];
+      const loadedPackages = packagesJson?.packages ?? [];
 
       setGroups(loadedGroups);
-      setPackages(packagesJson?.packages ?? []);
+      setPackages(loadedPackages);
+
+      if (created) {
+        const updatedCreated = loadedPackages.find((pkg: EnrollmentPackage) => pkg.id === created.package.id);
+        if (updatedCreated) {
+          setCreated({ ...created, package: updatedCreated });
+        }
+      }
 
       if (requestedGroupId) {
         const requested = loadedGroups.find(
@@ -386,6 +418,17 @@ export default function AgentDownloadClient() {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestedGroupId]);
+
+  useEffect(() => {
+    if (!anyBuilding) return;
+
+    const timer = window.setInterval(() => {
+      refresh();
+    }, 8000);
+
+    return () => window.clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [anyBuilding]);
 
   useEffect(() => {
     const label = selectedGroup?.name || (selectedGroupId === "default" ? "Default" : selectedGroupId);
@@ -457,6 +500,40 @@ export default function AgentDownloadClient() {
     }
   }
 
+  async function buildProvisionedInstaller() {
+    if (!created) return;
+
+    setBuildingId(created.package.id);
+    setError(null);
+    setWarning(null);
+
+    try {
+      const res = await fetch("/api/admin/enrollment-packages/build-installer", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          package_id: created.package.id,
+          bootstrap_secret: created.bootstrap_secret,
+          api_base_url: apiBaseUrl,
+          agent_ws_base_url: agentWsBaseUrl,
+        }),
+      });
+
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.error || `Failed to start installer build (${res.status})`);
+
+      if (json?.package) {
+        setCreated({ ...created, package: json.package });
+      }
+
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to start provisioned installer build");
+    } finally {
+      setBuildingId(null);
+    }
+  }
+
   async function revokePackage(id: string) {
     setRevokingId(id);
     setError(null);
@@ -491,6 +568,9 @@ export default function AgentDownloadClient() {
     const safeGroup = safeFilePart(groupLabel(groups, created.package.group_id));
     downloadText(`Install-Hi5TechAgent-${safeGroup}.ps1`, installCommand);
   }
+
+  const createdInstallerStatus = created?.package.installer_status || "not_requested";
+  const createdInstallerReady = createdInstallerStatus === "ready";
 
   return (
     <div className="space-y-6">
@@ -600,21 +680,29 @@ export default function AgentDownloadClient() {
           <div className="rounded-2xl border hi5-border bg-black/5 dark:bg-white/5 p-4 space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <div className="text-sm font-bold">Provisioned installer preview</div>
+                <div className="text-sm font-bold">Provisioned installer</div>
                 <div className="text-xs opacity-70 mt-1">
-                  Future final filename once the packaging worker embeds the provisioning payload.
+                  GitHub Actions builds a wrapper EXE containing this package’s enrolment details.
                 </div>
               </div>
-              <StatusPill tone="warning">Prepared, not embedded yet</StatusPill>
+              <StatusPill tone={installerStatusTone(createdInstallerStatus)}>
+                {installerStatusLabel(createdInstallerStatus)}
+              </StatusPill>
             </div>
 
             <div className="font-mono text-xs break-all rounded-xl border hi5-border bg-black/5 dark:bg-white/5 p-3">
-              {previewFileName}
+              {created?.package.installer_filename || previewFileName}
             </div>
 
+            {created?.package.installer_error ? (
+              <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-xs text-red-700 dark:text-red-200">
+                {created.package.installer_error}
+              </div>
+            ) : null}
+
             <div className="text-xs opacity-75 leading-relaxed">
-              In this pass, the named EXE endpoint validates package access and returns the static installer with a friendly filename.
-              The generated PowerShell command is still required to pass tenant/group/token values until embedded provisioning is added.
+              Once ready, deploy this EXE with only{" "}
+              <span className="font-mono">/VERYSILENT /NORESTART /SUPPRESSMSGBOXES</span>.
             </div>
           </div>
 
@@ -642,12 +730,36 @@ export default function AgentDownloadClient() {
             </button>
 
             {created ? (
+              <button
+                type="button"
+                className="hi5-btn-ghost text-sm inline-flex items-center gap-2"
+                onClick={buildProvisionedInstaller}
+                disabled={buildingId === created.package.id || created.package.installer_status === "building"}
+              >
+                <PackageCheck size={16} />
+                {created.package.installer_status === "building" || buildingId === created.package.id
+                  ? "Building…"
+                  : created.package.installer_status === "ready"
+                    ? "Rebuild provisioned EXE"
+                    : "Build provisioned EXE"}
+              </button>
+            ) : null}
+
+            {created && createdInstallerReady ? (
               <a
-                href={buildNamedExeDownloadUrl(created.package.id)}
+                href={buildProvisionedDownloadUrl(created.package.id)}
                 className="hi5-btn-ghost text-sm inline-flex items-center gap-2"
               >
                 <Download size={16} />
-                Download named EXE
+                Download provisioned EXE
+              </a>
+            ) : created ? (
+              <a
+                href={buildGenericNamedDownloadUrl(created.package.id)}
+                className="hi5-btn-ghost text-sm inline-flex items-center gap-2"
+              >
+                <Download size={16} />
+                Download generic EXE
               </a>
             ) : (
               <a href={AGENT_DOWNLOAD_PATH} download className="hi5-btn-ghost text-sm inline-flex items-center gap-2">
@@ -664,16 +776,13 @@ export default function AgentDownloadClient() {
           <div className="rounded-2xl border hi5-border p-3 text-xs opacity-75 leading-relaxed">
             Generic installer URL:{" "}
             <span className="font-mono break-all">{tenantAwareDownloadUrl}</span>
-            <br />
-            The final provisioned installer flow will allow only:{" "}
-            <span className="font-mono">/VERYSILENT /NORESTART /SUPPRESSMSGBOXES</span>
           </div>
         </section>
 
         <section className="hi5-panel p-5 space-y-4">
           <SectionTitle
             title="Generated PowerShell deployment command"
-            description="Production install method for this phase. Use this for manual installs, existing RMM tools, GPO, MDM script deployment, or one-off technician installs."
+            description="Use this until the provisioned EXE is ready, or for script-based deployment tools."
           />
 
           {created ? (
@@ -706,13 +815,15 @@ export default function AgentDownloadClient() {
                   Download .ps1
                 </button>
 
-                <a
-                  href={buildNamedExeDownloadUrl(created.package.id)}
-                  className="hi5-btn-ghost text-sm inline-flex items-center gap-2"
-                >
-                  <Download size={16} />
-                  Named EXE
-                </a>
+                {createdInstallerReady ? (
+                  <a
+                    href={buildProvisionedDownloadUrl(created.package.id)}
+                    className="hi5-btn-ghost text-sm inline-flex items-center gap-2"
+                  >
+                    <Download size={16} />
+                    Provisioned EXE
+                  </a>
+                ) : null}
               </div>
 
               <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-200 leading-relaxed">
@@ -729,21 +840,21 @@ export default function AgentDownloadClient() {
 
       <section className="hi5-panel p-5 space-y-4">
         <SectionTitle
-          title="Provisioned EXE roadmap"
-          description="The UI and download endpoint are now ready for the custom provisioned installer workflow."
+          title="Provisioned EXE workflow"
+          description="Once the build is ready, no tenant/group/token arguments are needed at install time."
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-          <InfoCard icon={<PackageCheck size={19} />} title="Now">
-            Named EXE download is package-aware and validates tenant/package access. The PowerShell command remains required for enrolment values.
+          <InfoCard icon={<PackageCheck size={19} />} title="Build">
+            Click <span className="font-semibold">Build provisioned EXE</span>. GitHub Actions creates a tenant/group-specific wrapper installer.
           </InfoCard>
 
-          <InfoCard icon={<FileCode2 size={19} />} title="Next installer pass">
-            The Windows installer will support embedded provisioning data so tenant, group, package, and enrolment token do not need to be passed on the command line.
+          <InfoCard icon={<FileCode2 size={19} />} title="Download">
+            When status changes to <span className="font-semibold">Ready</span>, download the provisioned EXE from the package row.
           </InfoCard>
 
-          <InfoCard icon={<ShieldCheck size={19} />} title="Final state">
-            The downloaded EXE can be deployed with only{" "}
+          <InfoCard icon={<ShieldCheck size={19} />} title="Deploy">
+            Deploy with only{" "}
             <span className="font-mono text-xs">/VERYSILENT /NORESTART /SUPPRESSMSGBOXES</span>.
           </InfoCard>
         </div>
@@ -783,7 +894,7 @@ export default function AgentDownloadClient() {
           <div className="space-y-3">
             <InfoCard icon={<Info size={19} />} title="Intune Win32 app steps">
               <ol className="list-decimal pl-4 space-y-1">
-                <li>Download the Windows agent installer.</li>
+                <li>Download the provisioned Windows agent installer.</li>
                 <li>Package it using the Microsoft Win32 Content Prep Tool.</li>
                 <li>
                   Upload the generated <span className="font-mono text-xs">.intunewin</span> file to Intune.
@@ -810,9 +921,9 @@ export default function AgentDownloadClient() {
           <div className="space-y-3">
             <div>
               <div className="text-sm font-bold mb-2">Install command</div>
-              <CodeBlock value={intuneInstallCommand} />
+              <CodeBlock value={silentCommand} />
               <div className="mt-2">
-                <CopyButton value={intuneInstallCommand} label="Copy install command" />
+                <CopyButton value={silentCommand} label="Copy install command" />
               </div>
             </div>
 
@@ -824,10 +935,6 @@ export default function AgentDownloadClient() {
               </div>
             </div>
           </div>
-        </div>
-
-        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-200">
-          For the current generic installer flow, Intune script deployment should use the generated PowerShell command above so tenant/group/package values are passed at install time. After the provisioned EXE pass, Intune can use only the silent install command.
         </div>
       </section>
 
@@ -885,8 +992,7 @@ export default function AgentDownloadClient() {
               <tr>
                 <th className="px-3 py-2">Name</th>
                 <th className="px-3 py-2">Group</th>
-                <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2">Provisioned EXE</th>
+                <th className="px-3 py-2">Installer</th>
                 <th className="px-3 py-2">Created</th>
                 <th className="px-3 py-2 text-right">Action</th>
               </tr>
@@ -895,7 +1001,7 @@ export default function AgentDownloadClient() {
             <tbody>
               {activePackages.length === 0 ? (
                 <tr>
-                  <td className="px-3 py-6 text-center opacity-70" colSpan={6}>
+                  <td className="px-3 py-6 text-center opacity-70" colSpan={5}>
                     No active enrolment packages yet.
                   </td>
                 </tr>
@@ -910,18 +1016,29 @@ export default function AgentDownloadClient() {
                     <td className="px-3 py-3">{groupLabel(groups, pkg.group_id)}</td>
 
                     <td className="px-3 py-3">
-                      <StatusPill tone="good">Active until revoked</StatusPill>
-                    </td>
-
-                    <td className="px-3 py-3">
                       <div className="flex flex-col gap-2">
-                        <StatusPill tone="warning">Named only</StatusPill>
-                        <a
-                          href={buildNamedExeDownloadUrl(pkg.id)}
-                          className="hi5-btn-ghost text-xs inline-flex items-center justify-center gap-1"
-                        >
-                          <Download size={14} /> Download EXE
-                        </a>
+                        <StatusPill tone={installerStatusTone(pkg.installer_status)}>
+                          {installerStatusLabel(pkg.installer_status)}
+                        </StatusPill>
+
+                        {pkg.installer_status === "ready" ? (
+                          <a
+                            href={buildProvisionedDownloadUrl(pkg.id)}
+                            className="hi5-btn-ghost text-xs inline-flex items-center justify-center gap-1"
+                          >
+                            <Download size={14} /> Download EXE
+                          </a>
+                        ) : pkg.installer_status === "building" ? (
+                          <span className="text-xs opacity-70">GitHub build running…</span>
+                        ) : pkg.installer_status === "failed" ? (
+                          <span className="text-xs text-red-600 dark:text-red-300">
+                            {pkg.installer_error || "Build failed"}
+                          </span>
+                        ) : (
+                          <span className="text-xs opacity-70">
+                            Generate a new package to build a provisioned EXE.
+                          </span>
+                        )}
                       </div>
                     </td>
 
