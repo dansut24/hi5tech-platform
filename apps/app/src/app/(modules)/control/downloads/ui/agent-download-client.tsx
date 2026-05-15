@@ -2,7 +2,21 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Check, Clipboard, Download, Plus, RefreshCw, ShieldCheck, XCircle } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  Clipboard,
+  Download,
+  FileCode2,
+  Info,
+  Laptop,
+  PackageCheck,
+  Plus,
+  RefreshCw,
+  ShieldCheck,
+  TerminalSquare,
+  XCircle,
+} from "lucide-react";
 
 type DeviceGroup = {
   id: string;
@@ -47,6 +61,34 @@ function createEnrollmentToken(pkg: EnrollmentPackage, bootstrapSecret: string) 
   return `${pkg.id}.${bootstrapSecret}`;
 }
 
+function safeFilePart(value: string) {
+  return value
+    .trim()
+    .replace(/[^a-z0-9_-]+/gi, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "Default";
+}
+
+function groupLabel(groups: DeviceGroup[], groupId: string | null | undefined) {
+  if (!groupId || groupId === "default") return "Default";
+  const group = groups.find((g) => g.id === groupId || g.slug === groupId);
+  return group ? group.name : groupId;
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return date.toLocaleString("en-GB", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function buildInstallCommand(input: {
   origin: string;
   tenantId: string;
@@ -61,7 +103,9 @@ function buildInstallCommand(input: {
   return [
     `$Installer = Join-Path $env:TEMP ${psSingleQuote(AGENT_FILE_NAME)}`,
     `$DownloadUrl = ${psSingleQuote(downloadUrl)}`,
+    ``,
     `Invoke-WebRequest -Uri $DownloadUrl -OutFile $Installer`,
+    ``,
     `Start-Process -FilePath $Installer -Verb RunAs -Wait -ArgumentList @(`,
     `  '/VERYSILENT',`,
     `  '/NORESTART',`,
@@ -77,6 +121,18 @@ function buildInstallCommand(input: {
   ].join("\n");
 }
 
+function buildSilentCommand() {
+  return `${AGENT_FILE_NAME} /VERYSILENT /NORESTART /SUPPRESSMSGBOXES`;
+}
+
+function buildIntuneInstallCommand() {
+  return `${AGENT_FILE_NAME} /VERYSILENT /NORESTART /SUPPRESSMSGBOXES`;
+}
+
+function buildIntuneUninstallCommand() {
+  return `"C:\\Program Files\\Hi5Tech\\Agent\\native_vp8_stream.exe" --uninstall-service`;
+}
+
 function downloadText(filename: string, text: string) {
   const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -89,10 +145,92 @@ function downloadText(filename: string, text: string) {
   URL.revokeObjectURL(url);
 }
 
-function groupLabel(groups: DeviceGroup[], groupId: string | null | undefined) {
-  if (!groupId || groupId === "default") return "Default";
-  const group = groups.find((g) => g.id === groupId || g.slug === groupId);
-  return group ? group.name : groupId;
+function CopyButton({
+  value,
+  label = "Copy",
+  copiedLabel = "Copied",
+  className = "hi5-btn-ghost text-sm",
+}: {
+  value: string;
+  label?: string;
+  copiedLabel?: string;
+  className?: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    if (!value) return;
+    await navigator.clipboard.writeText(value);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  }
+
+  return (
+    <button type="button" className={className} onClick={copy} disabled={!value}>
+      <span className="inline-flex items-center gap-2">
+        {copied ? <Check size={16} /> : <Clipboard size={16} />}
+        {copied ? copiedLabel : label}
+      </span>
+    </button>
+  );
+}
+
+function InfoCard({
+  icon,
+  title,
+  children,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border hi5-border bg-black/5 dark:bg-white/5 p-4">
+      <div className="flex items-start gap-3">
+        <div className="h-10 w-10 shrink-0 rounded-2xl border hi5-border bg-white/45 dark:bg-black/25 flex items-center justify-center">
+          {icon}
+        </div>
+        <div>
+          <div className="text-sm font-bold">{title}</div>
+          <div className="text-sm opacity-75 mt-1 leading-relaxed">{children}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CodeBlock({
+  value,
+  minHeight = "min-h-[88px]",
+}: {
+  value: string;
+  minHeight?: string;
+}) {
+  return (
+    <pre
+      className={[
+        "overflow-auto rounded-2xl border hi5-border bg-black/90 p-4 text-xs text-white whitespace-pre-wrap break-words",
+        minHeight,
+      ].join(" ")}
+    >
+      {value}
+    </pre>
+  );
+}
+
+function SectionTitle({
+  title,
+  description,
+}: {
+  title: string;
+  description?: string;
+}) {
+  return (
+    <div>
+      <div className="text-lg font-bold">{title}</div>
+      {description ? <p className="text-sm opacity-70 mt-1 leading-relaxed">{description}</p> : null}
+    </div>
+  );
 }
 
 export default function AgentDownloadClient() {
@@ -112,7 +250,6 @@ export default function AgentDownloadClient() {
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const [created, setCreated] = useState<CreatePackageResponse | null>(null);
-  const [copied, setCopied] = useState(false);
 
   const origin = typeof window !== "undefined" ? window.location.origin : "";
 
@@ -125,6 +262,12 @@ export default function AgentDownloadClient() {
     () => packages.filter((pkg) => pkg.status === "active"),
     [packages]
   );
+
+  const selectedGroupName = selectedGroup?.name || (selectedGroupId === "default" ? "Default" : selectedGroupId);
+  const tenantAwareDownloadUrl = `${origin || "https://tenant.hi5tech.co.uk"}${AGENT_DOWNLOAD_PATH}`;
+  const silentCommand = buildSilentCommand();
+  const intuneInstallCommand = buildIntuneInstallCommand();
+  const intuneUninstallCommand = buildIntuneUninstallCommand();
 
   const installCommand = useMemo(() => {
     if (!created) return "";
@@ -143,6 +286,7 @@ export default function AgentDownloadClient() {
   async function refresh() {
     setLoading(true);
     setError(null);
+
     try {
       const [groupsRes, packagesRes] = await Promise.all([
         fetch("/api/control/device-groups", { cache: "no-store" }),
@@ -166,7 +310,10 @@ export default function AgentDownloadClient() {
         } else if (requestedGroupId === "default") {
           setSelectedGroupId("default");
         }
-      } else if (loadedGroups.length > 0 && !loadedGroups.some((g: DeviceGroup) => g.id === selectedGroupId || g.slug === selectedGroupId)) {
+      } else if (
+        loadedGroups.length > 0 &&
+        !loadedGroups.some((g: DeviceGroup) => g.id === selectedGroupId || g.slug === selectedGroupId)
+      ) {
         setSelectedGroupId(loadedGroups[0].id);
       }
     } catch (err) {
@@ -198,18 +345,23 @@ export default function AgentDownloadClient() {
 
     setCreatingGroup(true);
     setError(null);
+
     try {
       const res = await fetch("/api/control/device-groups", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: trimmed }),
       });
+
       const json = await res.json().catch(() => null);
       if (!res.ok) throw new Error(json?.error || `Failed to create group (${res.status})`);
 
       setNewGroupName("");
       await refresh();
-      if (json?.group?.id) setSelectedGroupId(json.group.id);
+
+      if (json?.group?.id) {
+        setSelectedGroupId(json.group.id);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create group");
     } finally {
@@ -221,7 +373,6 @@ export default function AgentDownloadClient() {
     setCreating(true);
     setError(null);
     setWarning(null);
-    setCopied(false);
 
     try {
       const res = await fetch("/api/admin/enrollment-packages", {
@@ -243,7 +394,11 @@ export default function AgentDownloadClient() {
 
       const createdResponse = json as CreatePackageResponse;
       setCreated(createdResponse);
-      if (createdResponse.sync_warning) setWarning(createdResponse.sync_warning);
+
+      if (createdResponse.sync_warning) {
+        setWarning(createdResponse.sync_warning);
+      }
+
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create enrollment package");
@@ -256,13 +411,19 @@ export default function AgentDownloadClient() {
     setRevokingId(id);
     setError(null);
     setWarning(null);
+
     try {
       const res = await fetch(`/api/admin/enrollment-packages/revoke?id=${encodeURIComponent(id)}`, {
         method: "POST",
       });
+
       const json = await res.json().catch(() => null);
       if (!res.ok) throw new Error(json?.error || `Failed to revoke package (${res.status})`);
-      if (json?.sync_warning) setWarning(json.sync_warning);
+
+      if (json?.sync_warning) {
+        setWarning(json.sync_warning);
+      }
+
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to revoke package");
@@ -271,31 +432,24 @@ export default function AgentDownloadClient() {
     }
   }
 
-  async function copyCommand() {
-    if (!installCommand) return;
-    await navigator.clipboard.writeText(installCommand);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1800);
-  }
-
   function downloadCommand() {
     if (!installCommand || !created) return;
-    const safeGroup = groupLabel(groups, created.package.group_id).replace(/[^a-z0-9_-]+/gi, "-");
+    const safeGroup = safeFilePart(groupLabel(groups, created.package.group_id));
     downloadText(`Install-Hi5TechAgent-${safeGroup}.ps1`, installCommand);
   }
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 xl:grid-cols-[.9fr_1.1fr] gap-4">
+      <div className="grid grid-cols-1 xl:grid-cols-[0.95fr_1.05fr] gap-4">
         <section className="hi5-panel p-5 space-y-5">
           <div className="flex items-start gap-3">
             <div className="h-11 w-11 rounded-2xl bg-[rgb(var(--hi5-accent)/.14)] flex items-center justify-center shrink-0">
               <ShieldCheck size={22} />
             </div>
             <div>
-              <div className="text-lg font-bold">Generate Windows agent install command</div>
-              <p className="text-sm opacity-70 mt-1">
-                Create a long-lived tenant package. It remains active until revoked and enrolls devices straight into the selected group.
+              <div className="text-lg font-bold">Create Windows agent enrolment package</div>
+              <p className="text-sm opacity-70 mt-1 leading-relaxed">
+                Create a long-lived tenant package. It remains active until revoked and enrols devices directly into the selected group.
               </p>
             </div>
           </div>
@@ -303,24 +457,30 @@ export default function AgentDownloadClient() {
           {loading ? <div className="text-sm opacity-70">Loading groups and packages…</div> : null}
 
           <div className="rounded-2xl border hi5-border p-4 space-y-3">
-            <div className="text-sm font-semibold">Device group</div>
-            <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
-              <select
-                className="hi5-input"
-                value={selectedGroupId}
-                onChange={(e) => setSelectedGroupId(e.target.value)}
-              >
-                {groups.map((group) => (
-                  <option key={group.id} value={group.id}>
-                    {group.name}
-                  </option>
-                ))}
-                {groups.length === 0 ? <option value="default">Default</option> : null}
-              </select>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold">Target group</div>
+                <div className="text-xs opacity-70 mt-1">
+                  Devices installed with this package will enrol into this group.
+                </div>
+              </div>
               <button type="button" className="hi5-btn-ghost text-sm inline-flex items-center gap-2" onClick={refresh}>
                 <RefreshCw size={15} /> Refresh
               </button>
             </div>
+
+            <select
+              className="hi5-input"
+              value={selectedGroupId}
+              onChange={(e) => setSelectedGroupId(e.target.value)}
+            >
+              {groups.map((group) => (
+                <option key={group.id} value={group.id}>
+                  {group.name}
+                </option>
+              ))}
+              {groups.length === 0 ? <option value="default">Default</option> : null}
+            </select>
 
             <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
               <input
@@ -347,7 +507,7 @@ export default function AgentDownloadClient() {
                 className="hi5-input"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="e.g. Dansworld - Laptops"
+                placeholder="e.g. Windows Agent - Laptops"
               />
             </label>
 
@@ -358,7 +518,7 @@ export default function AgentDownloadClient() {
 
             <label className="block text-sm">
               <div className="text-xs opacity-70 mb-1">Package lifetime</div>
-              <input className="hi5-input" value="Always active until revoked" readOnly />
+              <input className="hi5-input" value="Active until revoked" readOnly />
             </label>
 
             <label className="block text-sm sm:col-span-2">
@@ -400,12 +560,12 @@ export default function AgentDownloadClient() {
               disabled={creating}
             >
               {creating ? <RefreshCw size={16} className="animate-spin" /> : <Plus size={16} />}
-              {creating ? "Generating…" : created ? "Generate new command" : "Generate command"}
+              {creating ? "Generating…" : created ? "Generate new package" : "Generate package"}
             </button>
 
             <a href={AGENT_DOWNLOAD_PATH} download className="hi5-btn-ghost text-sm inline-flex items-center gap-2">
               <Download size={16} />
-              Download installer only
+              Download installer
             </a>
 
             <Link href="/control/devices" className="hi5-btn-ghost text-sm">
@@ -413,19 +573,19 @@ export default function AgentDownloadClient() {
             </Link>
           </div>
 
-          <div className="rounded-2xl border hi5-border p-3 text-xs opacity-75">
-            The installer download is tenant-domain relative. On this tenant it resolves to{" "}
-            <span className="font-mono break-all">{origin || "https://tenant.hi5tech.co.uk"}{AGENT_DOWNLOAD_PATH}</span>.
+          <div className="rounded-2xl border hi5-border p-3 text-xs opacity-75 leading-relaxed">
+            Current installer URL:{" "}
+            <span className="font-mono break-all">{tenantAwareDownloadUrl}</span>
+            <br />
+            This pass keeps the working generic installer plus generated command. The next pass can add a provisioned EXE download so no tenant/group parameters are needed.
           </div>
         </section>
 
         <section className="hi5-panel p-5 space-y-4">
-          <div>
-            <div className="text-lg font-bold">PowerShell install command</div>
-            <p className="text-sm opacity-70 mt-1">
-              Run this from the target Windows device. It downloads the installer, asks for admin, installs the service, and enrolls into the selected group.
-            </p>
-          </div>
+          <SectionTitle
+            title="Generated PowerShell deployment command"
+            description="Use this for manual installs, technician installs, existing RMM tools, GPO, or MDM script deployment."
+          />
 
           {created ? (
             <>
@@ -444,37 +604,146 @@ export default function AgentDownloadClient() {
                 </div>
               </div>
 
-              <pre className="max-h-[430px] overflow-auto rounded-2xl border hi5-border bg-black/90 p-4 text-xs text-white whitespace-pre-wrap break-words">
-                {installCommand}
-              </pre>
+              <CodeBlock value={installCommand} minHeight="min-h-[320px]" />
 
               <div className="flex flex-wrap gap-2">
-                <button type="button" className="hi5-btn-primary text-sm inline-flex items-center gap-2" onClick={copyCommand}>
-                  {copied ? <Check size={16} /> : <Clipboard size={16} />}
-                  {copied ? "Copied" : "Copy command"}
-                </button>
+                <CopyButton value={installCommand} label="Copy command" className="hi5-btn-primary text-sm" />
                 <button type="button" className="hi5-btn-ghost text-sm" onClick={downloadCommand}>
                   Download .ps1
                 </button>
               </div>
 
-              <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-200">
-                Save this command now. The enrollment secret is only shown at creation time. The package remains active until revoked.
+              <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-200 leading-relaxed">
+                Save this command now. The enrolment secret is only shown at creation time. Anyone with this command can enrol devices into this tenant/group until the package is revoked.
               </div>
             </>
           ) : (
             <div className="rounded-2xl border hi5-border p-6 text-sm opacity-75">
-              No command generated yet. Choose a group and click <span className="font-semibold">Generate command</span>.
+              No package generated yet. Choose a group and click <span className="font-semibold">Generate package</span>.
             </div>
           )}
         </section>
       </div>
 
+      <section className="hi5-panel p-5 space-y-4">
+        <SectionTitle
+          title="Recommended install options"
+          description="Choose the install method that matches your deployment scenario."
+        />
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <InfoCard icon={<Laptop size={19} />} title="Manual install">
+            Download the installer, right-click it, choose <span className="font-semibold">Run as administrator</span>,
+            approve UAC, and the agent will install silently. The device should appear online within a few seconds.
+          </InfoCard>
+
+          <InfoCard icon={<TerminalSquare size={19} />} title="Silent install">
+            Use <span className="font-mono text-xs">{silentCommand}</span> from an elevated prompt, deployment tool,
+            or MDM context. If already running as admin/system, no UAC prompt is shown.
+          </InfoCard>
+
+          <InfoCard icon={<PackageCheck size={19} />} title="No VC++ prerequisite">
+            This Windows agent build is statically linked and should not require the Microsoft Visual C++ Redistributable
+            on clean Windows 10/11 devices.
+          </InfoCard>
+        </div>
+      </section>
+
+      <section className="hi5-panel p-5 space-y-4">
+        <SectionTitle
+          title="MDM / Microsoft Intune deployment"
+          description="Use these settings when deploying the Windows agent through Intune or another MDM."
+        />
+
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <div className="space-y-3">
+            <InfoCard icon={<Info size={19} />} title="Intune Win32 app steps">
+              <ol className="list-decimal pl-4 space-y-1">
+                <li>Download the Windows agent installer.</li>
+                <li>Package it using the Microsoft Win32 Content Prep Tool.</li>
+                <li>Upload the generated <span className="font-mono text-xs">.intunewin</span> file to Intune.</li>
+                <li>Set install behaviour to <span className="font-semibold">System</span>.</li>
+                <li>Assign to the required device group.</li>
+              </ol>
+            </InfoCard>
+
+            <InfoCard icon={<ShieldCheck size={19} />} title="Recommended detection rule">
+              Use a file detection rule:
+              <div className="mt-2 font-mono text-xs break-all">
+                Path: C:\Program Files\Hi5Tech\Agent
+                <br />
+                File: native_vp8_stream.exe
+                <br />
+                Detection: File exists
+              </div>
+            </InfoCard>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <div className="text-sm font-bold mb-2">Install command</div>
+              <CodeBlock value={intuneInstallCommand} />
+              <div className="mt-2">
+                <CopyButton value={intuneInstallCommand} label="Copy install command" />
+              </div>
+            </div>
+
+            <div>
+              <div className="text-sm font-bold mb-2">Uninstall command</div>
+              <CodeBlock value={intuneUninstallCommand} />
+              <div className="mt-2">
+                <CopyButton value={intuneUninstallCommand} label="Copy uninstall command" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-700 dark:text-amber-200">
+          For the current generic installer flow, Intune script deployment should use the generated PowerShell command above so tenant/group/package values are passed at install time. After the provisioned EXE pass, Intune can use only the silent install command.
+        </div>
+      </section>
+
+      <section className="hi5-panel p-5 space-y-4">
+        <SectionTitle
+          title="Install paths and troubleshooting"
+          description="Useful details for technicians when validating or troubleshooting installs."
+        />
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <InfoCard icon={<FileCode2 size={19} />} title="Installed locations">
+            <div className="font-mono text-xs break-all">
+              Program files:
+              <br />
+              C:\Program Files\Hi5Tech\Agent
+              <br />
+              <br />
+              Configuration/logs:
+              <br />
+              C:\ProgramData\Hi5Tech\Agent
+              <br />
+              C:\ProgramData\Hi5Tech\Agent\Logs\agent.log
+            </div>
+          </InfoCard>
+
+          <InfoCard icon={<AlertTriangle size={19} />} title="If the device does not appear online">
+            <ul className="list-disc pl-4 space-y-1">
+              <li>Confirm the installer ran as administrator or system.</li>
+              <li>Confirm internet access to the RMM endpoint.</li>
+              <li>Confirm the enrolment package has not been revoked.</li>
+              <li>Check the agent log in ProgramData.</li>
+              <li>Refresh the Devices page after a few seconds.</li>
+            </ul>
+          </InfoCard>
+        </div>
+      </section>
+
       <section className="hi5-panel p-5">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div>
-            <div className="text-base font-bold">Active enrollment packages</div>
-            <p className="text-sm opacity-70 mt-1">These packages are valid until revoked. Revoking blocks future installs with that command.</p>
+            <div className="text-base font-bold">Active enrolment packages</div>
+            <p className="text-sm opacity-70 mt-1 leading-relaxed">
+              These packages are valid until revoked. Revoking blocks future installs using that package, but does not remove already enrolled devices.
+            </p>
           </div>
           <button type="button" className="hi5-btn-ghost text-sm inline-flex items-center gap-2" onClick={refresh}>
             <RefreshCw size={15} /> Refresh
@@ -496,7 +765,9 @@ export default function AgentDownloadClient() {
             <tbody>
               {activePackages.length === 0 ? (
                 <tr>
-                  <td className="px-3 py-6 text-center opacity-70" colSpan={6}>No active enrollment packages yet.</td>
+                  <td className="px-3 py-6 text-center opacity-70" colSpan={6}>
+                    No active enrolment packages yet.
+                  </td>
                 </tr>
               ) : (
                 activePackages.map((pkg) => (
@@ -512,7 +783,7 @@ export default function AgentDownloadClient() {
                       </span>
                     </td>
                     <td className="px-3 py-3 font-mono text-xs opacity-75">{pkg.secret_hint || "—"}</td>
-                    <td className="px-3 py-3 text-xs opacity-75">{new Date(pkg.created_at).toLocaleString()}</td>
+                    <td className="px-3 py-3 text-xs opacity-75">{formatDate(pkg.created_at)}</td>
                     <td className="px-3 py-3 text-right">
                       <button
                         type="button"
