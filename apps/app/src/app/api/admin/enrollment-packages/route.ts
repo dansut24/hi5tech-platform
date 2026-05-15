@@ -76,15 +76,19 @@ async function assertGroupBelongsToTenant(
   if (!data) throw new Error("Selected group was not found for this tenant");
 }
 
+const PACKAGE_SELECT =
+  "id, tenant_id, group_id, policy_id, name, status, secret_hint, package_type, install_source, created_at, revoked_at, last_synced_at, installer_status, installer_file_path, installer_filename, installer_requested_at, installer_generated_at, installer_error";
+
 export async function GET() {
   const { supabase, me, tenant } = await getContext();
+
   if (!me || !tenant) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { data, error } = await supabase
     .from("enrollment_packages")
-    .select("id, tenant_id, group_id, policy_id, name, status, secret_hint, package_type, install_source, created_at, revoked_at, last_synced_at")
+    .select(PACKAGE_SELECT)
     .eq("tenant_id", tenant.id)
     .order("created_at", { ascending: false });
 
@@ -97,6 +101,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const { supabase, me, tenant } = await getContext();
+
   if (!me || !tenant) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -138,8 +143,9 @@ export async function POST(req: Request) {
       secret_hint: secretHint,
       created_by: me.id,
       status: "active",
+      installer_status: "not_requested",
     })
-    .select("id, tenant_id, group_id, policy_id, name, status, secret_hint, package_type, install_source, created_at, revoked_at, last_synced_at")
+    .select(PACKAGE_SELECT)
     .single();
 
   if (error) {
@@ -147,6 +153,7 @@ export async function POST(req: Request) {
   }
 
   let syncWarning: string | null = null;
+
   try {
     await controlServerJson("/api/enrollment-packages/sync", {
       method: "POST",
