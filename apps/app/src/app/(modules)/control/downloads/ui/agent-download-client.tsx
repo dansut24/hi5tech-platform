@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
   AlertTriangle,
@@ -62,11 +62,22 @@ function createEnrollmentToken(pkg: EnrollmentPackage, bootstrapSecret: string) 
 }
 
 function safeFilePart(value: string) {
-  return value
-    .trim()
-    .replace(/[^a-z0-9_-]+/gi, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 80) || "Default";
+  return (
+    value
+      .trim()
+      .replace(/[^a-z0-9_-]+/gi, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80) || "Default"
+  );
+}
+
+function getTenantSlugFromOrigin(origin: string) {
+  try {
+    const host = new URL(origin).hostname;
+    return safeFilePart(host.split(".")[0] || "Tenant");
+  } catch {
+    return "Tenant";
+  }
 }
 
 function groupLabel(groups: DeviceGroup[], groupId: string | null | undefined) {
@@ -121,6 +132,10 @@ function buildInstallCommand(input: {
   ].join("\n");
 }
 
+function buildNamedExeDownloadUrl(packageId: string) {
+  return `/api/admin/enrollment-packages/download/exe?id=${encodeURIComponent(packageId)}`;
+}
+
 function buildSilentCommand() {
   return `${AGENT_FILE_NAME} /VERYSILENT /NORESTART /SUPPRESSMSGBOXES`;
 }
@@ -137,11 +152,13 @@ function downloadText(filename: string, text: string) {
   const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
+
   a.href = url;
   a.download = filename;
   document.body.appendChild(a);
   a.click();
   a.remove();
+
   URL.revokeObjectURL(url);
 }
 
@@ -160,6 +177,7 @@ function CopyButton({
 
   async function copy() {
     if (!value) return;
+
     await navigator.clipboard.writeText(value);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1600);
@@ -180,9 +198,9 @@ function InfoCard({
   title,
   children,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   title: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <div className="rounded-2xl border hi5-border bg-black/5 dark:bg-white/5 p-4">
@@ -190,6 +208,7 @@ function InfoCard({
         <div className="h-10 w-10 shrink-0 rounded-2xl border hi5-border bg-white/45 dark:bg-black/25 flex items-center justify-center">
           {icon}
         </div>
+
         <div>
           <div className="text-sm font-bold">{title}</div>
           <div className="text-sm opacity-75 mt-1 leading-relaxed">{children}</div>
@@ -228,8 +247,35 @@ function SectionTitle({
   return (
     <div>
       <div className="text-lg font-bold">{title}</div>
-      {description ? <p className="text-sm opacity-70 mt-1 leading-relaxed">{description}</p> : null}
+      {description ? (
+        <p className="text-sm opacity-70 mt-1 leading-relaxed">{description}</p>
+      ) : null}
     </div>
+  );
+}
+
+function StatusPill({
+  children,
+  tone = "neutral",
+}: {
+  children: ReactNode;
+  tone?: "good" | "warning" | "bad" | "neutral" | "info";
+}) {
+  const cls =
+    tone === "good"
+      ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/25"
+      : tone === "warning"
+        ? "bg-amber-500/10 text-amber-700 dark:text-amber-200 border-amber-500/25"
+        : tone === "bad"
+          ? "bg-red-500/10 text-red-700 dark:text-red-200 border-red-500/25"
+          : tone === "info"
+            ? "bg-sky-500/10 text-sky-700 dark:text-sky-200 border-sky-500/25"
+            : "bg-black/5 dark:bg-white/5 hi5-border";
+
+  return (
+    <span className={["inline-flex rounded-full border px-2 py-1 text-xs font-semibold", cls].join(" ")}>
+      {children}
+    </span>
   );
 }
 
@@ -263,11 +309,14 @@ export default function AgentDownloadClient() {
     [packages]
   );
 
+  const tenantSlug = getTenantSlugFromOrigin(origin || "https://tenant.hi5tech.co.uk");
   const selectedGroupName = selectedGroup?.name || (selectedGroupId === "default" ? "Default" : selectedGroupId);
   const tenantAwareDownloadUrl = `${origin || "https://tenant.hi5tech.co.uk"}${AGENT_DOWNLOAD_PATH}`;
   const silentCommand = buildSilentCommand();
   const intuneInstallCommand = buildIntuneInstallCommand();
   const intuneUninstallCommand = buildIntuneUninstallCommand();
+
+  const previewFileName = `${safeFilePart(tenantSlug)}-${safeFilePart(selectedGroupName)}-Hi5TechAgentSetup.exe`;
 
   const installCommand = useMemo(() => {
     if (!created) return "";
@@ -300,11 +349,15 @@ export default function AgentDownloadClient() {
       if (!packagesRes.ok) throw new Error(packagesJson?.error || "Failed to load enrollment packages");
 
       const loadedGroups = groupsJson?.groups ?? [];
+
       setGroups(loadedGroups);
       setPackages(packagesJson?.packages ?? []);
 
       if (requestedGroupId) {
-        const requested = loadedGroups.find((g: DeviceGroup) => g.id === requestedGroupId || g.slug === requestedGroupId);
+        const requested = loadedGroups.find(
+          (g: DeviceGroup) => g.id === requestedGroupId || g.slug === requestedGroupId
+        );
+
         if (requested) {
           setSelectedGroupId(requested.id);
         } else if (requestedGroupId === "default") {
@@ -387,10 +440,7 @@ export default function AgentDownloadClient() {
       });
 
       const json = await res.json().catch(() => null);
-
-      if (!res.ok) {
-        throw new Error(json?.error || `Failed to create package (${res.status})`);
-      }
+      if (!res.ok) throw new Error(json?.error || `Failed to create package (${res.status})`);
 
       const createdResponse = json as CreatePackageResponse;
       setCreated(createdResponse);
@@ -425,6 +475,10 @@ export default function AgentDownloadClient() {
       }
 
       await refresh();
+
+      if (created?.package.id === id) {
+        setCreated(null);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to revoke package");
     } finally {
@@ -446,10 +500,11 @@ export default function AgentDownloadClient() {
             <div className="h-11 w-11 rounded-2xl bg-[rgb(var(--hi5-accent)/.14)] flex items-center justify-center shrink-0">
               <ShieldCheck size={22} />
             </div>
+
             <div>
-              <div className="text-lg font-bold">Create Windows agent enrolment package</div>
+              <div className="text-lg font-bold">Create Windows agent package</div>
               <p className="text-sm opacity-70 mt-1 leading-relaxed">
-                Create a long-lived tenant package. It remains active until revoked and enrols devices directly into the selected group.
+                Create a long-lived tenant enrolment package. It remains active until revoked and enrols devices into the selected group.
               </p>
             </div>
           </div>
@@ -464,6 +519,7 @@ export default function AgentDownloadClient() {
                   Devices installed with this package will enrol into this group.
                 </div>
               </div>
+
               <button type="button" className="hi5-btn-ghost text-sm inline-flex items-center gap-2" onClick={refresh}>
                 <RefreshCw size={15} /> Refresh
               </button>
@@ -489,6 +545,7 @@ export default function AgentDownloadClient() {
                 onChange={(e) => setNewGroupName(e.target.value)}
                 placeholder="Create a new group, e.g. Laptops"
               />
+
               <button
                 type="button"
                 className="hi5-btn-primary text-sm inline-flex items-center gap-2"
@@ -540,6 +597,27 @@ export default function AgentDownloadClient() {
             </label>
           </div>
 
+          <div className="rounded-2xl border hi5-border bg-black/5 dark:bg-white/5 p-4 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-bold">Provisioned installer preview</div>
+                <div className="text-xs opacity-70 mt-1">
+                  Future final filename once the packaging worker embeds the provisioning payload.
+                </div>
+              </div>
+              <StatusPill tone="warning">Prepared, not embedded yet</StatusPill>
+            </div>
+
+            <div className="font-mono text-xs break-all rounded-xl border hi5-border bg-black/5 dark:bg-white/5 p-3">
+              {previewFileName}
+            </div>
+
+            <div className="text-xs opacity-75 leading-relaxed">
+              In this pass, the named EXE endpoint validates package access and returns the static installer with a friendly filename.
+              The generated PowerShell command is still required to pass tenant/group/token values until embedded provisioning is added.
+            </div>
+          </div>
+
           {error ? (
             <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-600">
               {error}
@@ -563,10 +641,20 @@ export default function AgentDownloadClient() {
               {creating ? "Generating…" : created ? "Generate new package" : "Generate package"}
             </button>
 
-            <a href={AGENT_DOWNLOAD_PATH} download className="hi5-btn-ghost text-sm inline-flex items-center gap-2">
-              <Download size={16} />
-              Download installer
-            </a>
+            {created ? (
+              <a
+                href={buildNamedExeDownloadUrl(created.package.id)}
+                className="hi5-btn-ghost text-sm inline-flex items-center gap-2"
+              >
+                <Download size={16} />
+                Download named EXE
+              </a>
+            ) : (
+              <a href={AGENT_DOWNLOAD_PATH} download className="hi5-btn-ghost text-sm inline-flex items-center gap-2">
+                <Download size={16} />
+                Download generic installer
+              </a>
+            )}
 
             <Link href="/control/devices" className="hi5-btn-ghost text-sm">
               Back to Devices
@@ -574,17 +662,18 @@ export default function AgentDownloadClient() {
           </div>
 
           <div className="rounded-2xl border hi5-border p-3 text-xs opacity-75 leading-relaxed">
-            Current installer URL:{" "}
+            Generic installer URL:{" "}
             <span className="font-mono break-all">{tenantAwareDownloadUrl}</span>
             <br />
-            This pass keeps the working generic installer plus generated command. The next pass can add a provisioned EXE download so no tenant/group parameters are needed.
+            The final provisioned installer flow will allow only:{" "}
+            <span className="font-mono">/VERYSILENT /NORESTART /SUPPRESSMSGBOXES</span>
           </div>
         </section>
 
         <section className="hi5-panel p-5 space-y-4">
           <SectionTitle
             title="Generated PowerShell deployment command"
-            description="Use this for manual installs, technician installs, existing RMM tools, GPO, or MDM script deployment."
+            description="Production install method for this phase. Use this for manual installs, existing RMM tools, GPO, MDM script deployment, or one-off technician installs."
           />
 
           {created ? (
@@ -594,10 +683,14 @@ export default function AgentDownloadClient() {
                   <div className="text-xs opacity-60">Tenant ID</div>
                   <div className="font-mono text-xs mt-1 break-all">{created.package.tenant_id}</div>
                 </div>
+
                 <div className="rounded-2xl border hi5-border p-3">
                   <div className="text-xs opacity-60">Group</div>
-                  <div className="font-mono text-xs mt-1 break-all">{groupLabel(groups, created.package.group_id)}</div>
+                  <div className="font-mono text-xs mt-1 break-all">
+                    {groupLabel(groups, created.package.group_id)}
+                  </div>
                 </div>
+
                 <div className="rounded-2xl border hi5-border p-3">
                   <div className="text-xs opacity-60">Package</div>
                   <div className="font-mono text-xs mt-1 break-all">{created.package.id}</div>
@@ -608,9 +701,18 @@ export default function AgentDownloadClient() {
 
               <div className="flex flex-wrap gap-2">
                 <CopyButton value={installCommand} label="Copy command" className="hi5-btn-primary text-sm" />
+
                 <button type="button" className="hi5-btn-ghost text-sm" onClick={downloadCommand}>
                   Download .ps1
                 </button>
+
+                <a
+                  href={buildNamedExeDownloadUrl(created.package.id)}
+                  className="hi5-btn-ghost text-sm inline-flex items-center gap-2"
+                >
+                  <Download size={16} />
+                  Named EXE
+                </a>
               </div>
 
               <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-700 dark:text-amber-200 leading-relaxed">
@@ -624,6 +726,28 @@ export default function AgentDownloadClient() {
           )}
         </section>
       </div>
+
+      <section className="hi5-panel p-5 space-y-4">
+        <SectionTitle
+          title="Provisioned EXE roadmap"
+          description="The UI and download endpoint are now ready for the custom provisioned installer workflow."
+        />
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <InfoCard icon={<PackageCheck size={19} />} title="Now">
+            Named EXE download is package-aware and validates tenant/package access. The PowerShell command remains required for enrolment values.
+          </InfoCard>
+
+          <InfoCard icon={<FileCode2 size={19} />} title="Next installer pass">
+            The Windows installer will support embedded provisioning data so tenant, group, package, and enrolment token do not need to be passed on the command line.
+          </InfoCard>
+
+          <InfoCard icon={<ShieldCheck size={19} />} title="Final state">
+            The downloaded EXE can be deployed with only{" "}
+            <span className="font-mono text-xs">/VERYSILENT /NORESTART /SUPPRESSMSGBOXES</span>.
+          </InfoCard>
+        </div>
+      </section>
 
       <section className="hi5-panel p-5 space-y-4">
         <SectionTitle
@@ -661,8 +785,12 @@ export default function AgentDownloadClient() {
               <ol className="list-decimal pl-4 space-y-1">
                 <li>Download the Windows agent installer.</li>
                 <li>Package it using the Microsoft Win32 Content Prep Tool.</li>
-                <li>Upload the generated <span className="font-mono text-xs">.intunewin</span> file to Intune.</li>
-                <li>Set install behaviour to <span className="font-semibold">System</span>.</li>
+                <li>
+                  Upload the generated <span className="font-mono text-xs">.intunewin</span> file to Intune.
+                </li>
+                <li>
+                  Set install behaviour to <span className="font-semibold">System</span>.
+                </li>
                 <li>Assign to the required device group.</li>
               </ol>
             </InfoCard>
@@ -745,6 +873,7 @@ export default function AgentDownloadClient() {
               These packages are valid until revoked. Revoking blocks future installs using that package, but does not remove already enrolled devices.
             </p>
           </div>
+
           <button type="button" className="hi5-btn-ghost text-sm inline-flex items-center gap-2" onClick={refresh}>
             <RefreshCw size={15} /> Refresh
           </button>
@@ -757,11 +886,12 @@ export default function AgentDownloadClient() {
                 <th className="px-3 py-2">Name</th>
                 <th className="px-3 py-2">Group</th>
                 <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2">Secret</th>
+                <th className="px-3 py-2">Provisioned EXE</th>
                 <th className="px-3 py-2">Created</th>
                 <th className="px-3 py-2 text-right">Action</th>
               </tr>
             </thead>
+
             <tbody>
               {activePackages.length === 0 ? (
                 <tr>
@@ -776,14 +906,27 @@ export default function AgentDownloadClient() {
                       <div className="font-semibold">{pkg.name}</div>
                       <div className="font-mono text-[11px] opacity-60 break-all">{pkg.id}</div>
                     </td>
+
                     <td className="px-3 py-3">{groupLabel(groups, pkg.group_id)}</td>
+
                     <td className="px-3 py-3">
-                      <span className="rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 px-2 py-1 text-xs font-semibold">
-                        Active until revoked
-                      </span>
+                      <StatusPill tone="good">Active until revoked</StatusPill>
                     </td>
-                    <td className="px-3 py-3 font-mono text-xs opacity-75">{pkg.secret_hint || "—"}</td>
+
+                    <td className="px-3 py-3">
+                      <div className="flex flex-col gap-2">
+                        <StatusPill tone="warning">Named only</StatusPill>
+                        <a
+                          href={buildNamedExeDownloadUrl(pkg.id)}
+                          className="hi5-btn-ghost text-xs inline-flex items-center justify-center gap-1"
+                        >
+                          <Download size={14} /> Download EXE
+                        </a>
+                      </div>
+                    </td>
+
                     <td className="px-3 py-3 text-xs opacity-75">{formatDate(pkg.created_at)}</td>
+
                     <td className="px-3 py-3 text-right">
                       <button
                         type="button"
