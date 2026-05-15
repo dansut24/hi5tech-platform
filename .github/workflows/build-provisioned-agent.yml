@@ -1,0 +1,146 @@
+name: Build Provisioned Agent Installer
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_id:
+        description: "Enrollment package ID"
+        required: true
+        type: string
+      request_path:
+        description: "Supabase Storage request object path"
+        required: true
+        type: string
+      callback_url:
+        description: "Platform callback URL"
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Inno Setup
+        shell: powershell
+        run: |
+          choco install innosetup --yes --no-progress
+
+      - name: Download provisioning request from Supabase Storage
+        shell: powershell
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          REQUEST_PATH: ${{ inputs.request_path }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          New-Item -ItemType Directory -Force -Path ".build" | Out-Null
+
+          $url = "$env:SUPABASE_URL/storage/v1/object/agent-installer-requests/$env:REQUEST_PATH"
+
+          Invoke-WebRequest `
+            -Uri $url `
+            -Headers @{
+              Authorization = "Bearer $env:SUPABASE_SERVICE_ROLE_KEY"
+              apikey = $env:SUPABASE_SERVICE_ROLE_KEY
+            } `
+            -OutFile ".build\provisioning-request.json"
+
+      - name: Build provisioned wrapper installer
+        shell: powershell
+        run: |
+          .\.github\scripts\Build-ProvisionedAgentWrapper.ps1 `
+            -RequestJson ".build\provisioning-request.json" `
+            -GenericInstaller "apps\app\public\downloads\Hi5TechAgentSetup.exe" `
+            -InnoSetupCompiler "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
+            -OutputDir ".build\out"
+
+      - name: Upload provisioned installer to Supabase Storage
+        shell: powershell
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          $meta = Get-Content ".build\out\installer-meta.json" -Raw | ConvertFrom-Json
+          $filePath = $meta.local_path
+          $storagePath = $meta.storage_path
+
+          if (!(Test-Path $filePath)) {
+            throw "Installer output not found: $filePath"
+          }
+
+          $uploadUrl = "$env:SUPABASE_URL/storage/v1/object/agent-installers/$storagePath"
+
+          Invoke-WebRequest `
+            -Uri $uploadUrl `
+            -Method POST `
+            -Headers @{
+              Authorization = "Bearer $env:SUPABASE_SERVICE_ROLE_KEY"
+              apikey = $env:SUPABASE_SERVICE_ROLE_KEY
+              "x-upsert" = "true"
+              "Content-Type" = "application/vnd.microsoft.portable-executable"
+            } `
+            -InFile $filePath `
+            -UseBasicParsing
+
+      - name: Notify platform success
+        if: success()
+        shell: powershell
+        env:
+          CALLBACK_SECRET: ${{ secrets.PLATFORM_INSTALLER_CALLBACK_SECRET }}
+          CALLBACK_URL: ${{ inputs.callback_url }}
+          PACKAGE_ID: ${{ inputs.package_id }}
+        run: |
+          $meta = Get-Content ".build\out\installer-meta.json" -Raw | ConvertFrom-Json
+
+          $body = @{
+            package_id = $env:PACKAGE_ID
+            status = "ready"
+            installer_file_path = $meta.storage_path
+            installer_filename = $meta.filename
+            installer_generated_at = (Get-Date).ToUniversalTime().ToString("o")
+          } | ConvertTo-Json -Depth 10
+
+          Invoke-WebRequest `
+            -Uri $env:CALLBACK_URL `
+            -Method POST `
+            -Headers @{
+              Authorization = "Bearer $env:CALLBACK_SECRET"
+              "Content-Type" = "application/json"
+            } `
+            -Body $body `
+            -UseBasicParsing
+
+      - name: Notify platform failure
+        if: failure()
+        shell: powershell
+        env:
+          CALLBACK_SECRET: ${{ secrets.PLATFORM_INSTALLER_CALLBACK_SECRET }}
+          CALLBACK_URL: ${{ inputs.callback_url }}
+          PACKAGE_ID: ${{ inputs.package_id }}
+        run: |
+          $body = @{
+            package_id = $env:PACKAGE_ID
+            status = "failed"
+            installer_error = "GitHub Actions provisioned installer build failed. Check workflow logs."
+          } | ConvertTo-Json -Depth 10
+
+          try {
+            Invoke-WebRequest `
+              -Uri $env:CALLBACK_URL `
+              -Method POST `
+              -Headers @{
+                Authorization = "Bearer $env:CALLBACK_SECRET"
+                "Content-Type" = "application/json"
+              } `
+              -Body $body `
+              -UseBasicParsing
+          } catch {
+            Write-Host "Callback failed: $($_.Exception.Message)"
+          }
