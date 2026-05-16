@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createBrowserClient } from "@supabase/ssr";
 
 function getHashParams() {
   if (typeof window === "undefined") return new URLSearchParams();
@@ -10,6 +11,11 @@ function getHashParams() {
     : window.location.hash;
 
   return new URLSearchParams(raw);
+}
+
+function getQueryParams() {
+  if (typeof window === "undefined") return new URLSearchParams();
+  return new URLSearchParams(window.location.search);
 }
 
 export default function AuthStampPage() {
@@ -30,48 +36,94 @@ export default function AuthStampPage() {
   useEffect(() => {
     let cancelled = false;
 
+    async function stampSession(accessToken: string, refreshToken: string) {
+      const res = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+        },
+        credentials: "include",
+        body: JSON.stringify({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        }),
+      });
+
+      const json = await res.json().catch(() => null);
+
+      if (!res.ok) {
+        throw new Error(json?.error || `Session failed (${res.status})`);
+      }
+    }
+
     async function run() {
       try {
+        setMessage("Securing your session…");
+
+        const supabase = createBrowserClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL!,
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        );
+
+        const query = getQueryParams();
         const hash = getHashParams();
 
-        const accessToken = hash.get("access_token");
-        const refreshToken = hash.get("refresh_token");
-        const type = hash.get("type");
+        const code = query.get("code");
+        const hashAccessToken = hash.get("access_token");
+        const hashRefreshToken = hash.get("refresh_token");
+
+        let accessToken = hashAccessToken;
+        let refreshToken = hashRefreshToken;
+
+        if (code) {
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+
+          if (error) {
+            throw new Error(error.message);
+          }
+
+          accessToken = data.session?.access_token ?? null;
+          refreshToken = data.session?.refresh_token ?? null;
+        }
+
+        if (accessToken && refreshToken) {
+          await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+        }
+
+        if (!accessToken || !refreshToken) {
+          const { data, error } = await supabase.auth.getSession();
+
+          if (error) {
+            throw new Error(error.message);
+          }
+
+          accessToken = data.session?.access_token ?? null;
+          refreshToken = data.session?.refresh_token ?? null;
+        }
 
         if (!accessToken || !refreshToken) {
           setError(
-            "The confirmation link did not include a complete sign-in session. Please request a new signup email and try again."
+            "The confirmation link did not include a complete sign-in session. This usually means the email link was opened after it expired, was already used, or Supabase sent a magic link without a refresh token."
           );
           setMessage("Unable to sign in.");
           return;
         }
 
-        setMessage("Securing your session…");
-
-        const res = await fetch("/api/auth/session", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-          },
-          credentials: "include",
-          body: JSON.stringify({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-            type,
-          }),
-        });
-
-        const json = await res.json().catch(() => null);
-
-        if (!res.ok) {
-          throw new Error(json?.error || `Session failed (${res.status})`);
-        }
+        await stampSession(accessToken, refreshToken);
 
         if (cancelled) return;
 
         setMessage("Redirecting to setup…");
 
-        window.history.replaceState(null, "", `/auth/stamp?next=${encodeURIComponent(nextPath)}`);
+        window.history.replaceState(
+          null,
+          "",
+          `/auth/stamp?next=${encodeURIComponent(nextPath)}`
+        );
+
         window.location.replace(nextPath);
       } catch (err) {
         if (cancelled) return;
