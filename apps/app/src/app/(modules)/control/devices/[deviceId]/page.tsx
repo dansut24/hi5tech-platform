@@ -1,11 +1,11 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { redirect } from "next/navigation";
-import TerminalPanel from "../../[id]/ui/terminal-panel";
-import FileBrowserPanel from "../../[id]/ui/file-browser-panel";
-import ServicesPanel from "../../[id]/ui/services-panel";
-import ActivityPanel from "../../[id]/ui/activity-panel";
-import RemotePanel from "../../[id]/ui/remote-panel";
+import TerminalPanel from "./ui/terminal-panel";
+import FileBrowserPanel from "./ui/file-browser-panel";
+import ServicesPanel from "./ui/services-panel";
+import ActivityPanel from "./ui/activity-panel";
+import RemotePanel from "./ui/remote-panel";
 import AssetLinkPanel from "../../ui/asset-link-panel";
 import CreateIncidentFromDeviceButton from "../../ui/create-incident-from-device-button";
 import DeviceTicketsPanel from "../../ui/device-tickets-panel";
