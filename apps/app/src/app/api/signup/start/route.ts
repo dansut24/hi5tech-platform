@@ -133,7 +133,7 @@ export async function POST(req: Request) {
 
     const workspaceUrl = tenantBaseUrl(subdomain);
 
-    const emailRedirectTo = `${workspaceUrl}/auth/callback?next=/setup`;
+    const emailRedirectTo = `${workspaceUrl}/auth/confirm`;
 
     const { data: signUpData, error: signUpError } = await supabaseAuth.auth.signUp({
       email: adminEmail,
