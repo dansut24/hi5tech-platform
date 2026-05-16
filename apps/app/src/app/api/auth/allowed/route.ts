@@ -1,92 +1,193 @@
-import { NextResponse, type NextRequest } from "next/server";
-import { supabaseServer } from "@/lib/supabase/server";
+import { NextResponse } from "next/server";
+import { headers } from "next/headers";
+import { supabaseAdmin } from "@/lib/supabase/admin";
+
+export const dynamic = "force-dynamic";
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "hi5tech.co.uk";
 
-function parseTenant(hostname: string) {
-  const host = (hostname || "").split(":")[0].toLowerCase().trim();
-
-  if (!host) return { host, domain: null as string | null, subdomain: null as string | null };
-
-  // Local / preview => no gating
-  if (host === "localhost" || host.endsWith(".vercel.app")) {
-    return { host, domain: null, subdomain: null };
-  }
-
-  // Must be under root domain
-  if (!host.endsWith(ROOT_DOMAIN)) {
-    return { host, domain: null, subdomain: null };
-  }
-
-  // Root domain => not tenant
-  if (host === ROOT_DOMAIN) {
-    return { host, domain: ROOT_DOMAIN, subdomain: null };
-  }
-
-  const sub = host.slice(0, -ROOT_DOMAIN.length - 1); // remove ".hi5tech.co.uk"
-  if (!sub) return { host, domain: ROOT_DOMAIN, subdomain: null };
-
-  // Ignore non-tenant subdomains
-  if (sub === "www" || sub === "app") {
-    return { host, domain: ROOT_DOMAIN, subdomain: null };
-  }
-
-  return { host, domain: ROOT_DOMAIN, subdomain: sub };
+function json(status: number, body: any) {
+  return NextResponse.json(body, {
+    status,
+    headers: {
+      "cache-control": "no-store",
+    },
+  });
 }
 
-export async function POST(req: NextRequest) {
-  const debug: any = {
-    root_domain: ROOT_DOMAIN,
-    hdr_host: req.headers.get("host"),
-    hdr_x_forwarded_host: req.headers.get("x-forwarded-host"),
-    hdr_x_forwarded_proto: req.headers.get("x-forwarded-proto"),
-  };
+function cleanEmail(value: unknown) {
+  return String(value ?? "").trim().toLowerCase();
+}
 
+function getSubdomainFromHost(hostHeader: string | null) {
+  const host = String(hostHeader || "")
+    .toLowerCase()
+    .split(":")[0]
+    .trim();
+
+  if (!host) return null;
+
+  if (host === ROOT_DOMAIN || host === `www.${ROOT_DOMAIN}`) {
+    return null;
+  }
+
+  if (host.endsWith(`.${ROOT_DOMAIN}`)) {
+    const subdomain = host.slice(0, -1 * (`.${ROOT_DOMAIN}`.length));
+    return subdomain || null;
+  }
+
+  return null;
+}
+
+function safeNext(value: unknown) {
+  const next = String(value ?? "").trim();
+
+  if (!next || !next.startsWith("/") || next.startsWith("//")) {
+    return "";
+  }
+
+  return next;
+}
+
+export async function POST(req: Request) {
   try {
-    const body = await req.json().catch(() => ({}));
-    const email = String(body?.email || "").trim().toLowerCase();
-    debug.email = email;
+    const body = await req.json().catch(() => null);
 
-    const host =
-      req.headers.get("x-forwarded-host") ||
-      req.headers.get("host") ||
-      "";
+    const email = cleanEmail(body?.email);
+    const next = safeNext(body?.next);
 
-    const parsed = parseTenant(host);
-    debug.parsed = parsed;
-
-    if (!email) {
-      return NextResponse.json({ allowed: false, reason: "missing_email", debug }, { status: 200 });
+    if (!email || !email.includes("@")) {
+      return json(400, {
+        allowed: false,
+        error: "Email address required",
+      });
     }
 
-    if (!parsed.domain || !parsed.subdomain) {
-      return NextResponse.json(
-        { allowed: false, reason: "no_tenant_subdomain", debug },
-        { status: 200 }
+    const hdrs = await headers();
+    const subdomain = getSubdomainFromHost(hdrs.get("host"));
+
+    const admin = supabaseAdmin();
+
+    /*
+      Setup exception:
+      The super user has confirmed their email, but the tenant/membership
+      does not exist yet. Allow them to sign in only when:
+      - they are on the reserved tenant subdomain
+      - the next page is /setup
+      - their email matches tenant_signup_intents
+    */
+    if (subdomain && (next === "/setup" || next.startsWith("/setup?"))) {
+      const { data: intent } = await admin
+        .from("tenant_signup_intents")
+        .select("id, status")
+        .eq("root_domain", ROOT_DOMAIN)
+        .eq("subdomain", subdomain)
+        .eq("admin_email", email)
+        .in("status", ["pending_email", "confirmed"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (intent?.id) {
+        return json(200, {
+          allowed: true,
+          reason: "signup_setup_intent",
+        });
+      }
+    }
+
+    /*
+      Normal tenant login:
+      User must already have a membership for this tenant.
+    */
+    if (subdomain) {
+      const { data: tenant } = await admin
+        .from("tenants")
+        .select("id")
+        .eq("domain", ROOT_DOMAIN)
+        .eq("subdomain", subdomain)
+        .maybeSingle();
+
+      if (!tenant?.id) {
+        return json(403, {
+          allowed: false,
+          error: "Workspace not found.",
+        });
+      }
+
+      const { data: authUsers, error: listError } =
+        await admin.auth.admin.listUsers();
+
+      if (listError) {
+        return json(500, {
+          allowed: false,
+          error: listError.message,
+        });
+      }
+
+      const matchedUser = authUsers.users.find(
+        (user) => cleanEmail(user.email) === email
       );
+
+      if (!matchedUser?.id) {
+        return json(403, {
+          allowed: false,
+          error: "That email isn't authorised for this tenant.",
+        });
+      }
+
+      const { data: membership } = await admin
+        .from("memberships")
+        .select("id")
+        .eq("tenant_id", tenant.id)
+        .eq("user_id", matchedUser.id)
+        .maybeSingle();
+
+      if (!membership?.id) {
+        return json(403, {
+          allowed: false,
+          error: "That email isn't authorised for this tenant.",
+        });
+      }
+
+      return json(200, {
+        allowed: true,
+        reason: "tenant_membership",
+      });
     }
 
-    const supabase = await supabaseServer();
+    /*
+      App/root login fallback:
+      Allow if the email belongs to any existing platform user.
+    */
+    const { data: authUsers, error: listError } = await admin.auth.admin.listUsers();
 
-    const { data, error } = await supabase.rpc("is_email_allowed_for_tenant", {
-      p_domain: parsed.domain,
-      p_subdomain: parsed.subdomain,
-      p_email: email,
+    if (listError) {
+      return json(500, {
+        allowed: false,
+        error: listError.message,
+      });
+    }
+
+    const matchedUser = authUsers.users.find(
+      (user) => cleanEmail(user.email) === email
+    );
+
+    if (!matchedUser?.id) {
+      return json(403, {
+        allowed: false,
+        error: "Account not found.",
+      });
+    }
+
+    return json(200, {
+      allowed: true,
+      reason: "platform_user",
     });
-
-    debug.rpc = {
-      data,
-      error: error ? { message: error.message, code: (error as any).code } : null,
-      args: { p_domain: parsed.domain, p_subdomain: parsed.subdomain, p_email: email },
-    };
-
-    if (error) {
-      return NextResponse.json({ allowed: false, reason: "rpc_error", debug }, { status: 200 });
-    }
-
-    return NextResponse.json({ allowed: Boolean(data), debug }, { status: 200 });
-  } catch (e: any) {
-    debug.exception = e?.message || String(e);
-    return NextResponse.json({ allowed: false, reason: "server_error", debug }, { status: 200 });
+  } catch (err) {
+    return json(500, {
+      allowed: false,
+      error: err instanceof Error ? err.message : "Auth check failed",
+    });
   }
 }
