@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
 
 export const dynamic = "force-dynamic";
@@ -33,12 +34,19 @@ const ASSET_SELECT = `
   updated_at
 `;
 
-async function getTenantId() {
+async function getTenantContext() {
   const supabase = await supabaseServer();
 
   const { data: userRes } = await supabase.auth.getUser();
   const me = userRes.user;
-  if (!me) return { supabase, tenantId: null };
+
+  if (!me) {
+    return {
+      supabase,
+      me: null,
+      tenantId: null,
+    };
+  }
 
   const host = getEffectiveHost(await headers());
   const parsed = parseTenantHost(host);
@@ -51,7 +59,13 @@ async function getTenantId() {
       .eq("subdomain", parsed.subdomain)
       .maybeSingle();
 
-    if (tenant?.id) return { supabase, tenantId: tenant.id };
+    if (tenant?.id) {
+      return {
+        supabase,
+        me,
+        tenantId: tenant.id,
+      };
+    }
   }
 
   const { data: membership } = await supabase
@@ -62,7 +76,11 @@ async function getTenantId() {
     .limit(1)
     .maybeSingle();
 
-  return { supabase, tenantId: membership?.tenant_id ?? null };
+  return {
+    supabase,
+    me,
+    tenantId: membership?.tenant_id ?? null,
+  };
 }
 
 function clean(value: unknown) {
@@ -70,12 +88,57 @@ function clean(value: unknown) {
   return text || null;
 }
 
+function cleanDate(value: unknown) {
+  const text = clean(value);
+
+  if (!text) {
+    return null;
+  }
+
+  const d = new Date(text);
+
+  if (Number.isNaN(d.getTime())) {
+    return null;
+  }
+
+  return text;
+}
+
+function normalizeAssetStatus(value: unknown) {
+  const v = String(value ?? "").trim().toLowerCase();
+
+  if (v === "active") return "active";
+  if (v === "spare") return "spare";
+  if (v === "retired") return "retired";
+  if (v === "lost") return "lost";
+  if (v === "disposed") return "retired";
+
+  return "active";
+}
+
+async function loadAsset(tenantId: string, assetId: string) {
+  const admin = supabaseAdmin();
+
+  const { data, error } = await admin
+    .from("assets")
+    .select(ASSET_SELECT)
+    .eq("tenant_id", tenantId)
+    .eq("id", assetId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  return data ?? null;
+}
+
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ assetId: string }> }
 ) {
   const { assetId } = await params;
-  const { supabase, tenantId } = await getTenantId();
+  const { supabase, tenantId } = await getTenantContext();
 
   if (!tenantId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -117,21 +180,84 @@ export async function PATCH(
   { params }: { params: Promise<{ assetId: string }> }
 ) {
   const { assetId } = await params;
-  const { supabase, tenantId } = await getTenantId();
+  const { me, tenantId } = await getTenantContext();
 
-  if (!tenantId) {
+  if (!me || !tenantId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const body = await req.json().catch(() => null);
+  const action = clean(body?.action);
 
-  const patch = {
+  const admin = supabaseAdmin();
+
+  const existing = await loadAsset(tenantId, assetId);
+
+  if (!existing) {
+    return NextResponse.json({ error: "Asset not found" }, { status: 404 });
+  }
+
+  if (action === "unlink_control_device") {
+    const previousDeviceId = existing.control_device_id;
+
+    const { data: asset, error } = await admin
+      .from("assets")
+      .update({
+        control_device_id: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("tenant_id", tenantId)
+      .eq("id", assetId)
+      .select(ASSET_SELECT)
+      .single();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    if (previousDeviceId) {
+      await admin
+        .from("devices")
+        .update({ asset_id: null })
+        .eq("tenant_id", tenantId)
+        .eq("device_id", previousDeviceId)
+        .then(() => null);
+    }
+
+    return NextResponse.json({ asset });
+  }
+
+  if (action === "retire") {
+    const { data: asset, error } = await admin
+      .from("assets")
+      .update({
+        status: "retired",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("tenant_id", tenantId)
+      .eq("id", assetId)
+      .select(ASSET_SELECT)
+      .single();
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ asset });
+  }
+
+  const metadata =
+    body?.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata)
+      ? body.metadata
+      : existing.metadata || {};
+
+  const patch: Record<string, any> = {
     name: clean(body?.name),
-    asset_type: clean(body?.asset_type) || "device",
-    status: clean(body?.status) || "active",
-    source: clean(body?.source) || "manual",
+    asset_type: clean(body?.asset_type) || existing.asset_type || "device",
+    status: normalizeAssetStatus(body?.status ?? existing.status),
+    source: clean(body?.source) || existing.source || "manual",
     external_id: clean(body?.external_id),
-    control_device_id: clean(body?.control_device_id),
+    control_device_id: clean(body?.control_device_id) || existing.control_device_id || null,
     serial_number: clean(body?.serial_number),
     asset_tag: clean(body?.asset_tag),
     manufacturer: clean(body?.manufacturer),
@@ -143,9 +269,9 @@ export async function PATCH(
     department: clean(body?.department),
     location: clean(body?.location),
     warranty_status: clean(body?.warranty_status),
-    warranty_expires_at: clean(body?.warranty_expires_at),
+    warranty_expires_at: cleanDate(body?.warranty_expires_at),
     notes: clean(body?.notes),
-    metadata: body?.metadata && typeof body.metadata === "object" ? body.metadata : {},
+    metadata,
     updated_at: new Date().toISOString(),
   };
 
@@ -153,7 +279,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Asset name required" }, { status: 400 });
   }
 
-  const { data, error } = await supabase
+  const { data: asset, error } = await admin
     .from("assets")
     .update(patch)
     .eq("tenant_id", tenantId)
@@ -165,5 +291,5 @@ export async function PATCH(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ asset: data });
+  return NextResponse.json({ asset });
 }
