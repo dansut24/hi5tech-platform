@@ -8,6 +8,11 @@ import {
 
 export const dynamic = "force-dynamic";
 
+type InviteInput = {
+  email?: string;
+  role?: string;
+};
+
 function json(status: number, body: any) {
   return NextResponse.json(body, {
     status,
@@ -15,6 +20,27 @@ function json(status: number, body: any) {
       "cache-control": "no-store",
     },
   });
+}
+
+function cleanEmail(value: unknown) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function cleanText(value: unknown, fallback = "") {
+  const text = String(value ?? "").trim();
+  return text || fallback;
+}
+
+function validAppearance(value: string) {
+  return ["light", "dark", "system"].includes(value) ? value : "system";
+}
+
+function validAccent(value: string) {
+  return ["violet", "blue", "emerald", "rose", "orange"].includes(value) ? value : "violet";
+}
+
+function validInviteRole(value: string) {
+  return ["admin", "technician", "viewer"].includes(value) ? value : "technician";
 }
 
 export async function POST(req: Request) {
@@ -31,10 +57,26 @@ export async function POST(req: Request) {
     const body = await req.json().catch(() => null);
 
     const product = String(body?.product ?? "both") as OnboardingProduct;
-    const timezone = String(body?.timezone ?? "Europe/London").trim() || "Europe/London";
+    const timezone = cleanText(body?.timezone, "Europe/London");
+    const region = cleanText(body?.region, "United Kingdom");
+    const companyName = cleanText(body?.companyName);
+    const supportEmail = cleanEmail(body?.supportEmail);
+    const accentColor = validAccent(String(body?.accentColor ?? "violet"));
+    const appearance = validAppearance(String(body?.appearance ?? "system"));
+    const useItsmDefaults = body?.useItsmDefaults !== false;
+    const useControlDefaults = body?.useControlDefaults !== false;
+    const invites = Array.isArray(body?.invites) ? (body.invites as InviteInput[]) : [];
 
     if (!["itsm", "control", "both"].includes(product)) {
       return json(400, { error: "Invalid product selection" });
+    }
+
+    if (!companyName || companyName.length < 2) {
+      return json(400, { error: "Company name is required" });
+    }
+
+    if (!supportEmail || !supportEmail.includes("@")) {
+      return json(400, { error: "A valid support email is required" });
     }
 
     const { data: existingMembership } = await supabase
@@ -94,11 +136,29 @@ export async function POST(req: Request) {
     }
 
     const result = await completeTenantWorkspaceFromIntent({
-      intent,
+      intent: {
+        ...intent,
+        company_name: companyName,
+      },
       userId: user.id,
       email: user.email || intent.admin_email,
       product,
       timezone,
+      setup: {
+        companyName,
+        supportEmail,
+        region,
+        accentColor,
+        appearance,
+        useItsmDefaults,
+        useControlDefaults,
+        invites: invites
+          .map((invite) => ({
+            email: cleanEmail(invite.email),
+            role: validInviteRole(String(invite.role ?? "technician")),
+          }))
+          .filter((invite) => invite.email && invite.email.includes("@")),
+      },
     });
 
     const firstPath =
