@@ -63,11 +63,15 @@ export default function AssetEditForm({ asset, hasLinkedDevice = false }: Props)
   useEffect(() => {
     if (!open) return;
 
-    const originalOverflow = document.body.style.overflow;
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+
     document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
 
     return () => {
-      document.body.style.overflow = originalOverflow;
+      document.body.style.overflow = originalBodyOverflow;
+      document.documentElement.style.overflow = originalHtmlOverflow;
     };
   }, [open]);
 
@@ -139,18 +143,25 @@ export default function AssetEditForm({ asset, hasLinkedDevice = false }: Props)
   const modal =
     open && mounted
       ? createPortal(
-          <div className="fixed inset-0 z-[9999]">
+          <div className="fixed inset-0 z-[9999] overflow-y-auto overscroll-contain">
             <button
               type="button"
-              className="absolute inset-0 bg-black/60 backdrop-blur-md"
+              className="fixed inset-0 bg-black/60 backdrop-blur-md"
               aria-label="Close asset editor"
               onClick={() => {
                 if (!working && !actionWorking) setOpen(false);
               }}
             />
 
-            <div className="relative z-10 flex min-h-[100dvh] items-center justify-center p-3 sm:p-4">
-              <div className="hi5-panel w-full max-w-5xl max-h-[calc(100dvh-24px)] overflow-y-auto p-4 sm:p-5 space-y-5">
+            <div
+              className={[
+                "relative z-10 min-h-[100dvh] w-full",
+                "px-3 sm:px-4",
+                "pt-[calc(env(safe-area-inset-top,0px)+14px)]",
+                "pb-[calc(env(safe-area-inset-bottom,0px)+90px)]",
+              ].join(" ")}
+            >
+              <div className="hi5-panel mx-auto w-full max-w-5xl p-4 sm:p-5 space-y-5">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="text-xl font-extrabold">Edit asset</div>
@@ -255,25 +266,27 @@ export default function AssetEditForm({ asset, hasLinkedDevice = false }: Props)
                   </div>
                 </div>
 
-                <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
-                  <button
-                    type="button"
-                    className="hi5-btn-ghost text-sm w-full sm:w-auto"
-                    onClick={() => setOpen(false)}
-                    disabled={working || !!actionWorking}
-                  >
-                    Cancel
-                  </button>
+                <div className="sticky bottom-0 -mx-4 sm:-mx-5 -mb-4 sm:-mb-5 border-t hi5-border bg-[rgb(var(--hi5-card)/0.92)] dark:bg-[rgb(var(--hi5-card)/0.92)] backdrop-blur-xl px-4 sm:px-5 py-3 safe-bottom">
+                  <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
+                    <button
+                      type="button"
+                      className="hi5-btn-ghost text-sm w-full sm:w-auto"
+                      onClick={() => setOpen(false)}
+                      disabled={working || !!actionWorking}
+                    >
+                      Cancel
+                    </button>
 
-                  <button
-                    type="button"
-                    className="hi5-btn-primary text-sm w-full sm:w-auto inline-flex items-center justify-center gap-2"
-                    onClick={saveAsset}
-                    disabled={working || !!actionWorking || !form.name.trim()}
-                  >
-                    {working ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                    {working ? "Saving…" : "Save asset"}
-                  </button>
+                    <button
+                      type="button"
+                      className="hi5-btn-primary text-sm w-full sm:w-auto inline-flex items-center justify-center gap-2"
+                      onClick={saveAsset}
+                      disabled={working || !!actionWorking || !form.name.trim()}
+                    >
+                      {working ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                      {working ? "Saving…" : "Save asset"}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
