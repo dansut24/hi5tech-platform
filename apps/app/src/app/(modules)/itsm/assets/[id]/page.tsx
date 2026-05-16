@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
-import ControlLinkPanel from "../ui/control-link-panel";
 import { supabaseServer } from "@/lib/supabase/server";
 import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
+import AssetEditForm from "./asset-edit-form";
 
 export const dynamic = "force-dynamic";
 
@@ -175,10 +175,12 @@ export default async function AssetsDetail({
               Back to assets
             </Link>
 
+            <AssetEditForm asset={asset} hasLinkedDevice={Boolean(linkedDevice)} />
+
             {linkedDevice ? (
               <Link
                 href={`/control/devices/${encodeURIComponent(linkedDevice.device_id)}?tab=overview`}
-                className="hi5-btn-primary text-sm"
+                className="hi5-btn-ghost text-sm"
               >
                 Open in Control
               </Link>
@@ -234,7 +236,26 @@ export default async function AssetsDetail({
       </section>
 
       <section className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <ControlLinkPanel assetId={asset.id} />
+        <div className="hi5-card p-4 space-y-3">
+          <div className="text-sm font-bold">Control device link</div>
+
+          {linkedDevice ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Field label="Device ID" value={linkedDevice.device_id} />
+              <Field label="Hostname" value={linkedDevice.hostname} />
+              <Field label="OS" value={linkedDevice.os} />
+              <Field label="Architecture" value={linkedDevice.arch} />
+              <Field label="Agent version" value={linkedDevice.agent_version} />
+              <Field label="Online" value={linkedDevice.online ? "Yes" : "No"} />
+              <Field label="Last seen" value={formatDate(linkedDevice.last_seen_at)} />
+            </div>
+          ) : (
+            <div className="rounded-2xl border hi5-border bg-black/5 dark:bg-white/5 p-4 text-sm opacity-75 leading-relaxed">
+              This asset is not linked to a live Control device yet. Later, assets can be matched automatically by
+              serial number, hostname, Intune device ID or agent identity.
+            </div>
+          )}
+        </div>
 
         <div className="hi5-card p-4 space-y-3">
           <div className="text-sm font-bold">Notes</div>
@@ -248,8 +269,7 @@ export default async function AssetsDetail({
       <section className="hi5-card p-4">
         <div className="text-sm font-bold">Coming next</div>
         <p className="text-sm opacity-70 mt-2 leading-relaxed">
-          This page is ready for asset editing, CSV/Intune import history, linked tickets, and remote actions when a
-          Control device is matched.
+          This page is now ready for asset editing, related tickets, CSV import history and Intune matching suggestions.
         </p>
       </section>
     </div>
