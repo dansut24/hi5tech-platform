@@ -5,7 +5,7 @@ import { normalizeSubdomain, ROOT_DOMAIN } from "@/lib/onboarding/create-tenant-
 
 export const dynamic = "force-dynamic";
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "https://app.hi5tech.co.uk";
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "https://app.hi5tech.co.uk").replace(/\/+$/, "");
 const SIGNUP_PROXY_SECRET = process.env.SIGNUP_PROXY_SECRET || "";
 
 function json(status: number, body: any) {
@@ -19,6 +19,10 @@ function json(status: number, body: any) {
 
 function cleanEmail(value: unknown) {
   return String(value ?? "").trim().toLowerCase();
+}
+
+function tenantBaseUrl(subdomain: string) {
+  return `https://${subdomain}.${ROOT_DOMAIN}`;
 }
 
 export async function GET() {
@@ -127,7 +131,9 @@ export async function POST(req: Request) {
       }
     );
 
-    const emailRedirectTo = `${APP_URL}/auth/callback?next=/setup`;
+    const workspaceUrl = tenantBaseUrl(subdomain);
+
+    const emailRedirectTo = `${workspaceUrl}/auth/callback?next=/setup`;
 
     const { data: signUpData, error: signUpError } = await supabaseAuth.auth.signUp({
       email: adminEmail,
@@ -139,6 +145,7 @@ export async function POST(req: Request) {
           signup_intent_id: intent.id,
           company_name: companyName,
           workspace_subdomain: subdomain,
+          workspace_url: workspaceUrl,
         },
       },
     });
@@ -163,6 +170,7 @@ export async function POST(req: Request) {
       ok: true,
       message: "Check your email to confirm your account.",
       workspace: `${subdomain}.${ROOT_DOMAIN}`,
+      emailRedirectTo,
     });
   } catch (err) {
     return json(500, {
