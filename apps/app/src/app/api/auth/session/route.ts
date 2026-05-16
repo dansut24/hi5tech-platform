@@ -1,19 +1,21 @@
 import { NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 
 export const dynamic = "force-dynamic";
 
-function json(status: number, body: any, response?: NextResponse) {
-  const res =
-    response ??
-    NextResponse.json(body, {
-      status,
-      headers: {
-        "cache-control": "no-store",
-      },
-    });
+type CookieToSet = {
+  name: string;
+  value: string;
+  options: CookieOptions;
+};
 
-  return res;
+function json(status: number, body: any) {
+  return NextResponse.json(body, {
+    status,
+    headers: {
+      "cache-control": "no-store",
+    },
+  });
 }
 
 export async function POST(req: Request) {
@@ -43,7 +45,7 @@ export async function POST(req: Request) {
         getAll() {
           return [];
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: CookieToSet[]) {
           cookiesToSet.forEach(({ name, value, options }) => {
             response.cookies.set(name, value, options);
           });
