@@ -20,16 +20,16 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
 
   const tokenHash = url.searchParams.get("token_hash");
-  const type = (url.searchParams.get("type") || "email") as EmailOtpType;
+  const type = (url.searchParams.get("type") || "signup") as EmailOtpType;
   const next = safeNext(url.searchParams.get("next"));
-
-  const redirectUrl = new URL(next, url.origin);
 
   if (!tokenHash) {
     const failedUrl = new URL("/auth/error", url.origin);
     failedUrl.searchParams.set("message", "Missing confirmation token");
     return NextResponse.redirect(failedUrl);
   }
+
+  const redirectUrl = new URL(next, url.origin);
 
   const response = NextResponse.redirect(redirectUrl);
 
@@ -43,7 +43,12 @@ export async function GET(req: NextRequest) {
         },
         setAll(cookiesToSet: CookieToSet[]) {
           cookiesToSet.forEach(({ name, value, options }) => {
-            response.cookies.set(name, value, options);
+            response.cookies.set(name, value, {
+              ...options,
+              path: "/",
+              sameSite: "lax",
+              secure: true,
+            });
           });
         },
       },
