@@ -2,17 +2,19 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export type OnboardingProduct = "itsm" | "control" | "both";
 
-export type CreateTenantWorkspaceInput = {
-  userId: string;
-  email: string;
-  fullName?: string | null;
-  companyName: string;
+export type TenantSignupIntent = {
+  id: string;
+  company_name: string;
   subdomain: string;
-  product: OnboardingProduct;
-  timezone?: string | null;
+  root_domain: string;
+  admin_name: string;
+  admin_email: string;
+  status: string;
+  auth_user_id?: string | null;
+  created_tenant_id?: string | null;
 };
 
-const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "hi5tech.co.uk";
+export const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "hi5tech.co.uk";
 
 export function normalizeSubdomain(input: string) {
   return input
@@ -31,14 +33,8 @@ export function productLabel(product: OnboardingProduct) {
 }
 
 export function getProductModules(product: OnboardingProduct) {
-  if (product === "itsm") {
-    return ["itsm", "selfservice", "admin"];
-  }
-
-  if (product === "control") {
-    return ["control", "admin"];
-  }
-
+  if (product === "itsm") return ["itsm", "selfservice", "admin"];
+  if (product === "control") return ["control", "admin"];
   return ["itsm", "control", "selfservice", "admin"];
 }
 
@@ -91,37 +87,39 @@ export function getProductEntitlements(product: OnboardingProduct) {
   };
 }
 
-async function insertTenant(input: CreateTenantWorkspaceInput) {
+async function createTenantFromIntent(intent: TenantSignupIntent, userId: string, product: OnboardingProduct) {
   const admin = supabaseAdmin();
 
   const trialEndsAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
 
-  const fullPayload = {
-    name: input.companyName,
-    company_name: input.companyName,
-    domain: ROOT_DOMAIN,
-    subdomain: input.subdomain,
+  const payload = {
+    name: intent.company_name,
+    company_name: intent.company_name,
+    domain: intent.root_domain || ROOT_DOMAIN,
+    subdomain: intent.subdomain,
     status: "trial",
     plan: "trial",
     is_active: true,
     trial_ends_at: trialEndsAt,
-    created_by: input.userId,
-    onboarding_product: input.product,
+    created_by: userId,
+    onboarding_product: product,
     onboarding_completed_at: new Date().toISOString(),
   };
 
   const { data, error } = await admin
     .from("tenants")
-    .insert(fullPayload)
+    .insert(payload)
     .select("id, name, company_name, domain, subdomain, status, plan, trial_ends_at")
     .single();
 
-  if (!error && data) return data;
+  if (!error && data) {
+    return data;
+  }
 
   const minimalPayload = {
-    name: input.companyName,
-    domain: ROOT_DOMAIN,
-    subdomain: input.subdomain,
+    name: intent.company_name,
+    domain: intent.root_domain || ROOT_DOMAIN,
+    subdomain: intent.subdomain,
     is_active: true,
   };
 
@@ -138,48 +136,57 @@ async function insertTenant(input: CreateTenantWorkspaceInput) {
   return retry.data;
 }
 
-export async function createTenantWorkspace(input: CreateTenantWorkspaceInput) {
+export async function completeTenantWorkspaceFromIntent({
+  intent,
+  userId,
+  email,
+  product,
+  timezone,
+}: {
+  intent: TenantSignupIntent;
+  userId: string;
+  email: string;
+  product: OnboardingProduct;
+  timezone: string;
+}) {
   const admin = supabaseAdmin();
-
-  const companyName = input.companyName.trim();
-  const subdomain = normalizeSubdomain(input.subdomain);
-  const product = input.product;
-
-  if (!companyName) {
-    throw new Error("Company name is required");
-  }
-
-  if (!subdomain || subdomain.length < 3) {
-    throw new Error("Workspace URL must be at least 3 characters");
-  }
 
   if (!["itsm", "control", "both"].includes(product)) {
     throw new Error("Invalid product selection");
   }
 
-  const { data: existing } = await admin
-    .from("tenants")
-    .select("id")
-    .eq("domain", ROOT_DOMAIN)
-    .eq("subdomain", subdomain)
-    .maybeSingle();
-
-  if (existing?.id) {
-    throw new Error("That workspace URL is already taken");
+  if (intent.status === "completed" && intent.created_tenant_id) {
+    return {
+      tenant: {
+        id: intent.created_tenant_id,
+        subdomain: intent.subdomain,
+        domain: intent.root_domain || ROOT_DOMAIN,
+      },
+      product,
+      productLabel: productLabel(product),
+      tenantUrl: `https://${intent.subdomain}.${intent.root_domain || ROOT_DOMAIN}`,
+      alreadyCompleted: true,
+    };
   }
 
-  const tenant = await insertTenant({
-    ...input,
-    companyName,
-    subdomain,
-    product,
-  });
+  const { data: existingTenant } = await admin
+    .from("tenants")
+    .select("id")
+    .eq("domain", intent.root_domain || ROOT_DOMAIN)
+    .eq("subdomain", intent.subdomain)
+    .maybeSingle();
+
+  if (existingTenant?.id) {
+    throw new Error("This workspace URL is already active");
+  }
+
+  const tenant = await createTenantFromIntent(intent, userId, product);
 
   await admin.from("profiles").upsert(
     {
-      id: input.userId,
-      email: input.email,
-      full_name: input.fullName || input.email,
+      id: userId,
+      email,
+      full_name: intent.admin_name || email,
       tenant_id: tenant.id,
       created_at: new Date().toISOString(),
     },
@@ -191,7 +198,7 @@ export async function createTenantWorkspace(input: CreateTenantWorkspaceInput) {
     .upsert(
       {
         tenant_id: tenant.id,
-        user_id: input.userId,
+        user_id: userId,
         role: "owner",
         created_at: new Date().toISOString(),
       },
@@ -217,8 +224,9 @@ export async function createTenantWorkspace(input: CreateTenantWorkspaceInput) {
   await admin.from("tenant_settings").upsert(
     {
       tenant_id: tenant.id,
-      company_name: companyName,
-      timezone: input.timezone || "Europe/London",
+      company_name: intent.company_name,
+      support_email: intent.admin_email,
+      timezone: timezone || "Europe/London",
       onboarding_completed: true,
       onboarding_complete: true,
       updated_at: new Date().toISOString(),
@@ -296,7 +304,7 @@ export async function createTenantWorkspace(input: CreateTenantWorkspaceInput) {
               : "available",
           config_json: {},
           layout_json: {},
-          updated_by: input.userId,
+          updated_by: userId,
         });
       }
     }
@@ -331,6 +339,15 @@ export async function createTenantWorkspace(input: CreateTenantWorkspaceInput) {
       { onConflict: "tenant_id,slug" }
     );
   }
+
+  await admin
+    .from("tenant_signup_intents")
+    .update({
+      status: "completed",
+      created_tenant_id: tenant.id,
+      completed_at: new Date().toISOString(),
+    })
+    .eq("id", intent.id);
 
   return {
     tenant,
