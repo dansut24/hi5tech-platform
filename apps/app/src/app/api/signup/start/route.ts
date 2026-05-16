@@ -21,6 +21,18 @@ function cleanEmail(value: unknown) {
   return String(value ?? "").trim().toLowerCase();
 }
 
+export async function GET() {
+  return json(200, {
+    ok: true,
+    route: "platform-signup-start",
+    appUrl: APP_URL,
+    rootDomain: ROOT_DOMAIN,
+    hasSignupProxySecret: Boolean(SIGNUP_PROXY_SECRET),
+    hasSupabaseUrl: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
+    hasSupabaseAnonKey: Boolean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
+  });
+}
+
 export async function POST(req: Request) {
   try {
     if (SIGNUP_PROXY_SECRET) {
