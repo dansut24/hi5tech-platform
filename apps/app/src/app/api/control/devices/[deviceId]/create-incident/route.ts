@@ -59,6 +59,19 @@ function clean(value: unknown) {
   return text || null;
 }
 
+function normalizePriority(value: unknown) {
+  const v = String(value ?? "").trim().toLowerCase();
+
+  if (v === "low") return "low";
+  if (v === "normal") return "normal";
+  if (v === "medium") return "normal";
+  if (v === "high") return "high";
+  if (v === "critical") return "critical";
+  if (v === "urgent") return "critical";
+
+  return "normal";
+}
+
 async function loadDevice(tenantId: string, deviceId: string) {
   const admin = supabaseAdmin();
 
@@ -109,6 +122,7 @@ async function createAssetFromDevice(tenantId: string, userId: string, device: a
   if (existing) return existing;
 
   const assetName = device.hostname || `Device ${device.device_id}`;
+  const now = new Date().toISOString();
 
   const { data: asset, error } = await admin
     .from("assets")
@@ -126,7 +140,7 @@ async function createAssetFromDevice(tenantId: string, userId: string, device: a
         created_from: "control_create_ticket",
       },
       created_by: userId,
-      updated_at: new Date().toISOString(),
+      updated_at: now,
     })
     .select("*")
     .single();
@@ -176,7 +190,7 @@ export async function POST(
 
   const title = clean(body?.title);
   const description = clean(body?.description);
-  const priority = clean(body?.priority) || "medium";
+  const priority = normalizePriority(body?.priority);
   const category = clean(body?.category) || "Device";
   const createAssetIfMissing = body?.create_asset_if_missing !== false;
 
@@ -194,32 +208,32 @@ export async function POST(
     linkedAsset = await createAssetFromDevice(tenantId, me.id, device);
   }
 
-  const incidentTitle =
-    title ||
-    `Issue with ${device.hostname || device.device_id}`;
-
+  const incidentTitle = title || `Issue with ${device.hostname || device.device_id}`;
   const now = new Date().toISOString();
 
-const payload: Record<string, any> = {
-  tenant_id: tenantId,
-  title: incidentTitle,
-  description: buildDescription(device, description),
-  category,
-  status: "open",
-  priority,
-  triage_status: "new",
+  const payload: Record<string, any> = {
+    tenant_id: tenantId,
+    title: incidentTitle,
+    description: buildDescription(device, description),
+    category,
+    status: "open",
+    priority,
+    triage_status: "new",
 
-  // Required by your incidents table
-  submitted_by: me.id,
+    // Required by your current incidents schema.
+    submitted_by: me.id,
 
-  // Useful for current workflow
-  requester_id: me.id,
-  device_id: device.device_id,
-  asset_id: linkedAsset?.id ?? null,
+    // Useful for requester/workflow context.
+    requester_id: me.id,
 
-  created_at: now,
-  updated_at: now,
-};
+    // Device/asset linkage.
+    device_id: device.device_id,
+    asset_id: linkedAsset?.id ?? null,
+
+    created_at: now,
+    updated_at: now,
+  };
+
   const { data: incident, error } = await admin
     .from("incidents")
     .insert(payload)
