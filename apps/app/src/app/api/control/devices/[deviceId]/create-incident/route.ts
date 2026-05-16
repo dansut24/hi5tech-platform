@@ -62,14 +62,14 @@ function clean(value: unknown) {
 function normalizePriority(value: unknown) {
   const v = String(value ?? "").trim().toLowerCase();
 
-  if (v === "low") return "low";
-  if (v === "normal") return "normal";
-  if (v === "medium") return "normal";
-  if (v === "high") return "high";
-  if (v === "critical") return "critical";
-  if (v === "urgent") return "critical";
+  if (v === "low") return "Low";
+  if (v === "normal") return "Medium";
+  if (v === "medium") return "Medium";
+  if (v === "high") return "High";
+  if (v === "critical") return "Critical";
+  if (v === "urgent") return "Critical";
 
-  return "normal";
+  return "Medium";
 }
 
 async function loadDevice(tenantId: string, deviceId: string) {
@@ -220,13 +220,9 @@ export async function POST(
     priority,
     triage_status: "new",
 
-    // Required by your current incidents schema.
     submitted_by: me.id,
-
-    // Useful for requester/workflow context.
     requester_id: me.id,
 
-    // Device/asset linkage.
     device_id: device.device_id,
     asset_id: linkedAsset?.id ?? null,
 
