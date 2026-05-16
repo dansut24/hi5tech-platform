@@ -1,39 +1,39 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
+import { createServerClient } from "@supabase/ssr";
 
-type Body = {
-  access_token: string;
-  refresh_token: string;
-};
+export const dynamic = "force-dynamic";
 
-type CookieToSet = {
-  name: string;
-  value: string;
-  options?: CookieOptions;
-};
+function json(status: number, body: any, response?: NextResponse) {
+  const res =
+    response ??
+    NextResponse.json(body, {
+      status,
+      headers: {
+        "cache-control": "no-store",
+      },
+    });
 
-const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "hi5tech.co.uk";
-
-function cookieDomainFromHost(host?: string | null) {
-  const h = String(host || "").split(":")[0].toLowerCase();
-  if (!h) return undefined;
-  if (h === "localhost" || h.endsWith(".vercel.app")) return undefined;
-  return `.${ROOT_DOMAIN}`;
+  return res;
 }
 
 export async function POST(req: Request) {
-  const cookieStore = await cookies();
-  const { access_token, refresh_token } = (await req.json().catch(() => ({}))) as Partial<Body>;
+  const body = await req.json().catch(() => null);
 
-  if (!access_token || !refresh_token) {
-    return NextResponse.json({ error: "Missing tokens" }, { status: 400 });
+  const accessToken = String(body?.access_token ?? "");
+  const refreshToken = String(body?.refresh_token ?? "");
+
+  if (!accessToken || !refreshToken) {
+    return json(400, { error: "Missing auth tokens" });
   }
 
-  const host = req.headers.get("host");
-  const domain = cookieDomainFromHost(host);
-
-  const res = NextResponse.json({ ok: true });
+  const response = NextResponse.json(
+    { ok: true },
+    {
+      headers: {
+        "cache-control": "no-store",
+      },
+    }
+  );
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -41,28 +41,25 @@ export async function POST(req: Request) {
     {
       cookies: {
         getAll() {
-          return cookieStore.getAll();
+          return [];
         },
-        setAll(cookiesToSet: CookieToSet[]) {
-          for (const { name, value, options } of cookiesToSet) {
-            // ✅ Force shared domain so every tenant subdomain sees auth
-            res.cookies.set(name, value, {
-              ...options,
-              domain: options?.domain ?? domain,
-              path: options?.path ?? "/",
-            });
-          }
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            response.cookies.set(name, value, options);
+          });
         },
       },
     }
   );
 
-  // ✅ This is the key line: it persists session into cookies via setAll()
-  const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+  const { error } = await supabase.auth.setSession({
+    access_token: accessToken,
+    refresh_token: refreshToken,
+  });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 401 });
+    return json(401, { error: error.message });
   }
 
-  return res;
+  return response;
 }
