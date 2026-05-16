@@ -216,9 +216,11 @@ export async function POST(
     title: incidentTitle,
     description: buildDescription(device, description),
     category,
-    status: "open",
+
+    // Must match your current Supabase check constraints exactly.
+    status: "Open",
     priority,
-    triage_status: "new",
+    triage_status: "triage",
 
     submitted_by: me.id,
     requester_id: me.id,
