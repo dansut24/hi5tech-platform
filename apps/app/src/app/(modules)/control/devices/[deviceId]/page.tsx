@@ -8,6 +8,7 @@ import ActivityPanel from "../../[id]/ui/activity-panel";
 import RemotePanel from "../../[id]/ui/remote-panel";
 import AssetLinkPanel from "../../ui/asset-link-panel";
 import CreateIncidentFromDeviceButton from "../../ui/create-incident-from-device-button";
+import DeviceTicketsPanel from "../../ui/device-tickets-panel";
 import { getActiveTenantId } from "@/lib/tenant";
 import { getTenantFeatures } from "@/lib/entitlements";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -1018,6 +1019,7 @@ export default async function DevicePage({
 
   const tabs = [
     { key: "overview", label: "Overview" },
+    { key: "tickets", label: "Tickets" },
     { key: "remote", label: "Remote", locked: !canRemote },
     { key: "terminal", label: "Terminal", locked: !canTerminal },
     { key: "files", label: "Files", locked: !canFiles },
@@ -1116,6 +1118,10 @@ export default async function DevicePage({
         />
       ) : null}
 
+      {tab === "tickets" ? (
+        <DeviceTicketsPanel deviceId={deviceId} hostname={device.hostname} />
+      ) : null}
+
       {tab === "remote" ? <RemotePanel deviceId={deviceId} /> : null}
       {tab === "terminal" ? <TerminalPanel deviceId={deviceId} /> : null}
       {tab === "files" ? <FileBrowserPanel deviceId={deviceId} /> : null}
@@ -1199,6 +1205,7 @@ export default async function DevicePage({
 
       {![
         "overview",
+        "tickets",
         "remote",
         "terminal",
         "files",
