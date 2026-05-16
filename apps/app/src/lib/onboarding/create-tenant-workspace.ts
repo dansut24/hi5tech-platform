@@ -14,6 +14,20 @@ export type TenantSignupIntent = {
   created_tenant_id?: string | null;
 };
 
+export type SetupOptions = {
+  companyName?: string;
+  supportEmail?: string;
+  region?: string;
+  accentColor?: string;
+  appearance?: string;
+  useItsmDefaults?: boolean;
+  useControlDefaults?: boolean;
+  invites?: Array<{
+    email: string;
+    role: string;
+  }>;
+};
+
 export const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "hi5tech.co.uk";
 
 export function normalizeSubdomain(input: string) {
@@ -87,6 +101,19 @@ export function getProductEntitlements(product: OnboardingProduct) {
   };
 }
 
+function cleanText(value: unknown, fallback = "") {
+  const text = String(value ?? "").trim();
+  return text || fallback;
+}
+
+function cleanEmail(value: unknown) {
+  return String(value ?? "").trim().toLowerCase();
+}
+
+function validInviteRole(value: string) {
+  return ["admin", "technician", "viewer"].includes(value) ? value : "technician";
+}
+
 async function createTenantFromIntent(intent: TenantSignupIntent, userId: string, product: OnboardingProduct) {
   const admin = supabaseAdmin();
 
@@ -142,18 +169,28 @@ export async function completeTenantWorkspaceFromIntent({
   email,
   product,
   timezone,
+  setup,
 }: {
   intent: TenantSignupIntent;
   userId: string;
   email: string;
   product: OnboardingProduct;
   timezone: string;
+  setup?: SetupOptions;
 }) {
   const admin = supabaseAdmin();
 
   if (!["itsm", "control", "both"].includes(product)) {
     throw new Error("Invalid product selection");
   }
+
+  const companyName = cleanText(setup?.companyName, intent.company_name);
+  const supportEmail = cleanEmail(setup?.supportEmail || intent.admin_email || email);
+  const region = cleanText(setup?.region, "United Kingdom");
+  const accentColor = cleanText(setup?.accentColor, "violet");
+  const appearance = cleanText(setup?.appearance, "system");
+  const useItsmDefaults = setup?.useItsmDefaults !== false;
+  const useControlDefaults = setup?.useControlDefaults !== false;
 
   if (intent.status === "completed" && intent.created_tenant_id) {
     return {
@@ -180,7 +217,14 @@ export async function completeTenantWorkspaceFromIntent({
     throw new Error("This workspace URL is already active");
   }
 
-  const tenant = await createTenantFromIntent(intent, userId, product);
+  const tenant = await createTenantFromIntent(
+    {
+      ...intent,
+      company_name: companyName,
+    },
+    userId,
+    product
+  );
 
   await admin.from("profiles").upsert(
     {
@@ -224,11 +268,15 @@ export async function completeTenantWorkspaceFromIntent({
   await admin.from("tenant_settings").upsert(
     {
       tenant_id: tenant.id,
-      company_name: intent.company_name,
-      support_email: intent.admin_email,
+      company_name: companyName,
+      support_email: supportEmail,
       timezone: timezone || "Europe/London",
+      default_region: region,
+      default_appearance: appearance,
+      accent_color: accentColor,
       onboarding_completed: true,
       onboarding_complete: true,
+      setup_completed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     },
     { onConflict: "tenant_id" }
@@ -314,7 +362,26 @@ export async function completeTenantWorkspaceFromIntent({
     });
   }
 
-  if (product === "control" || product === "both") {
+  if ((product === "itsm" || product === "both") && useItsmDefaults) {
+    await admin.from("tenant_itsm_defaults").upsert(
+      {
+        tenant_id: tenant.id,
+        priorities: ["Low", "Medium", "High", "Critical"],
+        statuses: ["Open", "In Progress", "Resolved", "Closed"],
+        categories: ["Hardware", "Software", "Access", "Network", "Other"],
+        sla_profile: {
+          low_hours: 72,
+          medium_hours: 48,
+          high_hours: 24,
+          critical_hours: 4,
+        },
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "tenant_id" }
+    );
+  }
+
+  if ((product === "control" || product === "both") && useControlDefaults) {
     await admin.from("device_groups").upsert(
       [
         {
@@ -338,6 +405,24 @@ export async function completeTenantWorkspaceFromIntent({
       ],
       { onConflict: "tenant_id,slug" }
     );
+  }
+
+  const inviteRows =
+    setup?.invites
+      ?.map((invite) => ({
+        tenant_id: tenant.id,
+        email: cleanEmail(invite.email),
+        role: validInviteRole(invite.role),
+        invited_by: userId,
+        status: "pending",
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      }))
+      .filter((invite) => invite.email && invite.email.includes("@") && invite.email !== cleanEmail(email)) ?? [];
+
+  if (inviteRows.length) {
+    await admin.from("tenant_invites").upsert(inviteRows, {
+      onConflict: "tenant_id,email",
+    });
   }
 
   await admin
