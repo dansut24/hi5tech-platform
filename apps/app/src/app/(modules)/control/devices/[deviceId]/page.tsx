@@ -7,6 +7,7 @@ import ServicesPanel from "../../[id]/ui/services-panel";
 import ActivityPanel from "../../[id]/ui/activity-panel";
 import RemotePanel from "../../[id]/ui/remote-panel";
 import AssetLinkPanel from "../../ui/asset-link-panel";
+import CreateIncidentFromDeviceButton from "../../ui/create-incident-from-device-button";
 import { getActiveTenantId } from "@/lib/tenant";
 import { getTenantFeatures } from "@/lib/entitlements";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -1088,9 +1089,7 @@ export default async function DevicePage({
               Refresh inventory
             </button>
 
-            <button className="hi5-btn-ghost text-sm" type="button" title="Coming soon">
-              Create ticket
-            </button>
+            <CreateIncidentFromDeviceButton deviceId={deviceId} hostname={device.hostname} />
           </div>
         </div>
 
