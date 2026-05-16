@@ -6,6 +6,19 @@ import { createBrowserClient } from "@supabase/ssr";
 type Mode = "password" | "otp";
 type Step = "enterEmail" | "enterCode";
 
+function getSafeNext() {
+  if (typeof window === "undefined") return "/apps";
+
+  const params = new URLSearchParams(window.location.search);
+  const next = params.get("next") || "/apps";
+
+  if (!next.startsWith("/") || next.startsWith("//")) {
+    return "/apps";
+  }
+
+  return next;
+}
+
 export default function LoginForm() {
   const supabase = useMemo(() => {
     return createBrowserClient(
@@ -29,10 +42,18 @@ export default function LoginForm() {
     const r = await fetch("/api/auth/allowed", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email: e }),
+      body: JSON.stringify({
+        email: e,
+        next: getSafeNext(),
+      }),
     });
+
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j?.error || "Auth check failed");
+
+    if (!r.ok) {
+      throw new Error(j?.error || "Auth check failed");
+    }
+
     return Boolean(j?.allowed);
   }
 
@@ -41,73 +62,86 @@ export default function LoginForm() {
     setErr(message);
   }
 
-  /**
-   * After a successful sign-in we have a live session in memory.
-   * We stamp it into shared-domain cookies HERE — while the access_token
-   * is available — before redirecting anywhere.
-   * This avoids the race condition where /auth/stamp loads a fresh Supabase
-   * browser client that hasn't hydrated from localStorage yet and gets null.
-   */
-  async function stampAndRedirect(accessToken: string, refreshToken: string, next = "/apps") {
+  async function stampAndRedirect(
+    accessToken: string,
+    refreshToken: string,
+    next = getSafeNext()
+  ) {
     try {
       await fetch("/api/auth/session", {
         method: "POST",
         headers: { "content-type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ access_token: accessToken, refresh_token: refreshToken }),
+        body: JSON.stringify({
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        }),
       });
     } catch {
-      // Even if stamping fails, proceed — the Bearer token flow is a fallback
+      // Continue anyway — browser Supabase session may still exist.
     }
+
     window.location.href = next;
   }
 
-  // ------------------------
-  // PASSWORD LOGIN
-  // ------------------------
   async function handlePasswordLogin() {
     setLoading(true);
     setErr(null);
     setInfo(null);
 
     const e = email.trim().toLowerCase();
+
     if (!e) return doneErr("Please enter your email.");
     if (!password) return doneErr("Please enter your password.");
 
     try {
       const allowed = await checkAllowed(e);
-      if (!allowed) return doneErr("That email isn't authorised for this tenant.");
+
+      if (!allowed) {
+        return doneErr("That email isn't authorised for this tenant.");
+      }
     } catch (ex: any) {
       return doneErr(ex?.message || "Auth check failed.");
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email: e, password });
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: e,
+      password,
+    });
+
     if (error) return doneErr(error.message);
     if (!data.session) return doneErr("Sign in succeeded but no session was returned.");
 
     setLoading(false);
-    await stampAndRedirect(data.session.access_token, data.session.refresh_token, "/apps");
+    await stampAndRedirect(data.session.access_token, data.session.refresh_token);
   }
 
-  // ------------------------
-  // EMAIL OTP
-  // ------------------------
   async function sendOtpCode() {
     setLoading(true);
     setErr(null);
     setInfo(null);
 
     const e = email.trim().toLowerCase();
+
     if (!e) return doneErr("Please enter your email.");
 
     try {
       const allowed = await checkAllowed(e);
-      if (!allowed) return doneErr("That email isn't authorised for this tenant.");
+
+      if (!allowed) {
+        return doneErr("That email isn't authorised for this tenant.");
+      }
     } catch (ex: any) {
       return doneErr(ex?.message || "Auth check failed.");
     }
 
-    const { error } = await supabase.auth.signInWithOtp({ email: e });
+    const { error } = await supabase.auth.signInWithOtp({
+      email: e,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/confirm?next=${encodeURIComponent(getSafeNext())}`,
+      },
+    });
+
     if (error) return doneErr(error.message);
 
     setLoading(false);
@@ -122,6 +156,7 @@ export default function LoginForm() {
 
     const e = email.trim().toLowerCase();
     const token = code.trim();
+
     if (!token) return doneErr("Please enter the code.");
 
     const { data, error } = await supabase.auth.verifyOtp({
@@ -134,29 +169,34 @@ export default function LoginForm() {
     if (!data.session) return doneErr("Verified, but no session returned.");
 
     setLoading(false);
-    await stampAndRedirect(data.session.access_token, data.session.refresh_token, "/apps");
+    await stampAndRedirect(data.session.access_token, data.session.refresh_token);
   }
 
-  // ------------------------
-  // RESET PASSWORD
-  // ------------------------
   async function sendPasswordReset() {
     setLoading(true);
     setErr(null);
     setInfo(null);
 
     const e = email.trim().toLowerCase();
+
     if (!e) return doneErr("Enter your email first.");
 
     try {
       const allowed = await checkAllowed(e);
-      if (!allowed) return doneErr("That email isn't authorised for this tenant.");
+
+      if (!allowed) {
+        return doneErr("That email isn't authorised for this tenant.");
+      }
     } catch (ex: any) {
       return doneErr(ex?.message || "Auth check failed.");
     }
 
     const redirectTo = `${window.location.origin}/auth/callback?next=/auth/reset`;
-    const { error } = await supabase.auth.resetPasswordForEmail(e, { redirectTo });
+
+    const { error } = await supabase.auth.resetPasswordForEmail(e, {
+      redirectTo,
+    });
+
     if (error) return doneErr(error.message);
 
     setLoading(false);
