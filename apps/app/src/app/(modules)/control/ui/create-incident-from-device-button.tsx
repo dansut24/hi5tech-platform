@@ -17,7 +17,7 @@ export default function CreateIncidentFromDeviceButton({ deviceId, hostname }: P
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState(`Issue with ${hostname || deviceId}`);
   const [description, setDescription] = useState("");
-  const [priority, setPriority] = useState("medium");
+  const [priority, setPriority] = useState("normal");
   const [createAssetIfMissing, setCreateAssetIfMissing] = useState(true);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -143,7 +143,7 @@ export default function CreateIncidentFromDeviceButton({ deviceId, hostname }: P
                     onChange={(e) => setPriority(e.target.value)}
                   >
                     <option value="low">Low</option>
-                    <option value="medium">Medium</option>
+                    <option value="normal">Normal</option>
                     <option value="high">High</option>
                     <option value="critical">Critical</option>
                   </select>
