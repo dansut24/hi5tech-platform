@@ -198,19 +198,28 @@ export async function POST(
     title ||
     `Issue with ${device.hostname || device.device_id}`;
 
-  const payload: Record<string, any> = {
-    tenant_id: tenantId,
-    title: incidentTitle,
-    description: buildDescription(device, description),
-    category,
-    status: "open",
-    priority,
-    triage_status: "new",
-    device_id: device.device_id,
-    asset_id: linkedAsset?.id ?? null,
-    updated_at: new Date().toISOString(),
-  };
+  const now = new Date().toISOString();
 
+const payload: Record<string, any> = {
+  tenant_id: tenantId,
+  title: incidentTitle,
+  description: buildDescription(device, description),
+  category,
+  status: "open",
+  priority,
+  triage_status: "new",
+
+  // Required by your incidents table
+  submitted_by: me.id,
+
+  // Useful for current workflow
+  requester_id: me.id,
+  device_id: device.device_id,
+  asset_id: linkedAsset?.id ?? null,
+
+  created_at: now,
+  updated_at: now,
+};
   const { data: incident, error } = await admin
     .from("incidents")
     .insert(payload)
