@@ -141,7 +141,13 @@ html {
   height: 100%;
   min-height: 100%;
   background: rgb(var(--hi5-bg));
-  overscroll-behavior-y: none;
+
+  /*
+    Keep browser-native mobile pull-to-refresh enabled.
+    Do not use overscroll-behavior-y: none here.
+  */
+  overscroll-behavior-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 body {
@@ -149,9 +155,13 @@ body {
   min-height: 100dvh;
   color: rgb(var(--hi5-fg));
   background: transparent !important;
-  overscroll-behavior-y: none;
-}
 
+  /*
+    Allows iOS/Android browser pull-to-refresh across the app.
+  */
+  overscroll-behavior-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
 /* Helps mobile Safari avoid showing plain black/white past content */
 body > * {
   min-height: 100dvh;
