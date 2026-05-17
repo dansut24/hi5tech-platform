@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { getPricingPlan } from "@/lib/billing/pricing";
 
 export type OnboardingProduct = "itsm" | "control" | "both";
 
@@ -283,7 +284,6 @@ export async function completeTenantWorkspaceFromIntent({
       timezone: timezone || "Europe/London",
       default_region: region,
 
-      // New theme settings
       default_appearance: appearance,
       accent_color: accentColor,
       theme_preset: accentColor === "custom" ? "custom" : accentColor,
@@ -291,6 +291,28 @@ export async function completeTenantWorkspaceFromIntent({
       onboarding_completed: true,
       onboarding_complete: true,
       setup_completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "tenant_id" }
+  );
+
+  const pricingPlan = getPricingPlan(product);
+
+  await admin.from("tenant_billing_profiles").upsert(
+    {
+      tenant_id: tenant.id,
+      plan_key: pricingPlan.key,
+      billing_status: "trial",
+      trial_started_at: new Date().toISOString(),
+      trial_ends_at:
+        tenant.trial_ends_at ||
+        new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+      billing_email: supportEmail,
+      currency: "GBP",
+      base_monthly_amount: pricingPlan.baseMonthly,
+      per_technician_amount: pricingPlan.perTechnician,
+      per_device_amount: pricingPlan.perDevice,
+      cancel_at_period_end: false,
       updated_at: new Date().toISOString(),
     },
     { onConflict: "tenant_id" }
