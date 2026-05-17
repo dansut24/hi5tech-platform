@@ -1,14 +1,13 @@
 import React from "react";
 import Link from "next/link";
-import { headers } from "next/headers";
 import { redirect, notFound } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
-import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
 import {
   getTenantBillingProfile,
-  getTenantFeatureMap,
 } from "@/lib/billing/tenant-billing";
 import TrialBanner from "@/components/billing/trial-banner";
+import { resolveTenantEnvironment } from "@/lib/tenant/environment-host";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 type ModuleKey = "itsm" | "control" | "selfservice" | "admin";
 
@@ -85,6 +84,20 @@ const MODULES: Array<{
     ),
   },
 ];
+
+const ALL_FEATURES: Record<string, boolean> = {
+  itsm_core: true,
+  devices_ticket_context: true,
+  devices_inventory: true,
+  devices_reporting: true,
+  remote_control: true,
+  remote_terminal: true,
+  remote_files: true,
+  scripts: true,
+  monitoring: true,
+  patch_management: true,
+  automation: true,
+};
 
 function initials(name?: string | null, email?: string | null) {
   const n = (name || "").trim();
@@ -204,7 +217,7 @@ function UpgradeHint({
     <div className="hi5-card p-5">
       <div className="text-sm font-extrabold">Want to add more modules?</div>
       <p className="mt-1 text-sm opacity-75">
-        Products not included in your current plan are hidden from this Apps page. Workspace owners can add
+        Products not included in your live plan are hidden from Production. Workspace owners can add
         modules from Admin → Billing.
       </p>
 
@@ -229,15 +242,74 @@ function UpgradeHint({
   );
 }
 
-export default async function ModulesPage() {
-  const host = getEffectiveHost(await headers());
-  const parsed = parseTenantHost(host);
+async function getEnvironmentFeatureMap({
+  tenantId,
+  environmentId,
+  environmentKey,
+}: {
+  tenantId: string;
+  environmentId?: string | null;
+  environmentKey: "production" | "test" | "staging";
+}) {
+  if (environmentKey === "test") {
+    return { ...ALL_FEATURES };
+  }
 
-  if (parsed.subdomain === "admin") {
+  const admin = supabaseAdmin();
+
+  if (environmentId) {
+    const { data } = await admin
+      .from("tenant_feature_states")
+      .select("feature_key, status")
+      .eq("tenant_id", tenantId)
+      .eq("tenant_environment_id", environmentId);
+
+    const map: Record<string, boolean> = {};
+
+    for (const row of data ?? []) {
+      const status = String(row.status || "");
+
+      if (environmentKey === "production") {
+        map[row.feature_key] = status === "live";
+      } else {
+        map[row.feature_key] =
+          status === "available" ||
+          status === "selected" ||
+          status === "staged" ||
+          status === "live";
+      }
+    }
+
+    return map;
+  }
+
+  /*
+    Backwards-compatible fallback if environment rows do not exist yet.
+  */
+  const { data } = await admin
+    .from("tenant_entitlements")
+    .select("feature_key, enabled")
+    .eq("tenant_id", tenantId);
+
+  const fallback: Record<string, boolean> = {};
+
+  for (const row of data ?? []) {
+    fallback[row.feature_key] = row.enabled === true;
+  }
+
+  return fallback;
+}
+
+export default async function ModulesPage() {
+  const resolved = await resolveTenantEnvironment();
+
+  if (resolved?.isPlatformAdminHost) {
     redirect("/admin-console");
   }
 
-  if (!parsed.subdomain) notFound();
+  if (!resolved?.tenantId) {
+    notFound();
+  }
 
   const supabase = await supabaseServer();
 
@@ -245,14 +317,7 @@ export default async function ModulesPage() {
   const user = userRes.user;
   if (!user) redirect("/login");
 
-  const { data: tenant } = await supabase
-    .from("tenants")
-    .select("id, domain, subdomain, name, plan, status, trial_ends_at")
-    .eq("domain", parsed.rootDomain)
-    .eq("subdomain", parsed.subdomain)
-    .maybeSingle();
-
-  if (!tenant) notFound();
+  const tenant = resolved.tenant;
 
   const { data: membership } = await supabase
     .from("memberships")
@@ -280,7 +345,11 @@ export default async function ModulesPage() {
   const email = profile?.email ?? user.email ?? "";
 
   const [features, billingResult] = await Promise.all([
-    getTenantFeatureMap(tenant.id),
+    getEnvironmentFeatureMap({
+      tenantId: tenant.id,
+      environmentId: resolved.environment?.id,
+      environmentKey: resolved.environmentKey,
+    }),
     getTenantBillingProfile(tenant.id),
   ]);
 
@@ -388,6 +457,13 @@ export default async function ModulesPage() {
                   </span>
 
                   <span className="rounded-full border hi5-border px-2 py-1 bg-white/40 dark:bg-black/25">
+                    Environment:{" "}
+                    <span className="font-medium capitalize">
+                      {resolved.environmentKey}
+                    </span>
+                  </span>
+
+                  <span className="rounded-full border hi5-border px-2 py-1 bg-white/40 dark:bg-black/25">
                     Role: <span className="font-medium">{myRole}</span>
                   </span>
 
@@ -407,7 +483,7 @@ export default async function ModulesPage() {
                     Choose a module
                   </h2>
                   <p className="mt-1 text-sm opacity-75 leading-relaxed max-w-2xl 2xl:max-w-none">
-                    Only modules included in your current plan are shown here.
+                    Production shows live modules only. Test and staging use their own environment feature states.
                   </p>
                 </div>
 
@@ -417,7 +493,7 @@ export default async function ModulesPage() {
               </div>
             </div>
 
-            {canViewBilling && billing ? (
+            {canViewBilling && billing && resolved.environmentKey === "production" ? (
               <TrialBanner
                 planLabel={billingResult.plan.label}
                 planKey={billingResult.plan.key}
@@ -429,7 +505,7 @@ export default async function ModulesPage() {
               />
             ) : null}
 
-            {canViewBilling ? (
+            {canViewBilling && resolved.environmentKey === "production" ? (
               <UpgradeHint hasItsm={hasItsm} hasControl={hasControl} />
             ) : null}
           </div>
@@ -450,10 +526,10 @@ export default async function ModulesPage() {
                 <div className="text-lg font-extrabold">No modules available</div>
                 <p className="mt-2 text-sm opacity-75">
                   Your account is active, but no application modules are currently enabled for this
-                  workspace or your role.
+                  workspace, environment or your role.
                 </p>
 
-                {canViewBilling ? (
+                {canViewBilling && resolved.environmentKey === "production" ? (
                   <div className="mt-4">
                     <Link href="/admin/billing" className="hi5-btn-primary w-auto text-sm">
                       View billing and upgrades
