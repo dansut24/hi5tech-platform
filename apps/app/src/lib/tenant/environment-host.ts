@@ -7,11 +7,14 @@ export type TenantEnvironmentKey = "production" | "test" | "staging";
 
 export type TenantEnvironmentHost = {
   rootDomain: string;
+  host: string;
   hostSubdomain: string | null;
   tenantSubdomain: string | null;
   environmentKey: TenantEnvironmentKey;
   isPlatformAdminHost: boolean;
   isAppHost: boolean;
+  isRootMarketingHost: boolean;
+  isReservedHost: boolean;
   isTenantHost: boolean;
 };
 
@@ -61,6 +64,28 @@ export const RESERVED_TENANT_SUBDOMAINS = new Set([
   "prod",
   "production",
 ]);
+
+function cleanHost(value: string) {
+  return String(value || "")
+    .split(":")[0]
+    .trim()
+    .toLowerCase();
+}
+
+function getSubdomainFromHost(host: string, rootDomain = ROOT_DOMAIN) {
+  const h = cleanHost(host);
+  const root = cleanHost(rootDomain);
+
+  if (!h || !root) return null;
+  if (h === root) return null;
+
+  if (h.endsWith(`.${root}`)) {
+    const sub = h.slice(0, -(root.length + 1)).trim();
+    return sub || null;
+  }
+
+  return null;
+}
 
 export function parseEnvironmentSubdomain(subdomain?: string | null): {
   tenantSubdomain: string | null;
@@ -136,7 +161,7 @@ export function isReservedTenantSubdomain(value: string) {
   if (clean.endsWith("-stg")) return true;
 
   /*
-    Block the old prefix format too, just in case someone tries it.
+    Block the old prefix format too.
   */
   if (clean.startsWith("test-")) return true;
   if (clean.startsWith("stg-")) return true;
@@ -145,31 +170,70 @@ export function isReservedTenantSubdomain(value: string) {
 }
 
 export async function getTenantEnvironmentHost(): Promise<TenantEnvironmentHost> {
-  const host = getEffectiveHost(await headers());
+  const host = cleanHost(getEffectiveHost(await headers()));
+
+  /*
+    parseTenantHost may intentionally treat app/admin/www as non-tenant.
+    So we also derive the raw subdomain ourselves here.
+  */
   const parsed = parseTenantHost(host);
+  const rawSubdomain = getSubdomainFromHost(host, ROOT_DOMAIN);
+  const hostSubdomain = rawSubdomain || parsed.subdomain || null;
+  const rootDomain = parsed.rootDomain || ROOT_DOMAIN;
 
-  const hostSubdomain = parsed.subdomain || null;
+  const isRootMarketingHost =
+    host === ROOT_DOMAIN ||
+    host === `www.${ROOT_DOMAIN}`;
 
-  if (hostSubdomain === "admin") {
+  const isPlatformAdminHost = hostSubdomain === "admin";
+  const isAppHost = hostSubdomain === "app";
+  const isReservedHost =
+    Boolean(hostSubdomain) &&
+    RESERVED_TENANT_SUBDOMAINS.has(String(hostSubdomain)) &&
+    !isPlatformAdminHost &&
+    !isAppHost;
+
+  if (isPlatformAdminHost) {
     return {
-      rootDomain: parsed.rootDomain || ROOT_DOMAIN,
+      rootDomain,
+      host,
       hostSubdomain,
       tenantSubdomain: null,
       environmentKey: "production",
       isPlatformAdminHost: true,
       isAppHost: false,
+      isRootMarketingHost,
+      isReservedHost: false,
       isTenantHost: false,
     };
   }
 
-  if (hostSubdomain === "app") {
+  if (isAppHost) {
     return {
-      rootDomain: parsed.rootDomain || ROOT_DOMAIN,
+      rootDomain,
+      host,
       hostSubdomain,
       tenantSubdomain: null,
       environmentKey: "production",
       isPlatformAdminHost: false,
       isAppHost: true,
+      isRootMarketingHost,
+      isReservedHost: false,
+      isTenantHost: false,
+    };
+  }
+
+  if (isRootMarketingHost || isReservedHost) {
+    return {
+      rootDomain,
+      host,
+      hostSubdomain,
+      tenantSubdomain: null,
+      environmentKey: "production",
+      isPlatformAdminHost: false,
+      isAppHost: false,
+      isRootMarketingHost,
+      isReservedHost,
       isTenantHost: false,
     };
   }
@@ -177,12 +241,15 @@ export async function getTenantEnvironmentHost(): Promise<TenantEnvironmentHost>
   const env = parseEnvironmentSubdomain(hostSubdomain);
 
   return {
-    rootDomain: parsed.rootDomain || ROOT_DOMAIN,
+    rootDomain,
+    host,
     hostSubdomain,
     tenantSubdomain: env.tenantSubdomain,
     environmentKey: env.environmentKey,
     isPlatformAdminHost: false,
     isAppHost: false,
+    isRootMarketingHost,
+    isReservedHost: false,
     isTenantHost: Boolean(env.tenantSubdomain),
   };
 }
