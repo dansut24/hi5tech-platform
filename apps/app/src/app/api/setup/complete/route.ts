@@ -36,7 +36,9 @@ function validAppearance(value: string) {
 }
 
 function validAccent(value: string) {
-  return ["violet", "blue", "emerald", "rose", "orange"].includes(value) ? value : "violet";
+  return ["neutral", "violet", "blue", "emerald", "rose", "orange", "custom"].includes(value)
+    ? value
+    : "neutral";
 }
 
 function validInviteRole(value: string) {
@@ -61,7 +63,7 @@ export async function POST(req: Request) {
     const region = cleanText(body?.region, "United Kingdom");
     const companyName = cleanText(body?.companyName);
     const supportEmail = cleanEmail(body?.supportEmail);
-    const accentColor = validAccent(String(body?.accentColor ?? "violet"));
+    const accentColor = validAccent(String(body?.accentColor ?? "neutral"));
     const appearance = validAppearance(String(body?.appearance ?? "system"));
     const useItsmDefaults = body?.useItsmDefaults !== false;
     const useControlDefaults = body?.useControlDefaults !== false;
@@ -97,7 +99,9 @@ export async function POST(req: Request) {
 
     let { data: intent } = await admin
       .from("tenant_signup_intents")
-      .select("id, company_name, subdomain, root_domain, admin_name, admin_email, status, auth_user_id, created_tenant_id")
+      .select(
+        "id, company_name, subdomain, root_domain, admin_name, admin_email, status, auth_user_id, created_tenant_id"
+      )
       .eq("auth_user_id", user.id)
       .in("status", ["pending_email", "confirmed"])
       .order("created_at", { ascending: false })
@@ -107,7 +111,9 @@ export async function POST(req: Request) {
     if (!intent && user.email) {
       const res = await admin
         .from("tenant_signup_intents")
-        .select("id, company_name, subdomain, root_domain, admin_name, admin_email, status, auth_user_id, created_tenant_id")
+        .select(
+          "id, company_name, subdomain, root_domain, admin_name, admin_email, status, auth_user_id, created_tenant_id"
+        )
         .eq("admin_email", user.email.toLowerCase())
         .in("status", ["pending_email", "confirmed"])
         .order("created_at", { ascending: false })
@@ -118,7 +124,9 @@ export async function POST(req: Request) {
     }
 
     if (!intent) {
-      return json(404, { error: "Signup intent not found. Please start signup again." });
+      return json(404, {
+        error: "Signup intent not found. Please start signup again.",
+      });
     }
 
     if (intent.status === "pending_email") {
