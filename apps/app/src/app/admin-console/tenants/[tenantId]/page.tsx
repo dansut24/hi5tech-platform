@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requirePlatformAdmin } from "@/lib/platform-admin/guard";
 import PlatformAdminShell from "@/components/platform-admin/platform-admin-shell";
 import { formatGBP } from "@/lib/billing/pricing";
+import { buildTenantEnvironmentUrls } from "@/lib/tenant/environment-host";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,8 @@ async function loadTenantDetail(tenantId: string) {
     settings,
     billing,
     entitlements,
+    environments,
+    featureStates,
     billingChanges,
     membershipCount,
     deviceCount,
@@ -45,6 +48,16 @@ async function loadTenantDetail(tenantId: string) {
     admin.from("tenant_settings").select("*").eq("tenant_id", tenantId).maybeSingle(),
     admin.from("tenant_billing_profiles").select("*").eq("tenant_id", tenantId).maybeSingle(),
     admin.from("tenant_entitlements").select("*").eq("tenant_id", tenantId).order("feature_key"),
+    admin
+      .from("tenant_environments")
+      .select("id, key, name, type, can_reset, all_features_visible, is_live, sort_order")
+      .eq("tenant_id", tenantId)
+      .order("sort_order", { ascending: true }),
+    admin
+      .from("tenant_feature_states")
+      .select("id, tenant_environment_id, feature_key, status, updated_at")
+      .eq("tenant_id", tenantId)
+      .order("feature_key", { ascending: true }),
     admin
       .from("tenant_billing_changes")
       .select("*")
@@ -61,6 +74,8 @@ async function loadTenantDetail(tenantId: string) {
     settings: settings.data,
     billing: billing.data,
     entitlements: entitlements.data ?? [],
+    environments: environments.data ?? [],
+    featureStates: featureStates.data ?? [],
     billingChanges: billingChanges.data ?? [],
     counts: {
       users: membershipCount.count ?? 0,
@@ -81,6 +96,27 @@ function Field({ label, value }: { label: string; value: any }) {
   );
 }
 
+function StatusPill({
+  children,
+  tone = "neutral",
+}: {
+  children: React.ReactNode;
+  tone?: "good" | "warning" | "neutral";
+}) {
+  const className =
+    tone === "good"
+      ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200"
+      : tone === "warning"
+        ? "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-200"
+        : "hi5-border bg-black/5 dark:bg-white/5";
+
+  return (
+    <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${className}`}>
+      {children}
+    </span>
+  );
+}
+
 export default async function PlatformTenantDetailPage({
   params,
 }: {
@@ -98,7 +134,25 @@ export default async function PlatformTenantDetailPage({
   const billing = detail.billing;
 
   const tenantName = tenant.company_name || tenant.name || tenant.subdomain || tenant.id;
-  const workspaceUrl = `https://${tenant.subdomain}.${tenant.domain || "hi5tech.co.uk"}`;
+
+  const urls = buildTenantEnvironmentUrls({
+    subdomain: tenant.subdomain,
+    rootDomain: tenant.domain || "hi5tech.co.uk",
+  });
+
+  const workspaceUrl = urls.production;
+
+  const environmentById = new Map<string, any>();
+  for (const environment of detail.environments) {
+    environmentById.set(environment.id, environment);
+  }
+
+  const featureStatesByEnvironment = new Map<string, any[]>();
+  for (const state of detail.featureStates) {
+    const existing = featureStatesByEnvironment.get(state.tenant_environment_id) ?? [];
+    existing.push(state);
+    featureStatesByEnvironment.set(state.tenant_environment_id, existing);
+  }
 
   return (
     <PlatformAdminShell admin={adminContext}>
@@ -125,13 +179,60 @@ export default async function PlatformTenantDetailPage({
 
             <div className="flex flex-wrap gap-2">
               <a href={workspaceUrl} className="hi5-btn-ghost w-auto text-sm" target="_blank" rel="noreferrer">
-                Open workspace
+                Open production
+              </a>
+
+              <a href={urls.test} className="hi5-btn-ghost w-auto text-sm" target="_blank" rel="noreferrer">
+                Open test
+              </a>
+
+              <a href={urls.staging} className="hi5-btn-ghost w-auto text-sm" target="_blank" rel="noreferrer">
+                Open staging
               </a>
 
               <button className="hi5-btn-ghost w-auto text-sm" disabled>
                 Suspend placeholder
               </button>
             </div>
+          </div>
+        </div>
+
+        <div className="hi5-panel p-5">
+          <div className="text-lg font-extrabold">Environment URLs</div>
+          <p className="mt-2 text-sm opacity-75">
+            Each tenant environment is separated by hostname.
+          </p>
+
+          <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
+            <a
+              href={urls.production}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-2xl border hi5-border bg-black/5 p-4 transition hover:bg-black/10 dark:bg-white/5 dark:hover:bg-white/10"
+            >
+              <div className="text-xs opacity-65">Production</div>
+              <div className="mt-1 break-words text-sm font-bold">{urls.production}</div>
+            </a>
+
+            <a
+              href={urls.test}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-2xl border hi5-border bg-black/5 p-4 transition hover:bg-black/10 dark:bg-white/5 dark:hover:bg-white/10"
+            >
+              <div className="text-xs opacity-65">Test</div>
+              <div className="mt-1 break-words text-sm font-bold">{urls.test}</div>
+            </a>
+
+            <a
+              href={urls.staging}
+              target="_blank"
+              rel="noreferrer"
+              className="rounded-2xl border hi5-border bg-black/5 p-4 transition hover:bg-black/10 dark:bg-white/5 dark:hover:bg-white/10"
+            >
+              <div className="text-xs opacity-65">Staging</div>
+              <div className="mt-1 break-words text-sm font-bold">{urls.staging}</div>
+            </a>
           </div>
         </div>
 
@@ -196,6 +297,58 @@ export default async function PlatformTenantDetailPage({
             <Field label="Theme preset" value={settings?.theme_preset} />
             <Field label="Setup complete" value={settings?.setup_completed_at ? "Yes" : "No"} />
             <Field label="Updated" value={formatDate(settings?.updated_at)} />
+          </div>
+        </div>
+
+        <div className="hi5-panel p-5">
+          <div className="text-lg font-extrabold">Environments</div>
+          <p className="mt-2 text-sm opacity-75">
+            Production is live. Test is resettable. Staging is for selected changes before promotion.
+          </p>
+
+          <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-3">
+            {detail.environments.map((environment: any) => {
+              const states = featureStatesByEnvironment.get(environment.id) ?? [];
+              const liveCount = states.filter((state: any) => state.status === "live").length;
+              const availableCount = states.filter((state: any) => state.status === "available").length;
+              const selectedCount = states.filter((state: any) => state.status === "selected" || state.status === "staged").length;
+              const disabledCount = states.filter((state: any) => state.status === "disabled").length;
+
+              return (
+                <div
+                  key={environment.id}
+                  className="rounded-2xl border hi5-border bg-black/5 p-4 dark:bg-white/5"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-lg font-extrabold">{environment.name || environment.key}</div>
+                      <div className="mt-1 text-sm opacity-70">{environment.type || environment.key}</div>
+                    </div>
+
+                    {environment.is_live ? (
+                      <StatusPill tone="good">Live</StatusPill>
+                    ) : environment.can_reset ? (
+                      <StatusPill tone="warning">Resettable</StatusPill>
+                    ) : (
+                      <StatusPill>Non-live</StatusPill>
+                    )}
+                  </div>
+
+                  <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+                    <Field label="Live" value={liveCount} />
+                    <Field label="Available" value={availableCount} />
+                    <Field label="Selected/staged" value={selectedCount} />
+                    <Field label="Disabled" value={disabledCount} />
+                  </div>
+                </div>
+              );
+            })}
+
+            {!detail.environments.length ? (
+              <div className="rounded-2xl border hi5-border bg-black/5 p-4 text-sm opacity-70 dark:bg-white/5">
+                No environment rows found for this tenant.
+              </div>
+            ) : null}
           </div>
         </div>
 
