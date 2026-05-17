@@ -1,101 +1,244 @@
+import Link from "next/link";
+import { supabaseServer } from "@/lib/supabase/server";
 import { getActiveTenantId } from "@/lib/tenant";
-import { getTenantFeatures } from "@/lib/entitlements";
+import {
+  getTenantBillingProfile,
+  getTenantFeatureMap,
+  getTenantUsageCounts,
+} from "@/lib/billing/tenant-billing";
+import {
+  PRICING_PLANS,
+  formatGBP,
+  planMonthlySummary,
+  type PlanKey,
+} from "@/lib/billing/pricing";
+import TrialBanner from "@/components/billing/trial-banner";
 
-const plans = [
-  {
-    name: "ITSM Core",
-    price: "Included",
-    description: "Ticketing, request handling and basic device context.",
-    features: [
-      "Incidents and service requests",
-      "Requester/self-service access",
-      "Device context inside tickets",
-      "Basic ticket files and updates",
-    ],
-  },
-  {
-    name: "Control Add-on",
-    price: "Premium",
-    description: "Unlock full RMM visibility and remote tools.",
-    features: [
-      "Full device inventory",
-      "Remote control",
-      "Terminal",
-      "File browser",
-      "Device activity",
-    ],
-  },
-  {
-    name: "Automation Suite",
-    price: "Premium+",
-    description: "Advanced management, monitoring and patching.",
-    features: [
-      "Script library",
-      "Monitoring alerts",
-      "Patch management",
-      "Automation jobs",
-      "Reporting",
-    ],
-  },
-];
+export const dynamic = "force-dynamic";
 
-export default async function AdminBillingPage() {
-  const tenantId = await getActiveTenantId();
-  const features = await getTenantFeatures(tenantId);
+function PlanCard({
+  planKey,
+  current,
+  available,
+}: {
+  planKey: PlanKey;
+  current: boolean;
+  available: boolean;
+}) {
+  const plan = PRICING_PLANS[planKey];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Plan & billing</h1>
-        <p className="text-sm opacity-80 mt-1">
-          Manage the features available to this tenant.
-        </p>
+    <div
+      className={[
+        "rounded-3xl border p-5",
+        current
+          ? "border-[rgba(var(--hi5-accent),0.45)] bg-[rgba(var(--hi5-accent),0.10)]"
+          : "hi5-border bg-black/5 dark:bg-white/5",
+      ].join(" ")}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-lg font-extrabold">{plan.label}</div>
+          <p className="mt-2 text-sm leading-6 opacity-75">{plan.description}</p>
+        </div>
+
+        {current ? (
+          <span className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:text-emerald-200">
+            Current
+          </span>
+        ) : null}
       </div>
 
-      <div className="hi5-panel p-5">
-        <div className="text-sm font-semibold">Current enabled features</div>
+      <div className="mt-5">
+        <div className="text-3xl font-black">{formatGBP(plan.baseMonthly)}</div>
+        <div className="text-sm opacity-70">per month base</div>
+      </div>
 
-        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-          {Object.entries(features).map(([key, enabled]) => (
-            <div
-              key={key}
-              className="rounded-2xl border hi5-border p-3 flex items-center justify-between gap-3"
-            >
-              <span className="text-sm">{key.replaceAll("_", " ")}</span>
-              <span
-                className={[
-                  "rounded-full border px-2 py-0.5 text-xs",
-                  enabled
-                    ? "border-emerald-500/30 bg-emerald-500/10"
-                    : "hi5-border opacity-60",
-                ].join(" ")}
-              >
-                {enabled ? "Enabled" : "Locked"}
-              </span>
-            </div>
-          ))}
+      <div className="mt-4 space-y-2 text-sm opacity-80">
+        {plan.perTechnician > 0 ? <div>{formatGBP(plan.perTechnician)} per technician / month</div> : null}
+        {plan.perDevice > 0 ? <div>{formatGBP(plan.perDevice)} per device / month</div> : null}
+        <div>14-day free trial</div>
+        <div>Cancel anytime</div>
+      </div>
+
+      <div className="mt-5">
+        {current ? (
+          <button type="button" className="hi5-btn-ghost w-full" disabled>
+            Current plan
+          </button>
+        ) : available ? (
+          <Link
+            href={`/admin/billing/upgrade?plan=${plan.key}`}
+            className="hi5-btn-primary w-full"
+          >
+            Upgrade to {plan.shortLabel}
+          </Link>
+        ) : (
+          <button type="button" className="hi5-btn-ghost w-full" disabled>
+            Not available
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default async function BillingPage() {
+  const tenantId = await getActiveTenantId();
+  const supabase = await supabaseServer();
+
+  const { data: userRes } = await supabase.auth.getUser();
+  const user = userRes.user;
+
+  const { data: membership } = user
+    ? await supabase
+        .from("memberships")
+        .select("role")
+        .eq("tenant_id", tenantId)
+        .eq("user_id", user.id)
+        .maybeSingle()
+    : { data: null };
+
+  const isOwner = membership?.role === "owner";
+
+  const [billingResult, features, usage] = await Promise.all([
+    getTenantBillingProfile(tenantId),
+    getTenantFeatureMap(tenantId),
+    getTenantUsageCounts(tenantId),
+  ]);
+
+  const billing = billingResult.billing;
+  const plan = billingResult.plan;
+
+  const estimatedMonthly =
+    Number(billing.base_monthly_amount ?? plan.baseMonthly) +
+    usage.technicianCount * Number(billing.per_technician_amount ?? plan.perTechnician) +
+    usage.deviceCount * Number(billing.per_device_amount ?? plan.perDevice);
+
+  const hasItsm = features.itsm_core === true;
+  const hasControl =
+    features.devices_inventory === true ||
+    features.remote_control === true ||
+    features.remote_terminal === true ||
+    features.remote_files === true;
+
+  return (
+    <div className="min-h-[100dvh] space-y-5 pb-28">
+      <div className="hi5-panel p-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="text-xs uppercase tracking-[0.18em] opacity-60">Admin</div>
+            <h1 className="mt-2 text-3xl font-extrabold tracking-tight">Billing</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 opacity-75">
+              Manage your trial, plan, upgrade options and estimated monthly pricing.
+            </p>
+          </div>
+
+          <Link href="/apps" className="hi5-btn-ghost w-auto text-sm">
+            Back to apps
+          </Link>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {plans.map((plan) => (
-          <div key={plan.name} className="hi5-panel p-5 flex flex-col">
-            <div className="text-lg font-bold">{plan.name}</div>
-            <div className="text-2xl font-extrabold mt-2">{plan.price}</div>
-            <p className="text-sm opacity-75 mt-2">{plan.description}</p>
+      {!isOwner ? (
+        <div className="hi5-card p-5">
+          <div className="text-lg font-extrabold">Billing access restricted</div>
+          <p className="mt-2 text-sm opacity-75">
+            Billing is currently visible to the workspace owner only.
+          </p>
+        </div>
+      ) : (
+        <>
+          <TrialBanner
+            planLabel={plan.label}
+            planKey={plan.key}
+            daysRemaining={billingResult.daysRemaining}
+            trialEndsAt={billing.trial_ends_at}
+            baseMonthly={Number(billing.base_monthly_amount)}
+            perTechnician={Number(billing.per_technician_amount)}
+            perDevice={Number(billing.per_device_amount)}
+            showBillingLink={false}
+          />
 
-            <ul className="mt-4 space-y-2 text-sm opacity-85 flex-1">
-              {plan.features.map((f) => (
-                <li key={f}>✓ {f}</li>
-              ))}
-            </ul>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-4">
+            <div className="hi5-card p-5">
+              <div className="text-xs opacity-65">Current plan</div>
+              <div className="mt-1 text-2xl font-black">{plan.shortLabel}</div>
+              <div className="mt-2 text-sm opacity-70">{plan.label}</div>
+            </div>
 
-            <button type="button" className="hi5-btn-primary text-sm mt-5">
-              Contact sales / upgrade
-            </button>
+            <div className="hi5-card p-5">
+              <div className="text-xs opacity-65">Estimated monthly</div>
+              <div className="mt-1 text-2xl font-black">{formatGBP(estimatedMonthly)}</div>
+              <div className="mt-2 text-sm opacity-70">After trial, based on current usage.</div>
+            </div>
+
+            <div className="hi5-card p-5">
+              <div className="text-xs opacity-65">Technicians</div>
+              <div className="mt-1 text-2xl font-black">{usage.technicianCount}</div>
+              <div className="mt-2 text-sm opacity-70">{formatGBP(Number(billing.per_technician_amount))} each / month</div>
+            </div>
+
+            <div className="hi5-card p-5">
+              <div className="text-xs opacity-65">Devices</div>
+              <div className="mt-1 text-2xl font-black">{usage.deviceCount}</div>
+              <div className="mt-2 text-sm opacity-70">{formatGBP(Number(billing.per_device_amount))} each / month</div>
+            </div>
           </div>
-        ))}
-      </div>
+
+          <div className="hi5-card p-5">
+            <div className="text-lg font-extrabold">Current included modules</div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {hasItsm ? (
+                <span className="rounded-full border hi5-border bg-black/5 px-3 py-1 text-sm font-bold dark:bg-white/5">
+                  ITSM
+                </span>
+              ) : null}
+              {hasControl ? (
+                <span className="rounded-full border hi5-border bg-black/5 px-3 py-1 text-sm font-bold dark:bg-white/5">
+                  Control
+                </span>
+              ) : null}
+              <span className="rounded-full border hi5-border bg-black/5 px-3 py-1 text-sm font-bold dark:bg-white/5">
+                Admin
+              </span>
+            </div>
+          </div>
+
+          <div className="hi5-panel p-5">
+            <div className="text-lg font-extrabold">Plans and upgrades</div>
+            <p className="mt-2 text-sm opacity-75">
+              Modules not included in your plan are hidden from Apps and can be added here.
+            </p>
+
+            <div className="mt-5 grid grid-cols-1 gap-4 xl:grid-cols-3">
+              <PlanCard
+                planKey="itsm"
+                current={plan.key === "itsm"}
+                available={plan.key !== "itsm"}
+              />
+              <PlanCard
+                planKey="control"
+                current={plan.key === "control"}
+                available={plan.key !== "control"}
+              />
+              <PlanCard
+                planKey="both"
+                current={plan.key === "both" || plan.key === "platform"}
+                available={plan.key !== "both" && plan.key !== "platform"}
+              />
+            </div>
+          </div>
+
+          <div className="hi5-card p-5">
+            <div className="text-lg font-extrabold">Billing note</div>
+            <p className="mt-2 text-sm leading-6 opacity-75">
+              Payments are not connected yet. This page shows the pricing and plan logic that will later connect to Stripe,
+              manual invoicing, or your Hi5Tech platform admin billing portal.
+            </p>
+          </div>
+        </>
+      )}
     </div>
   );
 }
