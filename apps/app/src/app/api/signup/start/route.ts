@@ -152,8 +152,8 @@ export async function POST(req: Request) {
           company_name: companyName,
           workspace_subdomain: subdomain,
           workspace_url: workspaceUrl,
-          workspace_test_url: `https://test-${subdomain}.${ROOT_DOMAIN}`,
-          workspace_staging_url: `https://stg-${subdomain}.${ROOT_DOMAIN}`,
+          workspace_test_url: `https://${subdomain}-test.${ROOT_DOMAIN}`,
+workspace_staging_url: `https://${subdomain}-stg.${ROOT_DOMAIN}`,
           root_domain: ROOT_DOMAIN,
         },
       },
@@ -179,11 +179,11 @@ export async function POST(req: Request) {
       ok: true,
       message: "Check your email to confirm your account.",
       workspace: `${subdomain}.${ROOT_DOMAIN}`,
-      environmentUrls: {
-        production: workspaceUrl,
-        test: `https://test-${subdomain}.${ROOT_DOMAIN}`,
-        staging: `https://stg-${subdomain}.${ROOT_DOMAIN}`,
-      },
+     environmentUrls: {
+  production: workspaceUrl,
+  test: `https://${subdomain}-test.${ROOT_DOMAIN}`,
+  staging: `https://${subdomain}-stg.${ROOT_DOMAIN}`,
+},
       emailRedirectTo,
     });
   } catch (err) {
