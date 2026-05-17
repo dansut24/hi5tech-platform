@@ -9,7 +9,6 @@ import {
 import {
   PRICING_PLANS,
   formatGBP,
-  planMonthlySummary,
   type PlanKey,
 } from "@/lib/billing/pricing";
 import TrialBanner from "@/components/billing/trial-banner";
@@ -123,7 +122,7 @@ export default async function BillingPage() {
     features.remote_files === true;
 
   return (
-    <div className="min-h-[100dvh] space-y-5 pb-28">
+    <div className="hi5-page space-y-5">
       <div className="hi5-panel p-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
