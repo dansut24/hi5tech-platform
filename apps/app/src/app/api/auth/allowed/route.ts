@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { supabaseServer } from "@/lib/supabase/server";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 import {
   getTenantEnvironmentHost,
   resolveTenantEnvironment,
@@ -36,7 +37,7 @@ export async function POST(req: Request) {
 
     /*
       app.hi5tech.co.uk is the central app/login host.
-      Allow password login here; tenant membership can be resolved after sign-in.
+      It should not be treated as a tenant.
     */
     if (hostInfo.isAppHost) {
       return json(200, {
@@ -46,8 +47,8 @@ export async function POST(req: Request) {
     }
 
     /*
-      Platform admin login is guarded separately by /admin-console.
-      For testing mode, allow signed-in accounts to attempt login.
+      admin.hi5tech.co.uk is the Hi5Tech platform admin host.
+      Real platform-admin checks happen inside /admin-console.
     */
     if (hostInfo.isPlatformAdminHost) {
       return json(200, {
@@ -65,41 +66,79 @@ export async function POST(req: Request) {
       });
     }
 
-    const supabase = await supabaseServer();
+    const admin = supabaseAdmin();
 
-    const { data: profile } = await supabase
+    /*
+      Allow the original tenant signup owner through, even before profile/membership
+      records are fully created.
+    */
+    const { data: signupIntent } = await admin
+      .from("tenant_signup_intents")
+      .select("id, status, created_tenant_id, admin_email, subdomain")
+      .eq("admin_email", email)
+      .eq("subdomain", resolved.tenantSubdomain)
+      .in("status", ["pending_email", "confirmed", "completed"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (signupIntent?.id) {
+      return json(200, {
+        allowed: true,
+        mode: "signup-owner",
+        tenantId: resolved.tenantId,
+        tenantSubdomain: resolved.tenantSubdomain,
+        environmentKey: resolved.environmentKey,
+      });
+    }
+
+    /*
+      Best-effort strict check using profiles/memberships.
+      This catches normal existing users.
+    */
+    const { data: profile } = await admin
       .from("profiles")
-      .select("id")
+      .select("id, email")
       .eq("email", email)
       .maybeSingle();
 
-    if (!profile?.id) {
+    if (profile?.id) {
+      const { data: membership } = await admin
+        .from("memberships")
+        .select("id, role")
+        .eq("tenant_id", resolved.tenantId)
+        .eq("user_id", profile.id)
+        .maybeSingle();
+
+      if (membership?.id) {
+        return json(200, {
+          allowed: true,
+          mode: "tenant-member",
+          tenantId: resolved.tenantId,
+          tenantSubdomain: resolved.tenantSubdomain,
+          environmentKey: resolved.environmentKey,
+          role: membership.role,
+        });
+      }
+
       return json(200, {
         allowed: false,
         error: "That email isn't authorised for this tenant.",
       });
     }
 
-    const { data: membership } = await supabase
-      .from("memberships")
-      .select("id, role")
-      .eq("tenant_id", resolved.tenantId)
-      .eq("user_id", profile.id)
-      .maybeSingle();
-
-    if (!membership?.id) {
-      return json(200, {
-        allowed: false,
-        error: "That email isn't authorised for this tenant.",
-      });
-    }
-
+    /*
+      Important:
+      If no profile exists yet, do NOT block here.
+      Supabase password login will validate the credentials, then the actual app
+      route will enforce membership using the signed-in user ID.
+    */
     return json(200, {
       allowed: true,
+      mode: "defer-until-after-login",
       tenantId: resolved.tenantId,
       tenantSubdomain: resolved.tenantSubdomain,
       environmentKey: resolved.environmentKey,
-      role: membership.role,
     });
   } catch (err) {
     return json(500, {
