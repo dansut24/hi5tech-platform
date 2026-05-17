@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import {
   getTenantEnvironmentHost,
@@ -35,10 +34,6 @@ export async function POST(req: Request) {
 
     const hostInfo = await getTenantEnvironmentHost();
 
-    /*
-      app.hi5tech.co.uk is the central app/login host.
-      It should not be treated as a tenant.
-    */
     if (hostInfo.isAppHost) {
       return json(200, {
         allowed: true,
@@ -46,10 +41,6 @@ export async function POST(req: Request) {
       });
     }
 
-    /*
-      admin.hi5tech.co.uk is the Hi5Tech platform admin host.
-      Real platform-admin checks happen inside /admin-console.
-    */
     if (hostInfo.isPlatformAdminHost) {
       return json(200, {
         allowed: true,
@@ -68,10 +59,6 @@ export async function POST(req: Request) {
 
     const admin = supabaseAdmin();
 
-    /*
-      Allow the original tenant signup owner through, even before profile/membership
-      records are fully created.
-    */
     const { data: signupIntent } = await admin
       .from("tenant_signup_intents")
       .select("id, status, created_tenant_id, admin_email, subdomain")
@@ -92,10 +79,6 @@ export async function POST(req: Request) {
       });
     }
 
-    /*
-      Best-effort strict check using profiles/memberships.
-      This catches normal existing users.
-    */
     const { data: profile } = await admin
       .from("profiles")
       .select("id, email")
@@ -127,12 +110,6 @@ export async function POST(req: Request) {
       });
     }
 
-    /*
-      Important:
-      If no profile exists yet, do NOT block here.
-      Supabase password login will validate the credentials, then the actual app
-      route will enforce membership using the signed-in user ID.
-    */
     return json(200, {
       allowed: true,
       mode: "defer-until-after-login",
