@@ -230,15 +230,20 @@ function UpgradeHint({
 }
 
 export default async function ModulesPage() {
+  const host = getEffectiveHost(await headers());
+  const parsed = parseTenantHost(host);
+
+  if (parsed.subdomain === "admin") {
+    redirect("/admin-console");
+  }
+
+  if (!parsed.subdomain) notFound();
+
   const supabase = await supabaseServer();
 
   const { data: userRes } = await supabase.auth.getUser();
   const user = userRes.user;
   if (!user) redirect("/login");
-
-  const host = getEffectiveHost(await headers());
-  const parsed = parseTenantHost(host);
-  if (!parsed.subdomain) notFound();
 
   const { data: tenant } = await supabase
     .from("tenants")
