@@ -1,81 +1,87 @@
 /* apps/app/src/app/globals.css */
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 *, *::before, *::after { box-sizing: border-box; }
 
 /* ----------------------------------------------------------
-   Hi5Tech Vibrant Glass Theme
-   Goals:
-   - White (light) / Black (dark) base
-   - Exactly 3 spherical blobs in the background
-   - Cards/panels remain readable across all pages
-   - Buttons are vibrant + 3D with strong contrast
+   Hi5Tech Neutral Glass Theme
+   Defaults:
+   - Light: white / grey / light blue
+   - Dark: black / grey / dark blue
+   - Tenant settings override these from layout.tsx
 ---------------------------------------------------------- */
 
 :root {
   color-scheme: light;
 
   /* Base */
-  --hi5-bg: 255 255 255;
-  --hi5-fg: 12 14 18;
-  --hi5-muted: 90 98 110;
+  --hi5-bg: 248 250 252;
+  --hi5-fg: 15 23 42;
+  --hi5-muted: 71 85 105;
 
-  /* Brand accents */
-  --hi5-accent: 0 193 255;
-  --hi5-accent-2: 255 79 225;
-  --hi5-accent-3: 255 196 45;
+  /* Neutral blue accents */
+  --hi5-accent: 37 99 235;
+  --hi5-accent-2: 14 165 233;
+  --hi5-accent-3: 100 116 139;
 
   /* Borders */
-  --hi5-border: 12 14 18;
-  --hi5-border-alpha: 0.12;
-  --hi5-divider-alpha: 0.10;
+  --hi5-border: 15 23 42;
+  --hi5-border-alpha: 0.10;
+  --hi5-divider-alpha: 0.09;
 
   /* Cards / Panels */
   --hi5-card: 255 255 255;
-  --hi5-card-alpha: 0.78;
-  --hi5-panel-alpha: 0.84;
+  --hi5-card-alpha: 0.84;
+  --hi5-panel-alpha: 0.90;
+  --hi5-topbar: 255 255 255;
 
   /* Inner scrim to neutralise blobs behind content */
   --hi5-scrim-light: 255 255 255;
-  --hi5-scrim-alpha: 0.55;
+  --hi5-scrim-alpha: 0.58;
 
   /* Shadows */
-  --hi5-shadow-strong: 0 18px 55px rgb(0 0 0 / 0.12);
-  --hi5-shadow-soft: 0 10px 24px rgb(0 0 0 / 0.08);
+  --hi5-shadow-strong: 0 18px 55px rgb(15 23 42 / 0.10);
+  --hi5-shadow-soft: 0 10px 24px rgb(15 23 42 / 0.07);
 
   /* Background base */
-  --hi5-backdrop-base: linear-gradient(180deg, rgb(255 255 255 / 1), rgb(255 255 255 / 1));
+  --hi5-backdrop-base: linear-gradient(180deg, rgb(248 250 252 / 1), rgb(241 245 249 / 1));
 
-  /* Exactly 3 spheres */
+  /* Softer 3 spheres */
+  --hi5-glow-1: 0.10;
+  --hi5-glow-2: 0.08;
+  --hi5-glow-3: 0.06;
+
   --hi5-sphere-1:
     radial-gradient(circle at 32% 28%,
-      rgb(var(--hi5-accent) / 0.95) 0%,
-      rgb(var(--hi5-accent) / 0.35) 28%,
+      rgb(var(--hi5-accent) / var(--hi5-glow-1)) 0%,
+      rgb(var(--hi5-accent) / calc(var(--hi5-glow-1) * 0.42)) 28%,
       transparent 62%);
   --hi5-sphere-2:
     radial-gradient(circle at 68% 32%,
-      rgb(var(--hi5-accent-2) / 0.92) 0%,
-      rgb(var(--hi5-accent-2) / 0.30) 30%,
+      rgb(var(--hi5-accent-2) / var(--hi5-glow-2)) 0%,
+      rgb(var(--hi5-accent-2) / calc(var(--hi5-glow-2) * 0.38)) 30%,
       transparent 64%);
   --hi5-sphere-3:
     radial-gradient(circle at 40% 72%,
-      rgb(var(--hi5-accent-3) / 0.88) 0%,
-      rgb(var(--hi5-accent-3) / 0.28) 32%,
+      rgb(var(--hi5-accent-3) / var(--hi5-glow-3)) 0%,
+      rgb(var(--hi5-accent-3) / calc(var(--hi5-glow-3) * 0.35)) 32%,
       transparent 66%);
 
   --hi5-wash:
     radial-gradient(900px 520px at 18% 10%,
-      rgb(var(--hi5-accent) / 0.12),
+      rgb(var(--hi5-accent) / calc(var(--hi5-glow-1) * 0.8)),
       transparent 60%),
     radial-gradient(900px 520px at 86% 18%,
-      rgb(var(--hi5-accent-2) / 0.10),
+      rgb(var(--hi5-accent-2) / calc(var(--hi5-glow-2) * 0.75)),
       transparent 62%),
     radial-gradient(900px 600px at 50% 100%,
-      rgb(var(--hi5-accent-3) / 0.10),
+      rgb(var(--hi5-accent-3) / calc(var(--hi5-glow-3) * 0.7)),
       transparent 64%);
 
-  --hi5-spheres-opacity: 0.55;
-  --hi5-spheres-blur: 64px;
+  --hi5-spheres-opacity: 1;
+  --hi5-spheres-blur: 72px;
 
   /* Buttons */
   --hi5-btn-grad: linear-gradient(90deg,
@@ -90,7 +96,7 @@
   --hi5-btn-solid: 0;
 
   /* Grain */
-  --hi5-grain-opacity: 0.05;
+  --hi5-grain-opacity: 0.035;
 }
 
 /* ---------------------------------------------------------- */
@@ -98,41 +104,66 @@
 .dark {
   color-scheme: dark;
 
-  --hi5-bg: 0 0 0;
-  --hi5-fg: 244 247 252;
-  --hi5-muted: 170 180 196;
+  --hi5-bg: 2 6 23;
+  --hi5-fg: 248 250 252;
+  --hi5-muted: 148 163 184;
+
+  --hi5-accent: 37 99 235;
+  --hi5-accent-2: 30 64 175;
+  --hi5-accent-3: 51 65 85;
 
   --hi5-border: 255 255 255;
-  --hi5-border-alpha: 0.14;
-  --hi5-divider-alpha: 0.12;
+  --hi5-border-alpha: 0.13;
+  --hi5-divider-alpha: 0.11;
 
-  --hi5-card: 12 14 18;
-  --hi5-card-alpha: 0.40;
-  --hi5-panel-alpha: 0.48;
+  --hi5-card: 15 23 42;
+  --hi5-card-alpha: 0.42;
+  --hi5-panel-alpha: 0.52;
+  --hi5-topbar: 15 23 42;
 
-  --hi5-scrim-light: 0 0 0;
+  --hi5-scrim-light: 2 6 23;
   --hi5-scrim-alpha: 0.46;
 
   --hi5-shadow-strong: 0 26px 80px rgb(0 0 0 / 0.70);
   --hi5-shadow-soft: 0 16px 40px rgb(0 0 0 / 0.55);
 
-  --hi5-backdrop-base: linear-gradient(180deg, rgb(0 0 0 / 1), rgb(0 0 0 / 1));
+  --hi5-backdrop-base: linear-gradient(180deg, rgb(2 6 23 / 1), rgb(0 0 0 / 1));
 
-  --hi5-spheres-opacity: 0.78;
-  --hi5-spheres-blur: 72px;
+  --hi5-glow-1: 0.16;
+  --hi5-glow-2: 0.12;
+  --hi5-glow-3: 0.08;
+
+  --hi5-sphere-1:
+    radial-gradient(circle at 32% 28%,
+      rgb(var(--hi5-accent) / var(--hi5-glow-1)) 0%,
+      rgb(var(--hi5-accent) / calc(var(--hi5-glow-1) * 0.42)) 28%,
+      transparent 62%);
+  --hi5-sphere-2:
+    radial-gradient(circle at 68% 32%,
+      rgb(var(--hi5-accent-2) / var(--hi5-glow-2)) 0%,
+      rgb(var(--hi5-accent-2) / calc(var(--hi5-glow-2) * 0.38)) 30%,
+      transparent 64%);
+  --hi5-sphere-3:
+    radial-gradient(circle at 40% 72%,
+      rgb(var(--hi5-accent-3) / var(--hi5-glow-3)) 0%,
+      rgb(var(--hi5-accent-3) / calc(var(--hi5-glow-3) * 0.35)) 32%,
+      transparent 66%);
 
   --hi5-wash:
     radial-gradient(980px 620px at 18% 10%,
-      rgb(var(--hi5-accent) / 0.18),
+      rgb(var(--hi5-accent) / calc(var(--hi5-glow-1) * 0.9)),
       transparent 60%),
     radial-gradient(980px 620px at 86% 18%,
-      rgb(var(--hi5-accent-2) / 0.16),
+      rgb(var(--hi5-accent-2) / calc(var(--hi5-glow-2) * 0.85)),
       transparent 62%),
     radial-gradient(980px 680px at 52% 96%,
-      rgb(var(--hi5-accent-3) / 0.14),
+      rgb(var(--hi5-accent-3) / calc(var(--hi5-glow-3) * 0.75)),
       transparent 64%);
 
-  --hi5-grain-opacity: 0.10;
+  --hi5-spheres-opacity: 1;
+  --hi5-spheres-blur: 76px;
+
+  --hi5-grain-opacity: 0.08;
 }
 
 /* Base */
@@ -162,6 +193,7 @@ body {
   overscroll-behavior-y: auto;
   -webkit-overflow-scrolling: touch;
 }
+
 /* Helps mobile Safari avoid showing plain black/white past content */
 body > * {
   min-height: 100dvh;
@@ -203,7 +235,7 @@ body::before {
     var(--hi5-sphere-1),
     var(--hi5-sphere-2),
     var(--hi5-sphere-3);
-  filter: blur(var(--hi5-spheres-blur)) saturate(1.15);
+  filter: blur(var(--hi5-spheres-blur)) saturate(1.05);
   opacity: var(--hi5-spheres-opacity);
 }
 
@@ -314,27 +346,31 @@ body::after {
   padding: 10px 12px;
   color: rgb(var(--hi5-fg));
   outline: none;
-  background: rgb(255 255 255 / 0.88);
+  background: rgb(var(--hi5-card) / 0.78);
   border: 1px solid rgb(var(--hi5-border) / 0.14) !important;
   box-shadow:
-    0 1px 0 rgb(255 255 255 / 0.55) inset,
-    0 10px 24px rgb(0 0 0 / 0.05);
+    0 1px 0 rgb(255 255 255 / 0.45) inset,
+    0 10px 24px rgb(15 23 42 / 0.05);
   transition: box-shadow 160ms ease, border-color 160ms ease, transform 160ms ease, filter 160ms ease;
 }
 
 .dark .hi5-input {
-  background: rgb(12 14 18 / 0.72);
+  background: rgb(15 23 42 / 0.70);
   border: 1px solid rgb(255 255 255 / 0.16) !important;
   box-shadow:
     0 1px 0 rgb(255 255 255 / 0.06) inset,
     0 14px 34px rgb(0 0 0 / 0.55);
 }
 
+.hi5-input::placeholder {
+  color: rgb(var(--hi5-muted) / 0.72);
+}
+
 .hi5-input:focus {
   border-color: rgb(var(--hi5-accent) / 0.85) !important;
   box-shadow:
-    0 0 0 5px rgb(var(--hi5-accent) / 0.18),
-    0 18px 44px rgb(var(--hi5-accent-2) / 0.12);
+    0 0 0 5px rgb(var(--hi5-accent) / 0.16),
+    0 18px 44px rgb(var(--hi5-accent-2) / 0.10);
 }
 
 /* ----------------------------------------------------------
@@ -348,7 +384,7 @@ body::after {
   padding: 11px 14px;
   font-weight: 900;
   letter-spacing: 0.2px;
-  color: #0b0d12;
+  color: #ffffff;
   background:
     linear-gradient(
       0deg,
@@ -356,14 +392,14 @@ body::after {
       rgb(var(--hi5-accent) / var(--hi5-btn-solid))
     ),
     var(--hi5-btn-grad);
-  border: 1px solid rgb(255 255 255 / 0.34);
+  border: 1px solid rgb(255 255 255 / 0.24);
   box-shadow:
-    0 18px 40px rgb(0 0 0 / 0.14),
+    0 18px 40px rgb(15 23 42 / 0.12),
     0 14px 34px rgb(var(--hi5-accent) / 0.18),
-    0 12px 28px rgb(var(--hi5-accent-2) / 0.14),
-    0 1px 0 rgb(255 255 255 / 0.55) inset,
-    0 -10px 18px rgb(0 0 0 / 0.10) inset;
-  text-shadow: 0 1px 0 rgb(255 255 255 / 0.35);
+    0 12px 28px rgb(var(--hi5-accent-2) / 0.12),
+    0 1px 0 rgb(255 255 255 / 0.28) inset,
+    0 -10px 18px rgb(0 0 0 / 0.14) inset;
+  text-shadow: 0 1px 0 rgb(0 0 0 / 0.25);
   transition: transform 140ms ease, filter 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
 }
 
@@ -382,14 +418,14 @@ body::after {
 
 .hi5-btn-primary:hover,
 .hi5-accent-btn:hover {
-  filter: brightness(1.06) saturate(1.15);
+  filter: brightness(1.06) saturate(1.08);
   transform: translateY(-1px);
 }
 
 .hi5-btn-primary:active,
 .hi5-accent-btn:active {
   transform: translateY(0px);
-  filter: brightness(1.02) saturate(1.08);
+  filter: brightness(1.02) saturate(1.04);
 }
 
 .hi5-btn-primary:disabled,
@@ -406,18 +442,18 @@ body::after {
   font-weight: 800;
   color: rgb(var(--hi5-fg));
   border: 1px solid rgb(var(--hi5-border) / 0.14);
-  background: rgb(255 255 255 / 0.78);
+  background: rgb(var(--hi5-card) / 0.72);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   box-shadow:
-    0 12px 26px rgb(0 0 0 / 0.08),
-    0 1px 0 rgb(255 255 255 / 0.55) inset;
+    0 12px 26px rgb(15 23 42 / 0.07),
+    0 1px 0 rgb(255 255 255 / 0.35) inset;
   transition: transform 140ms ease, background 140ms ease, filter 140ms ease;
 }
 
 .dark .hi5-btn-ghost {
   color: rgb(var(--hi5-fg));
-  background: rgb(12 14 18 / 0.55);
+  background: rgb(15 23 42 / 0.55);
   border: 1px solid rgb(255 255 255 / 0.14);
   box-shadow:
     0 16px 38px rgb(0 0 0 / 0.62),
@@ -426,7 +462,7 @@ body::after {
 
 .hi5-btn-ghost:hover {
   transform: translateY(-1px);
-  filter: brightness(1.03) saturate(1.03);
+  filter: brightness(1.03) saturate(1.02);
 }
 
 .hi5-btn-ghost:active {
@@ -438,22 +474,22 @@ body::after {
 ---------------------------------------------------------- */
 
 .hi5-glass-bar {
-  background: rgb(var(--hi5-card) / 0.70);
+  background: rgb(var(--hi5-card) / 0.72);
   border-bottom: 1px solid rgb(var(--hi5-border) / var(--hi5-divider-alpha));
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
 }
 
 .hi5-topbar {
-  background: rgb(var(--hi5-card) / 0.78);
+  background: rgb(var(--hi5-topbar) / 0.78);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   border-bottom: 1px solid rgb(var(--hi5-border) / var(--hi5-divider-alpha));
-  box-shadow: 0 14px 34px rgb(0 0 0 / 0.10);
+  box-shadow: 0 14px 34px rgb(15 23 42 / 0.08);
 }
 
 .dark .hi5-topbar {
-  background: rgb(12 14 18 / 0.62);
+  background: rgb(var(--hi5-topbar) / 0.62);
   box-shadow: 0 18px 44px rgb(0 0 0 / 0.60);
 }
 
