@@ -5,7 +5,6 @@ import { headers } from "next/headers";
 import { supabaseServer } from "@/lib/supabase/server";
 import SystemTheme from "@/components/theme/SystemTheme";
 import { ToastProvider } from "@/components/ui/toast";
-import StagingChangesBanner from "@/components/environments/staging-changes-banner";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
