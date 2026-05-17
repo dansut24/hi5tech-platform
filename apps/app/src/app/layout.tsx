@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { supabaseServer } from "@/lib/supabase/server";
 import SystemTheme from "@/components/theme/SystemTheme";
 import { ToastProvider } from "@/components/ui/toast";
+import StagingChangesBanner from "@/components/environments/staging-changes-banner";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -63,10 +64,25 @@ function normalizeHost(rawHost: string) {
   return (rawHost || "").split(":")[0].trim().toLowerCase();
 }
 
+function baseTenantSubdomainFromEnvironmentSubdomain(subdomain: string) {
+  const clean = String(subdomain || "").trim().toLowerCase();
+
+  if (clean.endsWith("-test")) {
+    return clean.slice(0, -"-test".length);
+  }
+
+  if (clean.endsWith("-stg")) {
+    return clean.slice(0, -"-stg".length);
+  }
+
+  return clean;
+}
+
 /**
  * Resolve tenant lookup keys from host.
- * - tenant subdomain: dansworld.hi5tech.co.uk  -> { domain: hi5tech.co.uk, subdomain: dansworld }
- * - custom domain:    acme.com                 -> { domain: acme.com, subdomain: null }
+ * - tenant subdomain: dansworld.hi5tech.co.uk      -> { domain: hi5tech.co.uk, subdomain: dansworld }
+ * - test env:         dansworld-test.hi5tech.co.uk -> { domain: hi5tech.co.uk, subdomain: dansworld }
+ * - staging env:      dansworld-stg.hi5tech.co.uk  -> { domain: hi5tech.co.uk, subdomain: dansworld }
  * - root / non-tenant: hi5tech.co.uk or app.hi5tech.co.uk -> null
  */
 function tenantKeyFromHost(host: string): { domain: string; subdomain: string | null } | null {
@@ -78,15 +94,19 @@ function tenantKeyFromHost(host: string): { domain: string; subdomain: string | 
   if (h.endsWith(ROOT_DOMAIN)) {
     if (h === ROOT_DOMAIN) return null;
 
-    const sub = h.slice(0, -ROOT_DOMAIN.length - 1);
+    const rawSub = h.slice(0, -ROOT_DOMAIN.length - 1);
+    if (!rawSub) return null;
+
+    if (rawSub === "www" || rawSub === "app" || rawSub === "admin") return null;
+
+    const sub = baseTenantSubdomainFromEnvironmentSubdomain(rawSub);
     if (!sub) return null;
-    if (sub === "www" || sub === "app") return null;
 
     return { domain: ROOT_DOMAIN, subdomain: sub };
   }
 
-  // Not under root domain => custom domain tenant
-  return { domain: h, subdomain: null };
+  // Custom-domain theming can be wired to tenant_custom_domains later.
+  return null;
 }
 
 function normalizeThemeMode(value: any): ThemeMode {
@@ -197,12 +217,10 @@ function customRgb(custom: CustomThemeJson, mode: "light" | "dark", key: string,
 
   if (typeof value !== "string") return fallback;
 
-  // Accept "r g b"
   if (/^\d{1,3}\s+\d{1,3}\s+\d{1,3}$/.test(value.trim())) {
     return value.trim();
   }
 
-  // Accept hex
   return hexToRgbTriplet(value, fallback);
 }
 
@@ -223,20 +241,18 @@ function buildThemeCss({
   customTheme: CustomThemeJson;
   legacyTheme: any;
 }) {
-  const preset = accentColor === "custom" ? "neutral" : accentColor;
+  const presetFromThemePreset = normalizePreset(themePreset);
+  const preset = accentColor === "custom"
+    ? presetFromThemePreset === "custom"
+      ? "neutral"
+      : presetFromThemePreset
+    : accentColor;
+
   const presetValues = ACCENT_PRESETS[preset] ?? ACCENT_PRESETS.neutral;
 
   const isCustom = accentColor === "custom";
   const custom = isCustom ? customTheme : {};
 
-  /*
-    New preferred setup:
-    - Light default: white / grey / light blue
-    - Dark default: black / grey / dark blue
-
-    Legacy compatibility:
-    Existing branding fields like accent_hex still work, but only if present.
-  */
   const legacyAccent = legacyTheme?.accent_hex;
   const legacyAccent2 = legacyTheme?.accent_2_hex;
   const legacyAccent3 = legacyTheme?.accent_3_hex;
@@ -484,9 +500,6 @@ export default async function RootLayout({
 }>) {
   const supabase = await supabaseServer();
 
-  // ---------------------------------------------------------
-  // 1) Resolve current tenant based on Host header
-  // ---------------------------------------------------------
   const h = await headers();
   const host = normalizeHost(h.get("host") || "");
   const tenantKey = tenantKeyFromHost(host);
@@ -494,7 +507,6 @@ export default async function RootLayout({
   let tenantId: string | null = null;
   let tenantTheme: any = null;
 
-  // Load tenant + tenant_settings based on host (works even when logged out)
   if (tenantKey) {
     try {
       if (tenantKey.subdomain) {
@@ -522,13 +534,10 @@ export default async function RootLayout({
           .from("tenant_settings")
           .select(
             [
-              // New setup theme fields
               "default_appearance",
               "accent_color",
               "theme_preset",
               "custom_theme_json",
-
-              // Existing/legacy branding fields - keep compatible
               "accent_hex",
               "accent_2_hex",
               "accent_3_hex",
@@ -551,10 +560,6 @@ export default async function RootLayout({
     }
   }
 
-  // ---------------------------------------------------------
-  // 2) Resolve appearance/mode
-  // Tenant default wins initially, user setting can override after login.
-  // ---------------------------------------------------------
   let theme_mode: ThemeMode = normalizeThemeMode(tenantTheme?.default_appearance);
 
   try {
@@ -576,9 +581,6 @@ export default async function RootLayout({
     // keep default
   }
 
-  // ---------------------------------------------------------
-  // 3) Compute theme tokens
-  // ---------------------------------------------------------
   const accentColor = normalizePreset(tenantTheme?.accent_color);
   const themePreset = String(tenantTheme?.theme_preset || accentColor || "neutral");
   const customTheme =
@@ -594,8 +596,6 @@ export default async function RootLayout({
     legacyTheme: tenantTheme,
   });
 
-  // Initial server class avoids flash for explicit light/dark.
-  // For system, boot script will apply based on device preference.
   const htmlClass = theme_mode === "dark" ? "dark" : "";
 
   return (
@@ -606,6 +606,7 @@ export default async function RootLayout({
       </head>
       <body suppressHydrationWarning>
         {theme_mode === "system" ? <SystemTheme /> : null}
+        <StagingChangesBanner />
         <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
