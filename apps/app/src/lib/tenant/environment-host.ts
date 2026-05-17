@@ -2,15 +2,21 @@
 import { headers } from "next/headers";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { getEffectiveHost, parseTenantHost } from "@/lib/tenant/tenant-from-host";
+import {
+  getEffectiveHost,
+  normalizeTenantEnvironmentSubdomain,
+  parseTenantHost,
+  type TenantEnvironmentKey,
+} from "@/lib/tenant/tenant-from-host";
 
-export type TenantEnvironmentKey = "production" | "test" | "staging";
+export type { TenantEnvironmentKey };
 
 export type TenantEnvironmentHost = {
   rootDomain: string;
   host: string;
   hostSubdomain: string | null;
   tenantSubdomain: string | null;
+  requestedSubdomain: string | null;
   environmentKey: TenantEnvironmentKey;
   isPlatformAdminHost: boolean;
   isAppHost: boolean;
@@ -75,6 +81,7 @@ export const RESERVED_TENANT_SUBDOMAINS = new Set([
 
 function cleanHost(value: string) {
   return String(value || "")
+    .split(",")[0]
     .split(":")[0]
     .trim()
     .toLowerCase();
@@ -88,7 +95,7 @@ function getSubdomainFromHost(host: string, rootDomain = ROOT_DOMAIN) {
   if (h === root) return null;
 
   if (h.endsWith(`.${root}`)) {
-    const sub = h.slice(0, -(root.length + 1)).trim();
+    const sub = h.slice(0, -`.${root}`.length).trim();
     return sub || null;
   }
 
@@ -110,38 +117,15 @@ function isExternalCustomDomain(host: string) {
 
 export function parseEnvironmentSubdomain(subdomain?: string | null): {
   tenantSubdomain: string | null;
+  requestedSubdomain: string | null;
   environmentKey: TenantEnvironmentKey;
 } {
-  const raw = String(subdomain ?? "").trim().toLowerCase();
-
-  if (!raw) {
-    return {
-      tenantSubdomain: null,
-      environmentKey: "production",
-    };
-  }
-
-  if (raw.endsWith("-test")) {
-    const tenantSubdomain = raw.slice(0, -"-test".length).trim();
-
-    return {
-      tenantSubdomain: tenantSubdomain || null,
-      environmentKey: "test",
-    };
-  }
-
-  if (raw.endsWith("-stg")) {
-    const tenantSubdomain = raw.slice(0, -"-stg".length).trim();
-
-    return {
-      tenantSubdomain: tenantSubdomain || null,
-      environmentKey: "staging",
-    };
-  }
+  const parsed = normalizeTenantEnvironmentSubdomain(subdomain);
 
   return {
-    tenantSubdomain: raw,
-    environmentKey: "production",
+    tenantSubdomain: parsed.subdomain,
+    requestedSubdomain: parsed.requestedSubdomain,
+    environmentKey: parsed.environmentKey,
   };
 }
 
@@ -167,9 +151,12 @@ export function isReservedTenantSubdomain(value: string) {
   if (!clean) return true;
   if (RESERVED_TENANT_SUBDOMAINS.has(clean)) return true;
 
+  /*
+    Prevent customers creating literal environment-looking tenant names.
+    Environment hosts are generated from the base tenant.
+  */
   if (clean.endsWith("-test")) return true;
   if (clean.endsWith("-stg")) return true;
-
   if (clean.startsWith("test-")) return true;
   if (clean.startsWith("stg-")) return true;
 
@@ -181,20 +168,22 @@ export async function getTenantEnvironmentHost(): Promise<TenantEnvironmentHost>
 
   const parsed = parseTenantHost(host);
   const rawSubdomain = getSubdomainFromHost(host, ROOT_DOMAIN);
-  const hostSubdomain = rawSubdomain || parsed.subdomain || null;
   const rootDomain = parsed.rootDomain || ROOT_DOMAIN;
 
-  const isRootMarketingHost =
-    host === ROOT_DOMAIN ||
-    host === `www.${ROOT_DOMAIN}`;
-
-  const isPlatformAdminHost = hostSubdomain === "admin";
-  const isAppHost = hostSubdomain === "app";
+  const isRootMarketingHost = host === ROOT_DOMAIN || host === `www.${ROOT_DOMAIN}`;
+  const isPlatformAdminHost = host === `admin.${ROOT_DOMAIN}`;
+  const isAppHost = host === `app.${ROOT_DOMAIN}`;
   const isCustomDomainHost = isExternalCustomDomain(host);
 
+  const env = parseEnvironmentSubdomain(rawSubdomain);
+
+  const reservedBaseSubdomain = rawSubdomain
+    ? RESERVED_TENANT_SUBDOMAINS.has(rawSubdomain)
+    : false;
+
   const isReservedHost =
-    Boolean(hostSubdomain) &&
-    RESERVED_TENANT_SUBDOMAINS.has(String(hostSubdomain)) &&
+    Boolean(rawSubdomain) &&
+    reservedBaseSubdomain &&
     !isPlatformAdminHost &&
     !isAppHost;
 
@@ -202,8 +191,9 @@ export async function getTenantEnvironmentHost(): Promise<TenantEnvironmentHost>
     return {
       rootDomain,
       host,
-      hostSubdomain,
+      hostSubdomain: rawSubdomain,
       tenantSubdomain: null,
+      requestedSubdomain: rawSubdomain,
       environmentKey: "production",
       isPlatformAdminHost: true,
       isAppHost: false,
@@ -218,8 +208,9 @@ export async function getTenantEnvironmentHost(): Promise<TenantEnvironmentHost>
     return {
       rootDomain,
       host,
-      hostSubdomain,
+      hostSubdomain: rawSubdomain,
       tenantSubdomain: null,
+      requestedSubdomain: rawSubdomain,
       environmentKey: "production",
       isPlatformAdminHost: false,
       isAppHost: true,
@@ -234,8 +225,9 @@ export async function getTenantEnvironmentHost(): Promise<TenantEnvironmentHost>
     return {
       rootDomain,
       host,
-      hostSubdomain,
+      hostSubdomain: null,
       tenantSubdomain: null,
+      requestedSubdomain: null,
       environmentKey: "production",
       isPlatformAdminHost: false,
       isAppHost: false,
@@ -250,8 +242,9 @@ export async function getTenantEnvironmentHost(): Promise<TenantEnvironmentHost>
     return {
       rootDomain,
       host,
-      hostSubdomain,
+      hostSubdomain: rawSubdomain,
       tenantSubdomain: null,
+      requestedSubdomain: rawSubdomain,
       environmentKey: "production",
       isPlatformAdminHost: false,
       isAppHost: false,
@@ -262,13 +255,12 @@ export async function getTenantEnvironmentHost(): Promise<TenantEnvironmentHost>
     };
   }
 
-  const env = parseEnvironmentSubdomain(hostSubdomain);
-
   return {
     rootDomain,
     host,
-    hostSubdomain,
+    hostSubdomain: rawSubdomain,
     tenantSubdomain: env.tenantSubdomain,
+    requestedSubdomain: env.requestedSubdomain,
     environmentKey: env.environmentKey,
     isPlatformAdminHost: false,
     isAppHost: false,
@@ -329,6 +321,7 @@ export async function resolveTenantEnvironment(): Promise<ResolvedTenantEnvironm
       ...parsed,
       tenantId: tenant.id,
       tenantSubdomain: tenant.subdomain ?? null,
+      requestedSubdomain: tenant.subdomain ?? null,
       environmentKey,
       tenant,
       environment:
