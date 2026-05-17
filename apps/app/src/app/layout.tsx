@@ -605,7 +605,6 @@ export default async function RootLayout({
       </head>
       <body suppressHydrationWarning>
         {theme_mode === "system" ? <SystemTheme /> : null}
-        <StagingChangesBanner />
         <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
