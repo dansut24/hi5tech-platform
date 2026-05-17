@@ -114,6 +114,16 @@ function validInviteRole(value: string) {
   return ["admin", "technician", "viewer"].includes(value) ? value : "technician";
 }
 
+function validAccent(value: string) {
+  return ["neutral", "violet", "blue", "emerald", "rose", "orange", "custom"].includes(value)
+    ? value
+    : "neutral";
+}
+
+function validAppearance(value: string) {
+  return ["light", "dark", "system"].includes(value) ? value : "system";
+}
+
 async function createTenantFromIntent(intent: TenantSignupIntent, userId: string, product: OnboardingProduct) {
   const admin = supabaseAdmin();
 
@@ -187,8 +197,8 @@ export async function completeTenantWorkspaceFromIntent({
   const companyName = cleanText(setup?.companyName, intent.company_name);
   const supportEmail = cleanEmail(setup?.supportEmail || intent.admin_email || email);
   const region = cleanText(setup?.region, "United Kingdom");
-  const accentColor = cleanText(setup?.accentColor, "violet");
-  const appearance = cleanText(setup?.appearance, "system");
+  const accentColor = validAccent(cleanText(setup?.accentColor, "neutral"));
+  const appearance = validAppearance(cleanText(setup?.appearance, "system"));
   const useItsmDefaults = setup?.useItsmDefaults !== false;
   const useControlDefaults = setup?.useControlDefaults !== false;
 
@@ -272,8 +282,12 @@ export async function completeTenantWorkspaceFromIntent({
       support_email: supportEmail,
       timezone: timezone || "Europe/London",
       default_region: region,
+
+      // New theme settings
       default_appearance: appearance,
       accent_color: accentColor,
+      theme_preset: accentColor === "custom" ? "custom" : accentColor,
+
       onboarding_completed: true,
       onboarding_complete: true,
       setup_completed_at: new Date().toISOString(),
