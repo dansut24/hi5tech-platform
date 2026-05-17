@@ -5,6 +5,7 @@ import {
   getTenantEnvironmentHost,
   resolveTenantEnvironment,
 } from "@/lib/tenant/environment-host";
+import StagingChangesBanner from "@/components/environments/staging-changes-banner";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -18,7 +19,6 @@ export default async function ModulesLayout({
 }) {
   const supabase = await supabaseServer();
 
-  // Auth guard
   const { data: userRes } = await supabase.auth.getUser();
   const user = userRes.user;
 
@@ -26,20 +26,8 @@ export default async function ModulesLayout({
     redirect("/login");
   }
 
-  /*
-    Environment-aware tenant host parsing.
-
-    Correct behaviour:
-    - test123.hi5tech.co.uk       -> tenant test123, environment production
-    - test123-test.hi5tech.co.uk  -> tenant test123, environment test
-    - test123-stg.hi5tech.co.uk   -> tenant test123, environment staging
-
-    This replaces the old manual parsing that incorrectly looked for
-    a tenant named "test123-stg".
-  */
   const tenantHost = await getTenantEnvironmentHost();
 
-  // If not a tenant host, go to apps selector / safe default
   if (!tenantHost.isTenantHost) {
     redirect("/apps");
   }
@@ -58,7 +46,6 @@ export default async function ModulesLayout({
 
   const tenantId = resolved.tenantId;
 
-  // Membership check scoped to the real tenant ID, not the environment alias.
   const { data: memberships } = await supabase
     .from("memberships")
     .select("id, tenant_id, created_at")
@@ -72,10 +59,6 @@ export default async function ModulesLayout({
     redirect(`/login?error=tenant_access`);
   }
 
-  /*
-    Module assignments are intentionally retained for future module shell/nav gating.
-    The /apps page and environment-aware module visibility are handled elsewhere.
-  */
   const { data: mods } = await supabase
     .from("module_assignments")
     .select("module")
@@ -97,11 +80,6 @@ export default async function ModulesLayout({
   const environmentKey = resolved.environmentKey;
   void environmentKey;
 
-  /*
-    Do NOT inject CSS vars here.
-    Root layout is the single source of truth for theme tokens.
-    This layout is only for auth + tenant/membership gating.
-  */
   return (
     <div
       className="hi5-bg min-h-dvh"
@@ -110,6 +88,8 @@ export default async function ModulesLayout({
       data-requested-subdomain={resolved.requestedSubdomain || ""}
       data-environment={resolved.environmentKey}
     >
+      <StagingChangesBanner />
+
       <main className="w-full">{children}</main>
     </div>
   );
