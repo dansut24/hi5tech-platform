@@ -528,6 +528,33 @@ body::after {
   }
 }
 
+/* ----------------------------------------------------------
+   Page spacing helpers
+   Prevents large empty mobile scroll areas caused by pb-28/100dvh.
+---------------------------------------------------------- */
+
+.hi5-page {
+  min-height: 100svh;
+  padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 640px) {
+  .hi5-page {
+    padding-bottom: 2rem;
+  }
+}
+
+.hi5-page-with-mobile-nav {
+  min-height: 100svh;
+  padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+}
+
+@media (min-width: 1024px) {
+  .hi5-page-with-mobile-nav {
+    padding-bottom: 2rem;
+  }
+}
+
 /* Scrollbar utilities */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
