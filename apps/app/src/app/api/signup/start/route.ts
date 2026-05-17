@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { normalizeSubdomain, ROOT_DOMAIN } from "@/lib/onboarding/create-tenant-workspace";
+import { isReservedTenantSubdomain } from "@/lib/tenant/environment-host";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +62,12 @@ export async function POST(req: Request) {
 
     if (!subdomain || subdomain.length < 3) {
       return json(400, { error: "Workspace URL must be at least 3 characters" });
+    }
+
+    if (isReservedTenantSubdomain(subdomain)) {
+      return json(400, {
+        error: "That workspace URL is reserved. Please choose a different workspace name.",
+      });
     }
 
     if (!adminName || adminName.length < 2) {
@@ -132,7 +139,6 @@ export async function POST(req: Request) {
     );
 
     const workspaceUrl = tenantBaseUrl(subdomain);
-
     const emailRedirectTo = `${workspaceUrl}/auth/confirm`;
 
     const { data: signUpData, error: signUpError } = await supabaseAuth.auth.signUp({
@@ -146,6 +152,9 @@ export async function POST(req: Request) {
           company_name: companyName,
           workspace_subdomain: subdomain,
           workspace_url: workspaceUrl,
+          workspace_test_url: `https://test-${subdomain}.${ROOT_DOMAIN}`,
+          workspace_staging_url: `https://stg-${subdomain}.${ROOT_DOMAIN}`,
+          root_domain: ROOT_DOMAIN,
         },
       },
     });
@@ -170,6 +179,11 @@ export async function POST(req: Request) {
       ok: true,
       message: "Check your email to confirm your account.",
       workspace: `${subdomain}.${ROOT_DOMAIN}`,
+      environmentUrls: {
+        production: workspaceUrl,
+        test: `https://test-${subdomain}.${ROOT_DOMAIN}`,
+        staging: `https://stg-${subdomain}.${ROOT_DOMAIN}`,
+      },
       emailRedirectTo,
     });
   } catch (err) {
