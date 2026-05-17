@@ -25,14 +25,23 @@ export default async function StagingChangesBanner() {
     if (total <= 0) return null;
 
     return (
-      <div className="sticky top-0 z-50 border-b border-amber-500/20 bg-amber-500/12 px-4 py-3 text-amber-900 backdrop-blur-xl dark:text-amber-100">
-        <div className="mx-auto flex max-w-[1500px] flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-sm font-bold">
-            {total} staging change{total === 1 ? "" : "s"} selected for production review.
+      <div className="relative z-40 w-full border-b border-amber-500/25 bg-amber-500/12 px-3 py-2 text-amber-950 backdrop-blur-xl dark:bg-amber-400/10 dark:text-amber-100">
+        <div className="mx-auto flex w-full max-w-[1500px] items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-xs font-black uppercase tracking-[0.16em] opacity-75">
+              Staging
+            </div>
+
+            <div className="truncate text-sm font-extrabold sm:text-base">
+              {total} change{total === 1 ? "" : "s"} selected for production review
+            </div>
           </div>
 
-          <Link href="/admin/environments/changes" className="hi5-btn-ghost w-auto text-xs">
-            Review changes
+          <Link
+            href="/admin/environments/changes"
+            className="shrink-0 rounded-full border border-amber-500/30 bg-white/65 px-3 py-2 text-xs font-black text-amber-950 shadow-sm backdrop-blur transition hover:bg-white/85 dark:bg-black/25 dark:text-amber-100 dark:hover:bg-black/35"
+          >
+            Review
           </Link>
         </div>
       </div>
