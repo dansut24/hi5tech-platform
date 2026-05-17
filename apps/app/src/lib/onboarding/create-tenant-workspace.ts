@@ -296,7 +296,12 @@ export async function completeTenantWorkspaceFromIntent({
     { onConflict: "tenant_id" }
   );
 
-  const pricingPlan = getPricingPlan(product);
+    const pricingPlan = getPricingPlan(product);
+
+  const billingTrialEndsAt =
+    "trial_ends_at" in tenant && tenant.trial_ends_at
+      ? String(tenant.trial_ends_at)
+      : new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
 
   await admin.from("tenant_billing_profiles").upsert(
     {
@@ -304,9 +309,7 @@ export async function completeTenantWorkspaceFromIntent({
       plan_key: pricingPlan.key,
       billing_status: "trial",
       trial_started_at: new Date().toISOString(),
-      trial_ends_at:
-        tenant.trial_ends_at ||
-        new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+      trial_ends_at: billingTrialEndsAt,
       billing_email: supportEmail,
       currency: "GBP",
       base_monthly_amount: pricingPlan.baseMonthly,
@@ -317,7 +320,7 @@ export async function completeTenantWorkspaceFromIntent({
     },
     { onConflict: "tenant_id" }
   );
-
+  
   const entitlementMap = getProductEntitlements(product);
 
   await admin.from("tenant_entitlements").upsert(
