@@ -2,11 +2,12 @@ import React from "react";
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
-import {
-  getTenantBillingProfile,
-} from "@/lib/billing/tenant-billing";
+import { getTenantBillingProfile } from "@/lib/billing/tenant-billing";
 import TrialBanner from "@/components/billing/trial-banner";
-import { resolveTenantEnvironment } from "@/lib/tenant/environment-host";
+import {
+  getTenantEnvironmentHost,
+  resolveTenantEnvironment,
+} from "@/lib/tenant/environment-host";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 type ModuleKey = "itsm" | "control" | "selfservice" | "admin";
@@ -301,11 +302,17 @@ async function getEnvironmentFeatureMap({
 }
 
 export default async function ModulesPage() {
-  const resolved = await resolveTenantEnvironment();
+  const hostInfo = await getTenantEnvironmentHost();
 
-  if (resolved?.isPlatformAdminHost) {
+  if (hostInfo.isPlatformAdminHost) {
     redirect("/admin-console");
   }
+
+  if (hostInfo.isAppHost) {
+    redirect("/login");
+  }
+
+  const resolved = await resolveTenantEnvironment();
 
   if (!resolved?.tenantId) {
     notFound();
