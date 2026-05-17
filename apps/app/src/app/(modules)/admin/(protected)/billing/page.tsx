@@ -12,8 +12,22 @@ import {
   type PlanKey,
 } from "@/lib/billing/pricing";
 import TrialBanner from "@/components/billing/trial-banner";
+import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
+
+function formatDate(value?: string | null) {
+  if (!value) return "—";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+
+  return date.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
 
 function PlanCard({
   planKey,
@@ -82,6 +96,20 @@ function PlanCard({
   );
 }
 
+async function loadPendingBillingChanges(tenantId: string) {
+  const admin = supabaseAdmin();
+
+  const { data } = await admin
+    .from("tenant_billing_changes")
+    .select("id, change_type, from_plan, to_plan, status, created_at, scheduled_for")
+    .eq("tenant_id", tenantId)
+    .in("status", ["draft", "pending_approval", "scheduled"])
+    .order("created_at", { ascending: false })
+    .limit(10);
+
+  return data ?? [];
+}
+
 export default async function BillingPage() {
   const tenantId = await getActiveTenantId();
   const supabase = await supabaseServer();
@@ -99,11 +127,14 @@ export default async function BillingPage() {
     : { data: null };
 
   const isOwner = membership?.role === "owner";
+  const isBillingAdmin = membership?.role === "billing_admin";
+  const canViewBilling = isOwner || isBillingAdmin;
 
-  const [billingResult, features, usage] = await Promise.all([
+  const [billingResult, features, usage, pendingChanges] = await Promise.all([
     getTenantBillingProfile(tenantId),
     getTenantFeatureMap(tenantId),
     getTenantUsageCounts(tenantId),
+    loadPendingBillingChanges(tenantId),
   ]);
 
   const billing = billingResult.billing;
@@ -139,11 +170,11 @@ export default async function BillingPage() {
         </div>
       </div>
 
-      {!isOwner ? (
+      {!canViewBilling ? (
         <div className="hi5-card p-5">
           <div className="text-lg font-extrabold">Billing access restricted</div>
           <p className="mt-2 text-sm opacity-75">
-            Billing is currently visible to the workspace owner only.
+            Billing is currently visible to the workspace owner or billing admin only.
           </p>
         </div>
       ) : (
@@ -184,6 +215,47 @@ export default async function BillingPage() {
               <div className="mt-2 text-sm opacity-70">{formatGBP(Number(billing.per_device_amount))} each / month</div>
             </div>
           </div>
+
+          {pendingChanges.length ? (
+            <div className="hi5-panel p-5">
+              <div className="text-lg font-extrabold">Pending billing changes</div>
+              <p className="mt-2 text-sm opacity-75">
+                These changes have been requested but have not been applied yet.
+              </p>
+
+              <div className="mt-5 grid gap-3">
+                {pendingChanges.map((change: any) => {
+                  const toPlan = PRICING_PLANS[change.to_plan as PlanKey];
+
+                  return (
+                    <div
+                      key={change.id}
+                      className="rounded-2xl border hi5-border bg-black/5 p-4 dark:bg-white/5"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <div className="text-sm font-bold">
+                            {change.change_type === "plan_change" ? "Plan change" : change.change_type}
+                          </div>
+                          <div className="mt-1 text-sm opacity-75">
+                            {change.from_plan} → {toPlan?.label || change.to_plan}
+                          </div>
+                          <div className="mt-1 text-xs opacity-60">
+                            Requested {formatDate(change.created_at)}
+                            {change.scheduled_for ? ` · Scheduled ${formatDate(change.scheduled_for)}` : ""}
+                          </div>
+                        </div>
+
+                        <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-1 text-xs font-bold text-amber-700 dark:text-amber-200">
+                          {String(change.status).replaceAll("_", " ")}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
 
           <div className="hi5-card p-5">
             <div className="text-lg font-extrabold">Current included modules</div>
