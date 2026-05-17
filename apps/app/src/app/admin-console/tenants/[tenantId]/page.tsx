@@ -40,32 +40,47 @@ async function loadTenantDetail(tenantId: string) {
     entitlements,
     environments,
     featureStates,
+    customDomains,
     billingChanges,
     membershipCount,
     deviceCount,
     incidentCount,
   ] = await Promise.all([
     admin.from("tenant_settings").select("*").eq("tenant_id", tenantId).maybeSingle(),
+
     admin.from("tenant_billing_profiles").select("*").eq("tenant_id", tenantId).maybeSingle(),
+
     admin.from("tenant_entitlements").select("*").eq("tenant_id", tenantId).order("feature_key"),
+
     admin
       .from("tenant_environments")
       .select("id, key, name, type, can_reset, all_features_visible, is_live, sort_order")
       .eq("tenant_id", tenantId)
       .order("sort_order", { ascending: true }),
+
     admin
       .from("tenant_feature_states")
       .select("id, tenant_environment_id, feature_key, status, updated_at")
       .eq("tenant_id", tenantId)
       .order("feature_key", { ascending: true }),
+
+    admin
+      .from("tenant_custom_domains")
+      .select("*")
+      .eq("tenant_id", tenantId)
+      .order("created_at", { ascending: false }),
+
     admin
       .from("tenant_billing_changes")
       .select("*")
       .eq("tenant_id", tenantId)
       .order("created_at", { ascending: false })
       .limit(10),
+
     admin.from("memberships").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId),
+
     admin.from("devices").select("device_id", { count: "exact", head: true }).eq("tenant_id", tenantId),
+
     admin.from("incidents").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId),
   ]);
 
@@ -76,6 +91,7 @@ async function loadTenantDetail(tenantId: string) {
     entitlements: entitlements.data ?? [],
     environments: environments.data ?? [],
     featureStates: featureStates.data ?? [],
+    customDomains: customDomains.data ?? [],
     billingChanges: billingChanges.data ?? [],
     counts: {
       users: membershipCount.count ?? 0,
@@ -101,20 +117,38 @@ function StatusPill({
   tone = "neutral",
 }: {
   children: React.ReactNode;
-  tone?: "good" | "warning" | "neutral";
+  tone?: "good" | "warning" | "bad" | "neutral";
 }) {
   const className =
     tone === "good"
       ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200"
       : tone === "warning"
         ? "border-amber-500/25 bg-amber-500/10 text-amber-700 dark:text-amber-200"
-        : "hi5-border bg-black/5 dark:bg-white/5";
+        : tone === "bad"
+          ? "border-red-500/25 bg-red-500/10 text-red-700 dark:text-red-200"
+          : "hi5-border bg-black/5 dark:bg-white/5";
 
   return (
     <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${className}`}>
       {children}
     </span>
   );
+}
+
+function DomainStatusPill({ status }: { status: string }) {
+  if (status === "active" || status === "verified") {
+    return <StatusPill tone="good">{status}</StatusPill>;
+  }
+
+  if (status === "pending") {
+    return <StatusPill tone="warning">{status}</StatusPill>;
+  }
+
+  if (status === "failed" || status === "disabled") {
+    return <StatusPill tone="bad">{status}</StatusPill>;
+  }
+
+  return <StatusPill>{status || "unknown"}</StatusPill>;
 }
 
 export default async function PlatformTenantDetailPage({
@@ -142,12 +176,8 @@ export default async function PlatformTenantDetailPage({
 
   const workspaceUrl = urls.production;
 
-  const environmentById = new Map<string, any>();
-  for (const environment of detail.environments) {
-    environmentById.set(environment.id, environment);
-  }
-
   const featureStatesByEnvironment = new Map<string, any[]>();
+
   for (const state of detail.featureStates) {
     const existing = featureStatesByEnvironment.get(state.tenant_environment_id) ?? [];
     existing.push(state);
@@ -236,6 +266,54 @@ export default async function PlatformTenantDetailPage({
           </div>
         </div>
 
+        <div className="hi5-panel p-5">
+          <div className="text-lg font-extrabold">Custom domains</div>
+          <p className="mt-2 text-sm opacity-75">
+            Customer-owned domains connected to this tenant.
+          </p>
+
+          <div className="mt-4 grid gap-3">
+            {detail.customDomains.length ? (
+              detail.customDomains.map((domain: any) => (
+                <div
+                  key={domain.id}
+                  className="rounded-2xl border hi5-border bg-black/5 p-4 dark:bg-white/5"
+                >
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <div className="text-lg font-bold">{domain.domain}</div>
+
+                      <div className="mt-1 text-sm opacity-70">
+                        Environment: {domain.environment_key} · Method: {domain.verification_method}
+                      </div>
+
+                      <div className="mt-1 text-sm opacity-70">
+                        DNS target: {domain.dns_target || "—"}
+                      </div>
+
+                      <div className="mt-1 break-words font-mono text-xs opacity-60">
+                        {domain.verification_token}
+                      </div>
+
+                      <div className="mt-2 text-xs opacity-60">
+                        Created {formatDate(domain.created_at)}
+                        {domain.verified_at ? ` · Verified ${formatDate(domain.verified_at)}` : ""}
+                        {domain.activated_at ? ` · Activated ${formatDate(domain.activated_at)}` : ""}
+                      </div>
+                    </div>
+
+                    <DomainStatusPill status={domain.status} />
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-2xl border hi5-border bg-black/5 p-4 text-sm opacity-70 dark:bg-white/5">
+                No custom domains configured.
+              </div>
+            )}
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div className="hi5-card p-5">
             <div className="text-xs opacity-65">Users</div>
@@ -277,9 +355,18 @@ export default async function PlatformTenantDetailPage({
               <Field label="Plan key" value={billing?.plan_key} />
               <Field label="Billing email" value={billing?.billing_email} />
               <Field label="Currency" value={billing?.currency} />
-              <Field label="Base monthly" value={billing ? formatGBP(Number(billing.base_monthly_amount || 0)) : "—"} />
-              <Field label="Per technician" value={billing ? formatGBP(Number(billing.per_technician_amount || 0)) : "—"} />
-              <Field label="Per device" value={billing ? formatGBP(Number(billing.per_device_amount || 0)) : "—"} />
+              <Field
+                label="Base monthly"
+                value={billing ? formatGBP(Number(billing.base_monthly_amount || 0)) : "—"}
+              />
+              <Field
+                label="Per technician"
+                value={billing ? formatGBP(Number(billing.per_technician_amount || 0)) : "—"}
+              />
+              <Field
+                label="Per device"
+                value={billing ? formatGBP(Number(billing.per_device_amount || 0)) : "—"}
+              />
               <Field label="Cancel at period end" value={billing?.cancel_at_period_end ? "Yes" : "No"} />
             </div>
           </div>
@@ -311,7 +398,9 @@ export default async function PlatformTenantDetailPage({
               const states = featureStatesByEnvironment.get(environment.id) ?? [];
               const liveCount = states.filter((state: any) => state.status === "live").length;
               const availableCount = states.filter((state: any) => state.status === "available").length;
-              const selectedCount = states.filter((state: any) => state.status === "selected" || state.status === "staged").length;
+              const selectedCount = states.filter(
+                (state: any) => state.status === "selected" || state.status === "staged"
+              ).length;
               const disabledCount = states.filter((state: any) => state.status === "disabled").length;
 
               return (
