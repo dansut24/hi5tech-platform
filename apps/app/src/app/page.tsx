@@ -309,8 +309,15 @@ export default async function ModulesPage() {
   }
 
   if (hostInfo.isAppHost) {
-    redirect("/login");
+  const supabase = await supabaseServer();
+  const { data: userRes } = await supabase.auth.getUser();
+
+  if (userRes.user) {
+    redirect("/workspaces");
   }
+
+  redirect("/login");
+}
 
   const resolved = await resolveTenantEnvironment();
 
