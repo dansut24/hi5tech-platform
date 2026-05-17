@@ -4,6 +4,8 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requirePlatformAdmin } from "@/lib/platform-admin/guard";
 import PlatformAdminShell from "@/components/platform-admin/platform-admin-shell";
 import DomainStatusActions from "@/components/platform-admin/domain-status-actions";
+import TenantStatusActions from "@/components/platform-admin/tenant-status-actions";
+import TenantTrialActions from "@/components/platform-admin/tenant-trial-actions";
 import { formatGBP } from "@/lib/billing/pricing";
 import { buildTenantEnvironmentUrls } from "@/lib/tenant/environment-host";
 
@@ -264,6 +266,18 @@ export default async function PlatformTenantDetailPage({
               <div className="text-xs opacity-65">Staging</div>
               <div className="mt-1 break-words text-sm font-bold">{urls.staging}</div>
             </a>
+          </div>
+        </div>
+
+        <div className="hi5-panel p-5">
+          <div className="text-lg font-extrabold">Platform admin actions</div>
+          <p className="mt-2 text-sm opacity-75">
+            Manual tenant management actions. These are Hi5Tech-only controls and are written to the platform audit log.
+          </p>
+
+          <div className="mt-4 grid grid-cols-1 gap-4 xl:grid-cols-2">
+            <TenantStatusActions tenantId={tenant.id} currentStatus={tenant.status} />
+            <TenantTrialActions tenantId={tenant.id} />
           </div>
         </div>
 
