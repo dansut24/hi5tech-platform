@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { requirePlatformAdmin } from "@/lib/platform-admin/guard";
 import PlatformAdminShell from "@/components/platform-admin/platform-admin-shell";
+import DomainStatusActions from "@/components/platform-admin/domain-status-actions";
 import { formatGBP } from "@/lib/billing/pricing";
 import { buildTenantEnvironmentUrls } from "@/lib/tenant/environment-host";
 
@@ -302,7 +303,10 @@ export default async function PlatformTenantDetailPage({
                       </div>
                     </div>
 
-                    <DomainStatusPill status={domain.status} />
+                    <div className="flex flex-col items-start gap-3 sm:items-end">
+                      <DomainStatusPill status={domain.status} />
+                      <DomainStatusActions domainId={domain.id} currentStatus={domain.status} />
+                    </div>
                   </div>
                 </div>
               ))
