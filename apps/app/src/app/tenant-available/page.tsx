@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { headers } from "next/headers";
+import { normalizeTenantEnvironmentSubdomain } from "@/lib/tenant/tenant-from-host";
 
 const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "hi5tech.co.uk";
 const MARKETING_URL =
@@ -13,7 +14,7 @@ async function getRequestedSubdomain() {
   if (host === ROOT_DOMAIN) return null;
 
   const sub = host.slice(0, -ROOT_DOMAIN.length - 1);
-  if (!sub || sub === "www" || sub === "app") return null;
+  if (!sub || sub === "www" || sub === "app" || sub === "admin") return null;
 
   return sub;
 }
@@ -21,14 +22,22 @@ async function getRequestedSubdomain() {
 export default async function TenantAvailablePage({
   searchParams,
 }: {
-  searchParams: { requested?: string; path?: string };
+  searchParams: Promise<{ requested?: string; path?: string }>;
 }) {
+  const params = await searchParams;
+
   const fromHost = await getRequestedSubdomain();
-  const requested = (searchParams?.requested || fromHost || "").toLowerCase();
+  const requestedRaw = String(params?.requested || fromHost || "").toLowerCase();
+
+  const parsedRequested = normalizeTenantEnvironmentSubdomain(requestedRaw);
+  const signupSubdomain = parsedRequested.subdomain || requestedRaw;
 
   const signupUrl = new URL(MARKETING_URL);
-  signupUrl.pathname = "/signup"; // change if needed
-  if (requested) signupUrl.searchParams.set("subdomain", requested);
+  signupUrl.pathname = "/signup";
+
+  if (signupSubdomain) {
+    signupUrl.searchParams.set("subdomain", signupSubdomain);
+  }
 
   return (
     <div className="min-h-dvh flex items-center justify-center p-4">
@@ -36,9 +45,9 @@ export default async function TenantAvailablePage({
         <div className="text-sm opacity-70">Hi5Tech Platform</div>
 
         <h1 className="mt-2 text-2xl font-semibold">
-          {requested ? (
+          {requestedRaw ? (
             <>
-              <span className="hi5-accent">{requested}</span>.{ROOT_DOMAIN} is
+              <span className="hi5-accent">{requestedRaw}</span>.{ROOT_DOMAIN} is
               available
             </>
           ) : (
@@ -46,7 +55,15 @@ export default async function TenantAvailablePage({
           )}
         </h1>
 
-        <p className="mt-2 text-sm opacity-80">
+        {parsedRequested.environmentKey !== "production" && parsedRequested.subdomain ? (
+          <div className="mt-3 rounded-2xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-100">
+            This looks like an environment URL for{" "}
+            <b>{parsedRequested.subdomain}.{ROOT_DOMAIN}</b>. If that tenant exists,
+            contact your admin. If it does not exist, create the base tenant first.
+          </div>
+        ) : null}
+
+        <p className="mt-3 text-sm opacity-80">
           This tenant doesn’t exist yet. Create it now and start a{" "}
           <b>14-day free trial</b>.
         </p>
