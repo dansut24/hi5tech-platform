@@ -323,7 +323,7 @@ export default async function ModulesPage() {
   }
 
   return (
-    <div className="min-h-[100dvh] pb-[calc(4rem+env(safe-area-inset-bottom,0px))]">
+    <div className="hi5-page">
       <div className="mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-6 sm:py-8 lg:px-8 xl:px-10">
         <div className="grid grid-cols-1 gap-5 lg:gap-7 2xl:grid-cols-[360px_1fr]">
           <div className="space-y-5">
