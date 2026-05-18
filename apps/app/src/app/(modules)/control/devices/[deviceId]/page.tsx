@@ -11,7 +11,7 @@ import AssetLinkPanel from "../../ui/asset-link-panel";
 import CreateIncidentFromDeviceButton from "../../ui/create-incident-from-device-button";
 import DeviceTicketsPanel from "../../ui/device-tickets-panel";
 import { getActiveTenantId } from "@/lib/tenant";
-import { getTenantFeatures } from "@/lib/entitlements";
+import { getActiveEnvironmentFeatures } from "@/lib/entitlements";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -410,23 +410,11 @@ function TabLink({
   href,
   active,
   label,
-  locked,
-  badge,
 }: {
   href: string;
   active: boolean;
   label: string;
-  locked?: boolean;
-  badge?: string;
 }) {
-  if (locked) {
-    return (
-      <span className="rounded-2xl px-3 py-2 text-sm border hi5-border opacity-50 cursor-not-allowed">
-        {label} 🔒
-      </span>
-    );
-  }
-
   return (
     <Link
       href={href}
@@ -438,47 +426,9 @@ function TabLink({
       ].join(" ")}
     >
       <span>{label}</span>
-      {badge ? <span className="rounded-full bg-black/10 dark:bg-white/10 px-1.5 py-0.5 text-[10px]">{badge}</span> : null}
     </Link>
   );
 }
-
-function LockedButton({ label }: { label: string }) {
-  return (
-    <button className="hi5-btn-ghost text-sm opacity-60" type="button" disabled title="Premium feature">
-      {label} 🔒
-    </button>
-  );
-}
-
-function ComingSoonTab({
-  title,
-  description,
-  items,
-}: {
-  title: string;
-  description: string;
-  items: string[];
-}) {
-  return (
-    <div className="hi5-panel p-5 space-y-4">
-      <div>
-        <div className="text-lg font-extrabold">{title}</div>
-        <p className="text-sm opacity-75 mt-1">{description}</p>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-        {items.map((item) => (
-          <div key={item} className="rounded-2xl border hi5-border bg-black/5 dark:bg-white/5 p-4">
-            <div className="text-sm font-semibold">{item}</div>
-            <div className="text-xs opacity-65 mt-1">Planned for a future Control pass.</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 
 function getList(obj: any, keys: string[]) {
   if (Array.isArray(obj)) return obj;
@@ -823,8 +773,6 @@ async function loadDevice(tenantId: string, deviceId: string) {
 async function loadInventory(tenantId: string, deviceId: string) {
   const admin = supabaseAdmin();
 
-  // Prefer the live control-server snapshot so the page updates as soon as the
-  // agent sends inventory. Then mirror it into Supabase for the rest of the app.
   try {
     const upstream = await fetch(
       `${RMM_API_BASE}/api/devices/${encodeURIComponent(deviceId)}/inventory`,
@@ -1363,21 +1311,30 @@ export default async function DevicePage({
   const tab = String(sp.tab || "overview");
 
   const tenantId = await getActiveTenantId();
-  const features = await getTenantFeatures(tenantId);
+  const features = await getActiveEnvironmentFeatures(tenantId);
 
   const canRemote = features.remote_control === true;
   const canTerminal = features.remote_terminal === true;
   const canFiles = features.remote_files === true;
 
-  if (tab === "remote" && !canRemote) {
-    redirect(`/control/devices/${encodeURIComponent(deviceId)}?tab=overview`);
-  }
+  const allowedTabs = new Set([
+    "overview",
+    "hardware",
+    "security",
+    "storage",
+    "network",
+    "software",
+    "patching",
+    "events",
+    "tickets",
+    "services",
+    "activity",
+    ...(canRemote ? ["remote"] : []),
+    ...(canTerminal ? ["terminal"] : []),
+    ...(canFiles ? ["files"] : []),
+  ]);
 
-  if (tab === "terminal" && !canTerminal) {
-    redirect(`/control/devices/${encodeURIComponent(deviceId)}?tab=overview`);
-  }
-
-  if (tab === "files" && !canFiles) {
+  if (!allowedTabs.has(tab)) {
     redirect(`/control/devices/${encodeURIComponent(deviceId)}?tab=overview`);
   }
 
@@ -1425,12 +1382,10 @@ export default async function DevicePage({
     { key: "patching", label: "Updates" },
     { key: "events", label: "Event health" },
     { key: "tickets", label: "Tickets" },
-    { key: "remote", label: "Remote", locked: !canRemote },
-    { key: "terminal", label: "Terminal", locked: !canTerminal },
-    { key: "files", label: "Files", locked: !canFiles },
+    ...(canRemote ? [{ key: "remote", label: "Remote" }] : []),
+    ...(canTerminal ? [{ key: "terminal", label: "Terminal" }] : []),
+    ...(canFiles ? [{ key: "files", label: "Files" }] : []),
     { key: "services", label: "Services" },
-    { key: "processes", label: "Processes", badge: "Soon" },
-    { key: "jobs", label: "Jobs", badge: "Soon" },
     { key: "activity", label: "Activity" },
   ];
 
@@ -1458,36 +1413,28 @@ export default async function DevicePage({
 
           <div className="flex flex-wrap gap-2 xl:justify-end">
             {canRemote ? (
-              <Link className="hi5-btn-primary text-sm" href={`/control/devices/${encodeURIComponent(deviceId)}?tab=remote`}>
-                Remote Control
-              </Link>
-            ) : (
-              <LockedButton label="Remote Control" />
-            )}
+              <>
+                <Link className="hi5-btn-primary text-sm" href={`/control/devices/${encodeURIComponent(deviceId)}?tab=remote`}>
+                  Remote Control
+                </Link>
 
-            {canRemote ? (
-              <Link className="hi5-btn-ghost text-sm" href={`/control/devices/${encodeURIComponent(deviceId)}?tab=remote&mode=backstage`}>
-                Background Mode
-              </Link>
-            ) : (
-              <LockedButton label="Background Mode" />
-            )}
+                <Link className="hi5-btn-ghost text-sm" href={`/control/devices/${encodeURIComponent(deviceId)}?tab=remote&mode=backstage`}>
+                  Background Mode
+                </Link>
+              </>
+            ) : null}
 
             {canTerminal ? (
               <Link className="hi5-btn-ghost text-sm" href={`/control/devices/${encodeURIComponent(deviceId)}?tab=terminal`}>
                 Terminal
               </Link>
-            ) : (
-              <LockedButton label="Terminal" />
-            )}
+            ) : null}
 
             {canFiles ? (
               <Link className="hi5-btn-ghost text-sm" href={`/control/devices/${encodeURIComponent(deviceId)}?tab=files`}>
                 Files
               </Link>
-            ) : (
-              <LockedButton label="Files" />
-            )}
+            ) : null}
 
             <InventoryRefreshPanel
               deviceId={deviceId}
@@ -1506,8 +1453,6 @@ export default async function DevicePage({
               href={`/control/devices/${encodeURIComponent(deviceId)}?tab=${item.key}`}
               active={tab === item.key}
               label={item.label}
-              locked={item.locked}
-              badge={item.badge}
             />
           ))}
         </div>
@@ -1539,63 +1484,9 @@ export default async function DevicePage({
 
       {tab === "software" ? <SoftwareInventoryTab inventory={inventory} /> : null}
 
-      {tab === "processes" ? (
-        <ComingSoonTab
-          title="Processes"
-          description="This will show running processes, CPU/memory usage, owners, and safe terminate actions."
-          items={[
-            "Top CPU processes",
-            "Top memory processes",
-            "Process owner",
-            "Executable path",
-            "Start time",
-            "Terminate process",
-          ]}
-        />
-      ) : null}
-
       {tab === "patching" ? <UpdatesTab inventory={inventory} /> : null}
 
       {tab === "events" ? <EventHealthTab inventory={inventory} /> : null}
-
-      {tab === "jobs" ? (
-        <ComingSoonTab
-          title="Device jobs"
-          description="This will show commands and automation tasks sent to this device."
-          items={[
-            "Refresh inventory jobs",
-            "Script runs",
-            "Patch jobs",
-            "Restart jobs",
-            "Service actions",
-            "File transfer jobs",
-          ]}
-        />
-      ) : null}
-
-      {![
-        "overview",
-        "hardware",
-        "security",
-        "storage",
-        "network",
-        "tickets",
-        "remote",
-        "terminal",
-        "files",
-        "services",
-        "activity",
-        "software",
-        "processes",
-        "patching",
-        "events",
-        "jobs",
-      ].includes(tab) ? (
-        <div className="hi5-panel p-5">
-          <div className="text-lg font-semibold capitalize">{tab}</div>
-          <p className="text-sm opacity-75 mt-2">This tab is coming soon.</p>
-        </div>
-      ) : null}
     </div>
   );
 }
