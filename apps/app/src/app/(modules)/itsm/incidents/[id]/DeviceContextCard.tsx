@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { FolderOpen, Monitor, ScreenShare, Terminal } from "lucide-react";
+import { Monitor } from "lucide-react";
 import DeviceLinkerClient from "./DeviceLinkerClient";
-import PremiumFeatureLock from "@/components/premium/PremiumFeatureLock";
 
 type Device = {
   device_id: string;
@@ -42,6 +41,43 @@ export default function DeviceContextCard({
   const deviceId = device?.device_id ?? null;
   const name = device?.hostname || device?.device_id || "No linked device";
 
+  const visibleActions = deviceId
+    ? [
+        features.devices_inventory
+          ? {
+              key: "inventory",
+              href: `/control/devices/${encodeURIComponent(deviceId)}`,
+              label: "Full device",
+              className: "hi5-btn-ghost text-sm w-full",
+            }
+          : null,
+        features.remote_control
+          ? {
+              key: "remote",
+              href: `/control/devices/${encodeURIComponent(deviceId)}?tab=remote`,
+              label: "Remote",
+              className: "hi5-btn-primary text-sm w-full",
+            }
+          : null,
+        features.remote_terminal
+          ? {
+              key: "terminal",
+              href: `/control/devices/${encodeURIComponent(deviceId)}?tab=terminal`,
+              label: "Terminal",
+              className: "hi5-btn-ghost text-sm w-full",
+            }
+          : null,
+        features.remote_files
+          ? {
+              key: "files",
+              href: `/control/devices/${encodeURIComponent(deviceId)}?tab=files`,
+              label: "Files",
+              className: "hi5-btn-ghost text-sm w-full",
+            }
+          : null,
+      ].filter(Boolean)
+    : [];
+
   return (
     <div className="hi5-panel p-5 space-y-4">
       <div className="flex items-start justify-between gap-3">
@@ -51,7 +87,7 @@ export default function DeviceContextCard({
             Linked device
           </div>
           <p className="text-xs opacity-70 mt-1">
-            Device context is included with ITSM. Remote tools are premium.
+            Device context is included with ITSM. Remote tools appear here only when enabled for this workspace and environment.
           </p>
         </div>
 
@@ -94,64 +130,13 @@ export default function DeviceContextCard({
         currentDeviceId={deviceId}
       />
 
-      {deviceId ? (
+      {visibleActions.length ? (
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-          {features.devices_inventory ? (
-            <Link href={`/control/${deviceId}`} className="hi5-btn-ghost text-sm w-full">
-              Full device
+          {visibleActions.map((action: any) => (
+            <Link key={action.key} href={action.href} className={action.className}>
+              {action.label}
             </Link>
-          ) : (
-            <PremiumFeatureLock
-              tenantId={tenantId}
-              incidentId={incidentId}
-              deviceId={deviceId}
-              featureKey="devices_inventory"
-              label="Full inventory"
-            />
-          )}
-
-          {features.remote_control ? (
-            <Link href={`/control/${deviceId}?tab=remote`} className="hi5-btn-primary text-sm w-full">
-              Remote
-            </Link>
-          ) : (
-            <PremiumFeatureLock
-              tenantId={tenantId}
-              incidentId={incidentId}
-              deviceId={deviceId}
-              featureKey="remote_control"
-              label="Remote"
-              className="hi5-btn-primary text-sm w-full"
-            />
-          )}
-
-          {features.remote_terminal ? (
-            <Link href={`/control/${deviceId}?tab=terminal`} className="hi5-btn-ghost text-sm w-full">
-              Terminal
-            </Link>
-          ) : (
-            <PremiumFeatureLock
-              tenantId={tenantId}
-              incidentId={incidentId}
-              deviceId={deviceId}
-              featureKey="remote_terminal"
-              label="Terminal"
-            />
-          )}
-
-          {features.remote_files ? (
-            <Link href={`/control/${deviceId}?tab=files`} className="hi5-btn-ghost text-sm w-full">
-              Files
-            </Link>
-          ) : (
-            <PremiumFeatureLock
-              tenantId={tenantId}
-              incidentId={incidentId}
-              deviceId={deviceId}
-              featureKey="remote_files"
-              label="Files"
-            />
-          )}
+          ))}
         </div>
       ) : null}
     </div>
