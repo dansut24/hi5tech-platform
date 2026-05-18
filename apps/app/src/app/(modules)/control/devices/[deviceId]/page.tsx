@@ -488,6 +488,63 @@ async function loadDevice(tenantId: string, deviceId: string) {
 async function loadInventory(tenantId: string, deviceId: string) {
   const admin = supabaseAdmin();
 
+  // Prefer the live control-server snapshot so the page updates as soon as the
+  // agent sends inventory. Then mirror it into Supabase for the rest of the app.
+  try {
+    const upstream = await fetch(
+      `${RMM_API_BASE}/api/devices/${encodeURIComponent(deviceId)}/inventory`,
+      {
+        cache: "no-store",
+        headers: {
+          Accept: "application/json",
+          "X-Tenant-ID": tenantId,
+        },
+      }
+    );
+
+    if (upstream.ok) {
+      const json = await upstream.json().catch(() => null);
+      const inventory = json?.inventory ?? null;
+
+      if (inventory) {
+        const row = {
+          tenant_id: tenantId,
+          device_id: deviceId,
+          summary: inventory.summary ?? {},
+          hardware: inventory.hardware ?? {},
+          os: inventory.os ?? {},
+          cpu: inventory.cpu ?? {},
+          memory: inventory.memory ?? {},
+          storage: inventory.storage ?? [],
+          security: inventory.security ?? {},
+          network: inventory.network ?? {},
+          sessions: inventory.sessions ?? {},
+          displays: inventory.displays ?? [],
+          battery: inventory.battery ?? {},
+          agent: inventory.agent ?? {},
+          health: inventory.health ?? {},
+          software_summary: inventory.software_summary ?? {},
+          services_summary: inventory.services_summary ?? {},
+          events_summary: inventory.events_summary ?? {},
+          collected_at: inventory.collected_at ?? new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+
+        const { error: syncError } = await admin
+          .from("device_inventory")
+          .upsert(row, { onConflict: "tenant_id,device_id" });
+
+        if (syncError) {
+          console.error("[control/device] inventory Supabase sync failed", syncError.message);
+        }
+
+        return row as DeviceInventory;
+      }
+    }
+  } catch (err) {
+    console.error("[control/device] live inventory fetch failed", err);
+  }
+
   const { data, error } = await admin
     .from("device_inventory")
     .select(
