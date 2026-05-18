@@ -1,6 +1,6 @@
 import { supabaseServer } from "@/lib/supabase/server";
 import { getMemberTenantIds } from "@/lib/tenant";
-import { getTenantFeatures } from "@/lib/entitlements";
+import { getActiveEnvironmentFeatures } from "@/lib/entitlements";
 import { addIncidentComment } from "./actions";
 import { uploadIncidentAttachment, deleteIncidentAttachment } from "./attachments.actions";
 import DeviceContextCard from "./DeviceContextCard";
@@ -101,7 +101,7 @@ export default async function IncidentDetailPage({
     return <div className="hi5-card p-4 text-sm opacity-80">Incident not found.</div>;
   }
 
-  const features = await getTenantFeatures(incident.tenant_id);
+  const features = await getActiveEnvironmentFeatures(incident.tenant_id);
 
   let linkedDevice: any = null;
 
