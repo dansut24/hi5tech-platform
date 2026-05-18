@@ -45,11 +45,15 @@ async function resolveTenant(req: Request) {
 }
 
 function toInventoryRow(tenantId: string, deviceId: string, inventory: any) {
+  const updates = inventory?.windows_updates ?? inventory?.updates ?? {};
+  const events = inventory?.event_health ?? inventory?.events_summary ?? {};
+
   return {
     tenant_id: tenantId,
     device_id: deviceId,
     summary: inventory?.summary ?? {},
     hardware: inventory?.hardware ?? {},
+    warranty_identity: inventory?.warranty_identity ?? {},
     os: inventory?.os ?? {},
     cpu: inventory?.cpu ?? {},
     memory: inventory?.memory ?? {},
@@ -58,12 +62,17 @@ function toInventoryRow(tenantId: string, deviceId: string, inventory: any) {
     network: inventory?.network ?? {},
     sessions: inventory?.sessions ?? {},
     displays: inventory?.displays ?? [],
+    gpu: inventory?.gpu ?? {},
     battery: inventory?.battery ?? {},
     agent: inventory?.agent ?? {},
     health: inventory?.health ?? {},
     software_summary: inventory?.software_summary ?? {},
+    software: inventory?.software ?? inventory?.software_summary ?? {},
     services_summary: inventory?.services_summary ?? {},
-    events_summary: inventory?.events_summary ?? {},
+    windows_updates: updates,
+    updates,
+    events_summary: inventory?.events_summary ?? events,
+    event_health: events,
     collected_at: inventory?.collected_at ?? new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
@@ -137,4 +146,54 @@ export async function GET(
     { inventory: data ?? null },
     { headers: { "Cache-Control": "no-store" } }
   );
+}
+
+export async function POST(
+  req: NextRequest,
+  context: { params: Promise<{ deviceId: string }> }
+) {
+  const { deviceId } = await context.params;
+
+  if (!deviceId) {
+    return NextResponse.json({ error: "Missing deviceId" }, { status: 400 });
+  }
+
+  const resolved = await resolveTenant(req);
+  if ("error" in resolved) return resolved.error;
+
+  try {
+    const upstream = await fetch(
+      `${RMM_API_BASE}/api/devices/${encodeURIComponent(deviceId)}/inventory/refresh`,
+      {
+        method: "POST",
+        cache: "no-store",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "X-Tenant-ID": resolved.tenantId,
+          "X-User-ID": resolved.user.id,
+        },
+        body: JSON.stringify({ reason: "portal_manual_refresh" }),
+      }
+    );
+
+    const json = await upstream.json().catch(() => null);
+
+    if (!upstream.ok) {
+      return NextResponse.json(
+        { error: json?.error || json?.message || `Control server HTTP ${upstream.status}` },
+        { status: upstream.status === 409 ? 409 : 502 }
+      );
+    }
+
+    return NextResponse.json(
+      { success: true, upstream: json },
+      { headers: { "Cache-Control": "no-store" } }
+    );
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Inventory refresh request failed" },
+      { status: 502 }
+    );
+  }
 }
