@@ -5,6 +5,7 @@ import TerminalPanel from "./ui/terminal-panel";
 import FileBrowserPanel from "./ui/file-browser-panel";
 import ServicesPanel from "./ui/services-panel";
 import ActivityPanel from "./ui/activity-panel";
+import InventoryRefreshPanel from "./ui/inventory-refresh-panel";
 import RemotePanel from "./ui/remote-panel";
 import AssetLinkPanel from "../../ui/asset-link-panel";
 import CreateIncidentFromDeviceButton from "../../ui/create-incident-from-device-button";
@@ -50,7 +51,13 @@ type DeviceInventory = {
   health?: JsonRecord | null;
   software_summary?: JsonRecord | null;
   services_summary?: JsonRecord | null;
+  software?: JsonRecord | null;
+  windows_updates?: JsonRecord | null;
+  updates?: JsonRecord | null;
   events_summary?: JsonRecord | null;
+  event_health?: JsonRecord | null;
+  gpu?: JsonRecord | null;
+  warranty_identity?: JsonRecord | null;
   collected_at?: string | null;
 };
 
@@ -472,6 +479,334 @@ function ComingSoonTab({
   );
 }
 
+
+function getList(obj: any, keys: string[]) {
+  if (Array.isArray(obj)) return obj;
+  if (!obj || typeof obj !== "object") return [];
+
+  for (const key of keys) {
+    const value = obj[key];
+    if (Array.isArray(value)) return value;
+  }
+
+  return [];
+}
+
+function formatInstallDate(value: any) {
+  if (!value) return "—";
+  const raw = String(value);
+
+  if (/^\d{8}$/.test(raw)) {
+    return `${raw.slice(6, 8)}/${raw.slice(4, 6)}/${raw.slice(0, 4)}`;
+  }
+
+  return formatDate(raw);
+}
+
+function SmallTable({
+  columns,
+  rows,
+  emptyTitle,
+  emptyDescription,
+}: {
+  columns: { key: string; label: string; render?: (row: any) => ReactNode }[];
+  rows: any[];
+  emptyTitle: string;
+  emptyDescription: string;
+}) {
+  if (!rows.length) {
+    return <EmptyState title={emptyTitle} description={emptyDescription} />;
+  }
+
+  return (
+    <div className="overflow-x-auto rounded-2xl border hi5-border">
+      <table className="min-w-full text-sm">
+        <thead className="bg-black/5 dark:bg-white/5">
+          <tr>
+            {columns.map((column) => (
+              <th key={column.key} className="px-3 py-2 text-left text-xs font-bold opacity-70 whitespace-nowrap">
+                {column.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => (
+            <tr key={row.id ?? row.name ?? row.title ?? index} className="border-t hi5-border align-top">
+              {columns.map((column) => (
+                <td key={column.key} className="px-3 py-2 whitespace-nowrap max-w-[360px] overflow-hidden text-ellipsis">
+                  {column.render ? column.render(row) : text(row[column.key])}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function HardwareTab({ inventory }: { inventory: DeviceInventory | null }) {
+  const hardware = inventory?.hardware ?? {};
+  const warranty = inventory?.warranty_identity ?? {};
+  const gpu = inventory?.gpu ?? {};
+  const displays = asArray(inventory?.displays);
+
+  return (
+    <div className="space-y-4">
+      <Section title="Warranty-ready identity" note="Manufacturer, model, serial, asset tag and BIOS identity collected via WMI/CIM.">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+          <Field label="Manufacturer" value={firstValue(warranty, ["manufacturer"], firstValue(hardware, ["manufacturer"]))} />
+          <Field label="Model" value={firstValue(warranty, ["model"], firstValue(hardware, ["model"]))} />
+          <Field label="Serial number" value={firstValue(warranty, ["serial_number"], firstValue(hardware, ["serial_number", "serial"]))} />
+          <Field label="Asset tag" value={firstValue(warranty, ["asset_tag"], firstValue(hardware, ["asset_tag"]))} />
+          <Field label="Device UUID" value={firstValue(warranty, ["device_uuid"], firstValue(hardware, ["device_uuid", "uuid"]))} />
+          <Field label="BIOS vendor" value={firstValue(warranty, ["bios_vendor"], firstValue(hardware, ["bios_vendor"]))} />
+          <Field label="BIOS version" value={firstValue(warranty, ["bios_version"], firstValue(hardware, ["bios_version"]))} />
+          <Field label="BIOS date" value={firstValue(warranty, ["bios_date"], firstValue(hardware, ["bios_date"]))} />
+        </div>
+      </Section>
+
+      <Section title="GPU and displays" note="Useful for remote stream quality, black screen and multi-monitor support.">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
+          <Field label="GPU" value={firstValue(gpu, ["name"], firstValue(hardware, ["gpu", "gpu_name"]))} />
+          <Field label="Driver version" value={firstValue(gpu, ["driver_version"], firstValue(hardware, ["gpu_driver", "gpu_driver_version"]))} />
+          <Field label="Driver date" value={firstValue(gpu, ["driver_date"])} />
+        </div>
+
+        {displays.length ? (
+          <SmallTable
+            columns={[
+              { key: "name", label: "Display" },
+              { key: "resolution", label: "Resolution", render: (row) => `${text(row.width)}×${text(row.height)}` },
+              { key: "scale", label: "Scale", render: (row) => formatPercent(row.scale_percent ?? row.scale) },
+              { key: "primary", label: "Primary", render: (row) => yesNo(row.primary) },
+            ]}
+            rows={displays}
+            emptyTitle="No display inventory"
+            emptyDescription="Monitor inventory will appear after the next agent inventory pass."
+          />
+        ) : null}
+      </Section>
+    </div>
+  );
+}
+
+function SecurityTab({ inventory }: { inventory: DeviceInventory | null }) {
+  const security = inventory?.security ?? {};
+  const tpm = firstValue(security, ["tpm"], {}) as JsonRecord;
+  const localAdmins = getList(security?.local_admins, ["items", "members"]);
+  const bitlockerVolumes = getList(firstValue(security, ["bitlocker_volumes", "bitlocker"], []), ["items", "volumes"]);
+
+  return (
+    <div className="space-y-4">
+      <Section title="Security posture" note="Defender, firewall, Secure Boot, TPM and local administrator posture.">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+          <Field label="Defender" value={boolText(firstValue(security, ["defender_enabled", "antivirus_enabled"]))} />
+          <Field label="Defender real-time" value={boolText(firstValue(security, ["defender_realtime_enabled", "realtime_protection_enabled"]))} />
+          <Field label="Firewall" value={boolText(firstValue(security, ["firewall_enabled"]))} />
+          <Field label="Secure Boot" value={boolText(firstValue(security, ["secure_boot_enabled"]))} />
+          <Field label="TPM present" value={yesNo(firstValue(security, ["tpm_present"], firstValue(tpm, ["present"])))} />
+          <Field label="TPM enabled" value={yesNo(firstValue(security, ["tpm_enabled"], firstValue(tpm, ["enabled"])))} />
+          <Field label="TPM owned" value={yesNo(firstValue(tpm, ["owned"]))} />
+          <Field label="TPM spec version" value={firstValue(tpm, ["spec_version", "version"])} />
+        </div>
+      </Section>
+
+      <Section title="BitLocker volumes" note="Real BitLocker status reported per drive.">
+        <SmallTable
+          columns={[
+            { key: "mount", label: "Drive", render: (row) => text(row.drive ?? row.mount ?? row.letter ?? row.name) },
+            { key: "status", label: "Protection", render: (row) => text(row.protection_status ?? row.status ?? row.bitlocker_status) },
+            { key: "encryption", label: "Encryption", render: (row) => text(row.encryption_method ?? row.method) },
+            { key: "percentage", label: "Encrypted", render: (row) => formatPercent(row.encryption_percentage ?? row.percentage) },
+            { key: "lock", label: "Lock", render: (row) => text(row.lock_status ?? row.locked) },
+          ]}
+          rows={bitlockerVolumes}
+          emptyTitle="No BitLocker volume details"
+          emptyDescription="BitLocker details will appear after the agent reports the security inventory."
+        />
+      </Section>
+
+      <Section title="Local administrators" note="Useful for privilege drift checks.">
+        <SmallTable
+          columns={[
+            { key: "name", label: "Account", render: (row) => text(row.name ?? row.account ?? row.member) },
+            { key: "domain", label: "Domain", render: (row) => text(row.domain) },
+            { key: "type", label: "Type", render: (row) => text(row.type ?? row.object_class) },
+          ]}
+          rows={localAdmins}
+          emptyTitle="No local admin list yet"
+          emptyDescription="Local administrator membership will appear after the agent reports it."
+        />
+      </Section>
+    </div>
+  );
+}
+
+function StorageTab({ inventory }: { inventory: DeviceInventory | null }) {
+  const storage = asArray(inventory?.storage);
+
+  return (
+    <Section title="Storage" note="Disk usage, filesystem and BitLocker protection per volume.">
+      <SmallTable
+        columns={[
+          { key: "drive", label: "Drive", render: (row) => text(row.letter ?? row.mount ?? row.name) },
+          { key: "file_system", label: "Filesystem", render: (row) => text(row.file_system ?? row.fs) },
+          { key: "used", label: "Used", render: (row) => formatPercent(row.used_percent) },
+          { key: "free", label: "Free", render: (row) => formatBytes(row.free_bytes ?? row.free) },
+          { key: "total", label: "Total", render: (row) => formatBytes(row.total_bytes ?? row.total) },
+          { key: "bitlocker", label: "BitLocker", render: (row) => text(row.bitlocker_status ?? row.bitlocker) },
+        ]}
+        rows={storage}
+        emptyTitle="No storage inventory yet"
+        emptyDescription="Drive inventory will appear after the agent uploads storage details."
+      />
+    </Section>
+  );
+}
+
+function NetworkTab({ inventory }: { inventory: DeviceInventory | null }) {
+  const network = inventory?.network ?? {};
+  const adapters = getList(network, ["adapters", "items"]);
+
+  return (
+    <div className="space-y-4">
+      <Section title="Network summary" note="Primary network details used by technicians before remote support.">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+          <Field label="Primary IPv4" value={firstValue(network, ["primary_ipv4", "ipv4", "ip"])} />
+          <Field label="MAC address" value={firstValue(network, ["mac", "mac_address"])} />
+          <Field label="Adapter" value={firstValue(network, ["adapter", "adapter_name"])} />
+          <Field label="Connection type" value={firstValue(network, ["connection_type", "type"])} />
+          <Field label="Default gateway" value={firstValue(network, ["gateway", "default_gateway"])} />
+          <Field label="DNS servers" value={firstValue(network, ["dns", "dns_servers"])} />
+          <Field label="Domain/workgroup" value={firstValue(network, ["domain", "workgroup"])} />
+          <Field label="Public IP" value={firstValue(network, ["public_ip", "wan_ip"])} />
+        </div>
+      </Section>
+
+      <Section title="Adapters" note="All adapter records reported by the agent.">
+        <SmallTable
+          columns={[
+            { key: "name", label: "Name", render: (row) => text(row.name ?? row.adapter ?? row.description) },
+            { key: "status", label: "Status", render: (row) => text(row.status ?? row.oper_status) },
+            { key: "mac", label: "MAC", render: (row) => text(row.mac ?? row.mac_address) },
+            { key: "ipv4", label: "IPv4", render: (row) => Array.isArray(row.ipv4) ? row.ipv4.join(", ") : text(row.ipv4 ?? row.ip) },
+            { key: "gateway", label: "Gateway", render: (row) => text(row.gateway ?? row.default_gateway) },
+          ]}
+          rows={adapters}
+          emptyTitle="No adapter list yet"
+          emptyDescription="Network adapters will appear after the agent reports detailed network inventory."
+        />
+      </Section>
+    </div>
+  );
+}
+
+function SoftwareInventoryTab({ inventory }: { inventory: DeviceInventory | null }) {
+  const software = inventory?.software ?? inventory?.software_summary ?? {};
+  const rows = getList(software, ["items", "apps", "installed"]);
+  const recent = getList(software, ["recently_installed"]);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <InfoCard label="Installed apps" value={text(firstValue(software, ["count", "installed_apps", "installed_count"], rows.length))} tone="info" />
+        <InfoCard label="Recently installed" value={text(firstValue(software, ["recently_installed_count"], recent.length))} tone="neutral" />
+        <InfoCard label="Quiet uninstall available" value={text(rows.filter((row) => row.quiet_uninstall_string).length)} tone="neutral" />
+        <InfoCard label="Inventory state" value={text(firstValue(software, ["status"], inventory?.collected_at ? "Collected" : "Pending"))} tone={inventory?.collected_at ? "good" : "warning"} />
+      </div>
+
+      <Section title="Installed software" note="Registry 64-bit, 32-bit and current-user uninstall inventory.">
+        <SmallTable
+          columns={[
+            { key: "name", label: "Name" },
+            { key: "publisher", label: "Publisher" },
+            { key: "version", label: "Version" },
+            { key: "install_date", label: "Install date", render: (row) => formatInstallDate(row.install_date) },
+            { key: "scope", label: "Source", render: (row) => text(row.scope) },
+            { key: "quiet_uninstall_string", label: "Quiet uninstall", render: (row) => row.quiet_uninstall_string ? "Yes" : "No" },
+          ]}
+          rows={rows}
+          emptyTitle="No software inventory yet"
+          emptyDescription="Installed software will appear after the agent uploads the full inventory table."
+        />
+      </Section>
+    </div>
+  );
+}
+
+function UpdatesTab({ inventory }: { inventory: DeviceInventory | null }) {
+  const updates = inventory?.windows_updates ?? inventory?.updates ?? {};
+  const rows = getList(updates, ["updates", "items", "pending"]);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <InfoCard label="Pending updates" value={text(firstValue(updates, ["pending_count"], rows.length))} tone={rows.length ? "warning" : "good"} />
+        <InfoCard label="Last scan" value={formatDate(firstValue(updates, ["last_scan_utc", "last_scan_at"]))} tone="neutral" />
+        <InfoCard label="Collector error" value={text(firstValue(updates, ["error"], "None"))} tone={firstValue(updates, ["error"]) ? "warning" : "good"} />
+      </div>
+
+      <Section title="Pending Windows updates" note="Updates detected by the agent using the Windows Update COM API.">
+        <SmallTable
+          columns={[
+            { key: "title", label: "Title" },
+            { key: "kb", label: "KB", render: (row) => Array.isArray(row.kb) ? row.kb.join(", ") : text(row.kb) },
+            { key: "severity", label: "Severity" },
+            { key: "mandatory", label: "Mandatory", render: (row) => yesNo(row.mandatory) },
+            { key: "downloaded", label: "Downloaded", render: (row) => yesNo(row.downloaded) },
+            { key: "reboot_required", label: "Reboot", render: (row) => yesNo(row.reboot_required) },
+          ]}
+          rows={rows}
+          emptyTitle="No pending updates"
+          emptyDescription="No pending Windows updates were reported, or the update collector has not run yet."
+        />
+      </Section>
+    </div>
+  );
+}
+
+function EventHealthTab({ inventory }: { inventory: DeviceInventory | null }) {
+  const events = inventory?.event_health ?? inventory?.events_summary ?? {};
+  const shutdowns = getList(events, ["unexpected_shutdown_events", "shutdowns"]);
+  const crashes = getList(events, ["recent_crash_events", "crashes", "application_crashes"]);
+  const serviceFailures = getList(events, ["service_failure_events", "service_failures_events"]);
+  const updateFailures = getList(events, ["update_failure_events", "windows_update_failure_events"]);
+  const allRows = [
+    ...shutdowns.map((row) => ({ ...row, category: "Unexpected shutdown" })),
+    ...crashes.map((row) => ({ ...row, category: "Application crash" })),
+    ...serviceFailures.map((row) => ({ ...row, category: "Service failure" })),
+    ...updateFailures.map((row) => ({ ...row, category: "Update failure" })),
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <InfoCard label="Unexpected shutdowns" value={text(firstValue(events, ["unexpected_shutdowns"], shutdowns.length))} tone={Number(firstValue(events, ["unexpected_shutdowns"], 0)) > 0 ? "warning" : "good"} />
+        <InfoCard label="Recent crashes" value={text(firstValue(events, ["recent_crashes"], crashes.length))} tone={Number(firstValue(events, ["recent_crashes"], 0)) > 0 ? "warning" : "good"} />
+        <InfoCard label="Update failures" value={text(firstValue(events, ["update_failures", "windows_update_failures"], updateFailures.length))} tone={Number(firstValue(events, ["update_failures", "windows_update_failures"], 0)) > 0 ? "warning" : "good"} />
+        <InfoCard label="Service failures" value={text(firstValue(events, ["service_failures"], serviceFailures.length))} tone={Number(firstValue(events, ["service_failures"], 0)) > 0 ? "warning" : "good"} />
+      </div>
+
+      <Section title="Recent event details" note="High-value events from the last reported event-health window.">
+        <SmallTable
+          columns={[
+            { key: "category", label: "Category" },
+            { key: "time_created", label: "Time", render: (row) => formatDate(row.time_created) },
+            { key: "id", label: "Event ID" },
+            { key: "provider", label: "Provider" },
+            { key: "message", label: "Message" },
+          ]}
+          rows={allRows}
+          emptyTitle="No recent event-health records"
+          emptyDescription="No crashes, update failures, service failures or unexpected shutdowns were reported."
+        />
+      </Section>
+    </div>
+  );
+}
+
 async function loadDevice(tenantId: string, deviceId: string) {
   const admin = supabaseAdmin();
 
@@ -512,6 +847,7 @@ async function loadInventory(tenantId: string, deviceId: string) {
           device_id: deviceId,
           summary: inventory.summary ?? {},
           hardware: inventory.hardware ?? {},
+          warranty_identity: inventory.warranty_identity ?? {},
           os: inventory.os ?? {},
           cpu: inventory.cpu ?? {},
           memory: inventory.memory ?? {},
@@ -520,12 +856,17 @@ async function loadInventory(tenantId: string, deviceId: string) {
           network: inventory.network ?? {},
           sessions: inventory.sessions ?? {},
           displays: inventory.displays ?? [],
+          gpu: inventory.gpu ?? {},
           battery: inventory.battery ?? {},
           agent: inventory.agent ?? {},
           health: inventory.health ?? {},
           software_summary: inventory.software_summary ?? {},
+          software: inventory.software ?? inventory.software_summary ?? {},
           services_summary: inventory.services_summary ?? {},
+          windows_updates: inventory.windows_updates ?? inventory.updates ?? {},
+          updates: inventory.updates ?? inventory.windows_updates ?? {},
           events_summary: inventory.events_summary ?? {},
+          event_health: inventory.event_health ?? inventory.events_summary ?? {},
           collected_at: inventory.collected_at ?? new Date().toISOString(),
           updated_at: new Date().toISOString(),
         };
@@ -548,7 +889,7 @@ async function loadInventory(tenantId: string, deviceId: string) {
   const { data, error } = await admin
     .from("device_inventory")
     .select(
-      "summary, hardware, os, cpu, memory, storage, security, network, sessions, displays, battery, agent, health, software_summary, services_summary, events_summary, collected_at"
+      "summary, hardware, warranty_identity, os, cpu, memory, storage, security, network, sessions, displays, gpu, battery, agent, health, software_summary, software, services_summary, windows_updates, updates, events_summary, event_health, collected_at"
     )
     .eq("tenant_id", tenantId)
     .eq("device_id", deviceId)
@@ -1076,15 +1417,19 @@ export default async function DevicePage({
 
   const tabs = [
     { key: "overview", label: "Overview" },
+    { key: "hardware", label: "Hardware" },
+    { key: "security", label: "Security" },
+    { key: "storage", label: "Storage" },
+    { key: "network", label: "Network" },
+    { key: "software", label: "Software" },
+    { key: "patching", label: "Updates" },
+    { key: "events", label: "Event health" },
     { key: "tickets", label: "Tickets" },
     { key: "remote", label: "Remote", locked: !canRemote },
     { key: "terminal", label: "Terminal", locked: !canTerminal },
     { key: "files", label: "Files", locked: !canFiles },
-    { key: "software", label: "Software", badge: "Soon" },
     { key: "services", label: "Services" },
     { key: "processes", label: "Processes", badge: "Soon" },
-    { key: "patching", label: "Patching", badge: "Soon" },
-    { key: "events", label: "Events", badge: "Soon" },
     { key: "jobs", label: "Jobs", badge: "Soon" },
     { key: "activity", label: "Activity" },
   ];
@@ -1144,9 +1489,11 @@ export default async function DevicePage({
               <LockedButton label="Files" />
             )}
 
-            <button className="hi5-btn-ghost text-sm" type="button" title="Coming soon">
-              Refresh inventory
-            </button>
+            <InventoryRefreshPanel
+              deviceId={deviceId}
+              remoteActive={remoteActive}
+              collectedAt={inventory?.collected_at}
+            />
 
             <CreateIncidentFromDeviceButton deviceId={deviceId} hostname={device.hostname} />
           </div>
@@ -1175,6 +1522,11 @@ export default async function DevicePage({
         />
       ) : null}
 
+      {tab === "hardware" ? <HardwareTab inventory={inventory} /> : null}
+      {tab === "security" ? <SecurityTab inventory={inventory} /> : null}
+      {tab === "storage" ? <StorageTab inventory={inventory} /> : null}
+      {tab === "network" ? <NetworkTab inventory={inventory} /> : null}
+
       {tab === "tickets" ? (
         <DeviceTicketsPanel deviceId={deviceId} hostname={device.hostname} />
       ) : null}
@@ -1185,20 +1537,7 @@ export default async function DevicePage({
       {tab === "services" ? <ServicesPanel deviceId={deviceId} /> : null}
       {tab === "activity" ? <ActivityPanel deviceId={deviceId} /> : null}
 
-      {tab === "software" ? (
-        <ComingSoonTab
-          title="Software inventory"
-          description="This will show installed software, publishers, versions, install dates, and uninstall actions."
-          items={[
-            "Installed applications",
-            "Recently installed software",
-            "Version distribution",
-            "Publisher summary",
-            "Uninstall jobs",
-            "Software search",
-          ]}
-        />
-      ) : null}
+      {tab === "software" ? <SoftwareInventoryTab inventory={inventory} /> : null}
 
       {tab === "processes" ? (
         <ComingSoonTab
@@ -1215,35 +1554,9 @@ export default async function DevicePage({
         />
       ) : null}
 
-      {tab === "patching" ? (
-        <ComingSoonTab
-          title="Patching"
-          description="This will show Windows Update status, missing patches, install history and reboot requirements."
-          items={[
-            "Pending updates",
-            "Installed updates",
-            "Failed updates",
-            "Last scan",
-            "Reboot required",
-            "Patch policy",
-          ]}
-        />
-      ) : null}
+      {tab === "patching" ? <UpdatesTab inventory={inventory} /> : null}
 
-      {tab === "events" ? (
-        <ComingSoonTab
-          title="Events"
-          description="This will highlight recent Windows events that matter to technicians."
-          items={[
-            "Unexpected shutdowns",
-            "Application crashes",
-            "Service failures",
-            "Windows Update failures",
-            "Blue screen signals",
-            "Agent errors",
-          ]}
-        />
-      ) : null}
+      {tab === "events" ? <EventHealthTab inventory={inventory} /> : null}
 
       {tab === "jobs" ? (
         <ComingSoonTab
@@ -1262,6 +1575,10 @@ export default async function DevicePage({
 
       {![
         "overview",
+        "hardware",
+        "security",
+        "storage",
+        "network",
         "tickets",
         "remote",
         "terminal",
