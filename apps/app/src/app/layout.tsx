@@ -35,6 +35,24 @@ type CustomThemeJson = {
   dark?: Record<string, any>;
 };
 
+type TenantTheme = {
+  default_appearance?: string | null;
+  accent_color?: string | null;
+  theme_preset?: string | null;
+  custom_theme_json?: CustomThemeJson | null;
+
+  accent_hex?: string | null;
+  accent_2_hex?: string | null;
+  accent_3_hex?: string | null;
+  bg_hex?: string | null;
+  card_hex?: string | null;
+  topbar_hex?: string | null;
+
+  glow_1?: number | string | null;
+  glow_2?: number | string | null;
+  glow_3?: number | string | null;
+};
+
 function hexToRgbTriplet(hex?: string | null, fallback = "0 0 0") {
   if (!hex) return fallback;
 
@@ -198,7 +216,7 @@ function buildThemeCss({
   themeMode: ThemeMode;
   accentColor: ThemePreset;
   customTheme: CustomThemeJson;
-  legacyTheme: any;
+  legacyTheme: TenantTheme | null;
 }) {
   const preset = accentColor === "custom" ? "neutral" : accentColor;
   const presetValues = ACCENT_PRESETS[preset] ?? ACCENT_PRESETS.neutral;
@@ -248,11 +266,26 @@ function buildThemeCss({
     hexToRgbTriplet(legacyAccent3, "51 65 85")
   );
 
-  const lightBg = customRgb(custom, "light", "bg", hexToRgbTriplet(legacyTheme?.bg_hex, "248 250 252"));
+  const lightBg = customRgb(
+    custom,
+    "light",
+    "bg",
+    hexToRgbTriplet(legacyTheme?.bg_hex, "248 250 252")
+  );
   const lightFg = customRgb(custom, "light", "fg", "15 23 42");
   const lightMuted = customRgb(custom, "light", "muted", "71 85 105");
-  const lightCard = customRgb(custom, "light", "card", hexToRgbTriplet(legacyTheme?.card_hex, "255 255 255"));
-  const lightTopbar = customRgb(custom, "light", "topbar", hexToRgbTriplet(legacyTheme?.topbar_hex, "255 255 255"));
+  const lightCard = customRgb(
+    custom,
+    "light",
+    "card",
+    hexToRgbTriplet(legacyTheme?.card_hex, "255 255 255")
+  );
+  const lightTopbar = customRgb(
+    custom,
+    "light",
+    "topbar",
+    hexToRgbTriplet(legacyTheme?.topbar_hex, "255 255 255")
+  );
 
   const darkBg = customRgb(custom, "dark", "bg", "2 6 23");
   const darkFg = customRgb(custom, "dark", "fg", "248 250 252");
@@ -446,7 +479,7 @@ function themeBootScript(mode: ThemeMode) {
 `;
 }
 
-async function resolveTenantTheme(host: string) {
+async function resolveTenantTheme(host: string): Promise<TenantTheme | null> {
   const parsed = parseTenantHost(host);
 
   if (!parsed.isTenantHost) {
@@ -454,6 +487,22 @@ async function resolveTenantTheme(host: string) {
   }
 
   const supabase = await supabaseServer();
+
+  const themeSelect = [
+    "default_appearance",
+    "accent_color",
+    "theme_preset",
+    "custom_theme_json",
+    "accent_hex",
+    "accent_2_hex",
+    "accent_3_hex",
+    "bg_hex",
+    "card_hex",
+    "topbar_hex",
+    "glow_1",
+    "glow_2",
+    "glow_3",
+  ].join(",");
 
   try {
     if (parsed.isCustomDomainHost) {
@@ -468,27 +517,11 @@ async function resolveTenantTheme(host: string) {
 
       const { data } = await supabase
         .from("tenant_settings")
-        .select(
-          [
-            "default_appearance",
-            "accent_color",
-            "theme_preset",
-            "custom_theme_json",
-            "accent_hex",
-            "accent_2_hex",
-            "accent_3_hex",
-            "bg_hex",
-            "card_hex",
-            "topbar_hex",
-            "glow_1",
-            "glow_2",
-            "glow_3",
-          ].join(",")
-        )
+        .select(themeSelect)
         .eq("tenant_id", domainRow.tenant_id)
         .maybeSingle();
 
-      return data ?? null;
+      return (data as unknown as TenantTheme | null) ?? null;
     }
 
     if (!parsed.subdomain) return null;
@@ -504,27 +537,11 @@ async function resolveTenantTheme(host: string) {
 
     const { data } = await supabase
       .from("tenant_settings")
-      .select(
-        [
-          "default_appearance",
-          "accent_color",
-          "theme_preset",
-          "custom_theme_json",
-          "accent_hex",
-          "accent_2_hex",
-          "accent_3_hex",
-          "bg_hex",
-          "card_hex",
-          "topbar_hex",
-          "glow_1",
-          "glow_2",
-          "glow_3",
-        ].join(",")
-      )
+      .select(themeSelect)
       .eq("tenant_id", tenant.id)
       .maybeSingle();
 
-    return data ?? null;
+    return (data as unknown as TenantTheme | null) ?? null;
   } catch {
     return null;
   }
@@ -542,7 +559,9 @@ export default async function RootLayout({
 
   const tenantTheme = await resolveTenantTheme(host);
 
-  let themeMode: ThemeMode = normalizeThemeMode(tenantTheme?.default_appearance);
+  let themeMode: ThemeMode = normalizeThemeMode(
+    (tenantTheme as TenantTheme | null)?.default_appearance
+  );
 
   try {
     const { data: userRes } = await supabase.auth.getUser();
@@ -564,9 +583,10 @@ export default async function RootLayout({
   }
 
   const accentColor = normalizePreset(tenantTheme?.accent_color);
+
   const customTheme =
     tenantTheme?.custom_theme_json && typeof tenantTheme.custom_theme_json === "object"
-      ? (tenantTheme.custom_theme_json as CustomThemeJson)
+      ? tenantTheme.custom_theme_json
       : {};
 
   const cssVars = buildThemeCss({
