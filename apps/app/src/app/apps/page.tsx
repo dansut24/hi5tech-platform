@@ -1,5 +1,4 @@
 // apps/app/src/app/apps/page.tsx
-import React from "react";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { supabaseServer } from "@/lib/supabase/server";
@@ -10,85 +9,13 @@ import {
 } from "@/lib/tenant/environment-host";
 import { getTenantBillingProfile } from "@/lib/billing/tenant-billing";
 import TrialBanner from "@/components/billing/trial-banner";
+import TenantShell from "@/components/shell/tenant-shell";
+import type { TenantShellModule } from "@/components/shell/tenant-sidebar";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 type ModuleKey = "itsm" | "control" | "selfservice" | "admin";
-
-const MODULES: Array<{
-  key: ModuleKey;
-  title: string;
-  description: string;
-  href: string;
-  gradient: string;
-  icon: React.ReactNode;
-}> = [
-  {
-    key: "itsm",
-    title: "ITSM",
-    description: "Incidents, requests, changes, and service desk workflows.",
-    href: "/itsm",
-    gradient:
-      "radial-gradient(700px 220px at 15% 0%, rgba(var(--hi5-accent),0.28), transparent 58%), radial-gradient(700px 220px at 85% 100%, rgba(var(--hi5-accent-2),0.20), transparent 58%)",
-    icon: (
-      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-        <path
-          fill="currentColor"
-          d="M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Zm0 2v16h10V4H7Zm2 3h6v2H9V7Zm0 4h6v2H9v-2Zm0 4h4v2H9v-2Z"
-        />
-      </svg>
-    ),
-  },
-  {
-    key: "control",
-    title: "Control",
-    description: "Remote tools, device access, live actions, and inventory.",
-    href: "/control/devices",
-    gradient:
-      "radial-gradient(700px 220px at 10% 10%, rgba(var(--hi5-accent-3),0.24), transparent 58%), radial-gradient(700px 220px at 90% 90%, rgba(var(--hi5-accent),0.22), transparent 58%)",
-    icon: (
-      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-        <path
-          fill="currentColor"
-          d="M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-4l2 3v1H8v-1l2-3H6a2 2 0 0 1-2-2V6Zm2 0v7h12V6H6Z"
-        />
-      </svg>
-    ),
-  },
-  {
-    key: "selfservice",
-    title: "Self Service",
-    description: "End-user portal for requests, updates, and knowledge base.",
-    href: "/selfservice",
-    gradient:
-      "radial-gradient(700px 220px at 20% 0%, rgba(var(--hi5-accent-2),0.18), transparent 58%), radial-gradient(700px 220px at 80% 100%, rgba(var(--hi5-accent-3),0.18), transparent 58%)",
-    icon: (
-      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-        <path
-          fill="currentColor"
-          d="M12 2a7 7 0 0 1 7 7c0 2.1-.9 3.9-2.3 5.2-.5.5-.7 1.2-.7 1.9V18a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-1.9c0-.7-.2-1.4-.7-1.9A7.2 7.2 0 0 1 5 9a7 7 0 0 1 7-7Zm-2 17h4v-1h-4v1Zm.3-4h3.4c.2-1.2.8-2.2 1.6-3 1-1 1.7-2.3 1.7-4a5 5 0 0 0-10 0c0 1.7.7 3 1.7 4 .8.8 1.4 1.8 1.6 3Z"
-        />
-      </svg>
-    ),
-  },
-  {
-    key: "admin",
-    title: "Admin",
-    description: "Users, tenant settings, access control, billing and upgrades.",
-    href: "/admin",
-    gradient:
-      "radial-gradient(700px 220px at 15% 0%, rgba(var(--hi5-accent),0.20), transparent 58%), radial-gradient(700px 220px at 85% 100%, rgba(var(--hi5-accent-2),0.16), transparent 58%)",
-    icon: (
-      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-        <path
-          fill="currentColor"
-          d="M12 1.5 20 6v6c0 5-3.4 9.4-8 10.5C7.4 21.4 4 17 4 12V6l8-4.5Zm0 2.3L6 6.6V12c0 4 2.6 7.5 6 8.4 3.4-.9 6-4.4 6-8.4V6.6l-6-2.8Zm-1 4.2h2v6h-2V8Zm0 7h2v2h-2v-2Z"
-        />
-      </svg>
-    ),
-  },
-];
 
 const ALL_FEATURES: Record<string, boolean> = {
   itsm_core: true,
@@ -104,163 +31,84 @@ const ALL_FEATURES: Record<string, boolean> = {
   automation: true,
 };
 
-function initials(name?: string | null, email?: string | null) {
-  const n = (name || "").trim();
+const MODULE_CATALOG: Record<
+  ModuleKey,
+  {
+    key: ModuleKey;
+    title: string;
+    shortTitle: string;
+    description: string;
+    href: string;
+    badge?: string;
+    gradient: string;
+    features: string[];
+  }
+> = {
+  itsm: {
+    key: "itsm",
+    title: "ITSM",
+    shortTitle: "ITSM",
+    description: "Incidents, service requests, changes, assets and knowledge.",
+    href: "/itsm",
+    badge: "Core",
+    gradient:
+      "radial-gradient(700px 240px at 10% 0%, rgb(var(--hi5-accent) / 0.24), transparent 62%), radial-gradient(700px 260px at 90% 100%, rgb(var(--hi5-accent-2) / 0.18), transparent 62%)",
+    features: ["Incidents", "Requests", "Changes", "Knowledge"],
+  },
+  control: {
+    key: "control",
+    title: "Control",
+    shortTitle: "Control",
+    description: "Devices, inventory, remote tools, scripts and patching.",
+    href: "/control/devices",
+    badge: "RMM",
+    gradient:
+      "radial-gradient(700px 240px at 10% 0%, rgb(var(--hi5-accent-3) / 0.20), transparent 62%), radial-gradient(700px 260px at 90% 100%, rgb(var(--hi5-accent) / 0.18), transparent 62%)",
+    features: ["Devices", "Inventory", "Remote tools", "Scripts"],
+  },
+  selfservice: {
+    key: "selfservice",
+    title: "Self Service",
+    shortTitle: "Portal",
+    description: "End-user portal for tickets, updates and knowledge articles.",
+    href: "/selfservice",
+    badge: "Portal",
+    gradient:
+      "radial-gradient(700px 240px at 10% 0%, rgb(var(--hi5-accent-2) / 0.18), transparent 62%), radial-gradient(700px 260px at 90% 100%, rgb(var(--hi5-accent-3) / 0.16), transparent 62%)",
+    features: ["My tickets", "Requests", "Approvals", "Knowledge"],
+  },
+  admin: {
+    key: "admin",
+    title: "Admin",
+    shortTitle: "Admin",
+    description: "Users, teams, branding, billing, modules and security.",
+    href: "/admin",
+    badge: "Settings",
+    gradient:
+      "radial-gradient(700px 240px at 10% 0%, rgb(var(--hi5-accent) / 0.18), transparent 62%), radial-gradient(700px 260px at 90% 100%, rgb(var(--hi5-accent-2) / 0.14), transparent 62%)",
+    features: ["Users", "Teams", "Billing", "Modules"],
+  },
+};
 
-  if (n) {
-    const parts = n.split(/\s+/).slice(0, 2);
-    return parts.map((p) => p[0]?.toUpperCase() ?? "").join("");
+function formatEnvironment(value: string) {
+  if (value === "test") return "Test";
+  if (value === "staging") return "Staging";
+  return "Production";
+}
+
+function initials(name?: string | null, fallback?: string | null) {
+  const clean = String(name || "").trim();
+
+  if (clean) {
+    return clean
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() || "")
+      .join("");
   }
 
-  const e = (email || "").trim();
-  return e ? e[0].toUpperCase() : "U";
-}
-
-function ModuleTile({
-  module,
-  myRole,
-}: {
-  module: (typeof MODULES)[number];
-  myRole: string;
-}) {
-  const rolePill =
-    module.key === "itsm" ? (
-      <span className="rounded-full border hi5-border bg-white/45 px-2 py-1 text-[11px] dark:bg-black/25">
-        Your role: <span className="font-semibold">{myRole}</span>
-      </span>
-    ) : null;
-
-  return (
-    <div className="hi5-card group flex min-h-[260px] flex-col p-0 sm:min-h-[280px]">
-      <div
-        className="pointer-events-none absolute inset-0 opacity-80"
-        style={{ background: module.gradient }}
-      />
-
-      <div
-        className="pointer-events-none absolute inset-0 opacity-60 dark:opacity-35"
-        style={{
-          background:
-            "linear-gradient(135deg, rgba(255,255,255,0.30), rgba(255,255,255,0.00))",
-        }}
-      />
-
-      <div className="relative z-10 flex h-full flex-col p-5 sm:p-6">
-        <div className="flex items-start gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border hi5-border bg-white/55 backdrop-blur dark:bg-black/30">
-            {module.icon}
-          </div>
-
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-lg font-extrabold leading-tight sm:text-xl">
-                {module.title}
-              </h3>
-              {rolePill}
-            </div>
-
-            <p className="mt-2 text-sm leading-relaxed opacity-80">
-              {module.description}
-            </p>
-          </div>
-        </div>
-
-        <div className="flex-1" />
-
-        <div className="mt-5 flex flex-col gap-3">
-          {module.key === "itsm" ? (
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <Link className="hi5-btn-ghost text-center text-xs" href="/itsm">
-                Dashboard
-              </Link>
-              <Link
-                className="hi5-btn-ghost text-center text-xs"
-                href="/itsm/incidents/new"
-              >
-                New incident
-              </Link>
-            </div>
-          ) : null}
-
-          {module.key === "control" ? (
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <Link
-                className="hi5-btn-ghost text-center text-xs"
-                href="/control/devices"
-              >
-                Devices
-              </Link>
-              <Link
-                className="hi5-btn-ghost text-center text-xs"
-                href="/control/devices"
-              >
-                Remote tools
-              </Link>
-            </div>
-          ) : null}
-
-          {module.key === "admin" ? (
-            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <Link
-                className="hi5-btn-ghost text-center text-xs"
-                href="/admin/users"
-              >
-                Users
-              </Link>
-              <Link
-                className="hi5-btn-ghost text-center text-xs"
-                href="/admin/billing"
-              >
-                Billing
-              </Link>
-            </div>
-          ) : null}
-
-          <Link href={module.href} className="hi5-btn-primary text-center text-sm">
-            Open
-          </Link>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function UpgradeHint({
-  hasItsm,
-  hasControl,
-}: {
-  hasItsm: boolean;
-  hasControl: boolean;
-}) {
-  if (hasItsm && hasControl) return null;
-
-  return (
-    <div className="hi5-card p-5">
-      <div className="text-sm font-extrabold">Want to add more modules?</div>
-      <p className="mt-1 text-sm opacity-75">
-        Products not included in your live plan are hidden from Production.
-        Workspace owners can add modules from Admin → Billing.
-      </p>
-
-      <div className="mt-4 flex flex-wrap gap-2">
-        {!hasItsm ? (
-          <span className="rounded-full border hi5-border bg-black/5 px-3 py-1 text-xs font-bold dark:bg-white/5">
-            ITSM available as upgrade
-          </span>
-        ) : null}
-
-        {!hasControl ? (
-          <span className="rounded-full border hi5-border bg-black/5 px-3 py-1 text-xs font-bold dark:bg-white/5">
-            Control available as upgrade
-          </span>
-        ) : null}
-
-        <Link href="/admin/billing" className="hi5-btn-primary w-auto text-sm">
-          View billing
-        </Link>
-      </div>
-    </div>
-  );
+  const f = String(fallback || "").trim();
+  return f ? f[0].toUpperCase() : "H";
 }
 
 async function getEnvironmentFeatureMap({
@@ -318,6 +166,191 @@ async function getEnvironmentFeatureMap({
   return fallback;
 }
 
+function getEnabledModules({
+  features,
+  role,
+}: {
+  features: Record<string, boolean>;
+  role: string;
+}) {
+  const enabled = new Set<ModuleKey>();
+
+  const hasItsm = features.itsm_core === true;
+
+  const hasControl =
+    features.devices_inventory === true ||
+    features.devices_reporting === true ||
+    features.remote_control === true ||
+    features.remote_terminal === true ||
+    features.remote_files === true ||
+    features.scripts === true ||
+    features.monitoring === true ||
+    features.patch_management === true ||
+    features.automation === true;
+
+  if (hasItsm) {
+    enabled.add("itsm");
+    enabled.add("selfservice");
+  }
+
+  if (hasControl) {
+    enabled.add("control");
+  }
+
+  if (role === "owner" || role === "admin" || role === "billing_admin") {
+    enabled.add("admin");
+  }
+
+  return {
+    enabled,
+    hasItsm,
+    hasControl,
+  };
+}
+
+function ModuleCard({
+  module,
+  role,
+}: {
+  module: (typeof MODULE_CATALOG)[ModuleKey];
+  role: string;
+}) {
+  return (
+    <article className="hi5-card min-h-[310px] overflow-hidden p-0">
+      <div className="pointer-events-none absolute inset-0 opacity-95" style={{ background: module.gradient }} />
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/25 to-transparent opacity-70 dark:from-white/10" />
+
+      <div className="relative z-10 flex h-full flex-col p-5 sm:p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="grid h-14 w-14 place-items-center rounded-3xl border hi5-border bg-white/50 text-lg font-black backdrop-blur dark:bg-black/25">
+            {initials(module.title)}
+          </div>
+
+          <div className="flex flex-wrap justify-end gap-2">
+            {module.badge ? (
+              <span className="rounded-full border hi5-border bg-white/45 px-2.5 py-1 text-xs font-black dark:bg-black/25">
+                {module.badge}
+              </span>
+            ) : null}
+
+            {module.key === "itsm" ? (
+              <span className="rounded-full border hi5-border bg-white/45 px-2.5 py-1 text-xs font-black dark:bg-black/25">
+                {role}
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="mt-5">
+          <h2 className="text-2xl font-black tracking-tight">{module.title}</h2>
+          <p className="mt-2 text-sm leading-6 opacity-75">{module.description}</p>
+        </div>
+
+        <div className="mt-5 flex flex-wrap gap-2">
+          {module.features.map((feature) => (
+            <span
+              key={feature}
+              className="rounded-full border hi5-border bg-white/35 px-3 py-1 text-xs font-bold opacity-90 dark:bg-black/20"
+            >
+              {feature}
+            </span>
+          ))}
+        </div>
+
+        <div className="flex-1" />
+
+        <div className="mt-6 grid gap-2">
+          {module.key === "itsm" ? (
+            <div className="grid grid-cols-2 gap-2">
+              <Link href="/itsm/incidents" className="hi5-btn-ghost text-center text-xs">
+                Incidents
+              </Link>
+
+              <Link href="/itsm/incidents/new" className="hi5-btn-ghost text-center text-xs">
+                New ticket
+              </Link>
+            </div>
+          ) : null}
+
+          {module.key === "control" ? (
+            <div className="grid grid-cols-2 gap-2">
+              <Link href="/control/devices" className="hi5-btn-ghost text-center text-xs">
+                Devices
+              </Link>
+
+              <Link href="/control/devices" className="hi5-btn-ghost text-center text-xs">
+                Remote tools
+              </Link>
+            </div>
+          ) : null}
+
+          {module.key === "admin" ? (
+            <div className="grid grid-cols-2 gap-2">
+              <Link href="/admin/users" className="hi5-btn-ghost text-center text-xs">
+                Users
+              </Link>
+
+              <Link href="/admin/billing" className="hi5-btn-ghost text-center text-xs">
+                Billing
+              </Link>
+            </div>
+          ) : null}
+
+          <Link href={module.href} className="hi5-btn-primary text-center text-sm">
+            Open {module.shortTitle}
+          </Link>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function UpgradeHint({
+  hasItsm,
+  hasControl,
+  canViewBilling,
+}: {
+  hasItsm: boolean;
+  hasControl: boolean;
+  canViewBilling: boolean;
+}) {
+  if (hasItsm && hasControl) return null;
+
+  return (
+    <section className="hi5-card p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h2 className="text-lg font-black tracking-tight">Want to add more modules?</h2>
+          <p className="mt-1 text-sm leading-6 opacity-75">
+            Production only shows modules that are live on your plan. Test and staging can preview
+            selected features before promotion.
+          </p>
+        </div>
+
+        {canViewBilling ? (
+          <Link href="/admin/billing" className="hi5-btn-primary w-auto text-sm">
+            View billing
+          </Link>
+        ) : null}
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        {!hasItsm ? (
+          <span className="rounded-full border hi5-border bg-black/5 px-3 py-1 text-xs font-bold dark:bg-white/5">
+            ITSM available as upgrade
+          </span>
+        ) : null}
+
+        {!hasControl ? (
+          <span className="rounded-full border hi5-border bg-black/5 px-3 py-1 text-xs font-bold dark:bg-white/5">
+            Control available as upgrade
+          </span>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 export default async function AppsPage() {
   const hostInfo = await getTenantEnvironmentHost();
 
@@ -351,6 +384,7 @@ export default async function AppsPage() {
   }
 
   const tenant = resolved.tenant;
+  const tenantName = tenant.company_name || tenant.name || tenant.subdomain || "Workspace";
 
   const { data: membership } = await supabase
     .from("memberships")
@@ -363,21 +397,15 @@ export default async function AppsPage() {
     redirect("/login?error=tenant_access");
   }
 
-  const myRole = String(membership.role || "user");
-  const isOwner = myRole === "owner";
-  const isBillingAdmin = myRole === "billing_admin";
-  const canViewBilling = isOwner || isBillingAdmin;
+  const role = String(membership.role || "user");
+  const canViewBilling = role === "owner" || role === "billing_admin";
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name, avatar_url, email")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  const fullName = profile?.full_name ?? "";
-  const email = profile?.email ?? user.email ?? "";
-
-  const [features, billingResult] = await Promise.all([
+  const [{ data: profile }, features, billingResult] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("full_name, avatar_url, email")
+      .eq("id", user.id)
+      .maybeSingle(),
     getEnvironmentFeatureMap({
       tenantId: tenant.id,
       environmentId: resolved.environment?.id,
@@ -386,203 +414,135 @@ export default async function AppsPage() {
     getTenantBillingProfile(tenant.id),
   ]);
 
-  const hasItsm = features.itsm_core === true;
+  const { enabled, hasItsm, hasControl } = getEnabledModules({
+    features,
+    role,
+  });
 
-  const hasControl =
-    features.devices_inventory === true ||
-    features.devices_reporting === true ||
-    features.remote_control === true ||
-    features.remote_terminal === true ||
-    features.remote_files === true ||
-    features.scripts === true ||
-    features.monitoring === true;
+  const visibleModules = (["itsm", "control", "selfservice", "admin"] as ModuleKey[])
+    .filter((key) => enabled.has(key))
+    .map((key) => MODULE_CATALOG[key]);
 
-  const enabled = new Set<ModuleKey>();
-
-  if (hasItsm) {
-    enabled.add("itsm");
-    enabled.add("selfservice");
-  }
-
-  if (hasControl) {
-    enabled.add("control");
-  }
-
-  if (myRole === "owner" || myRole === "admin" || myRole === "billing_admin") {
-    enabled.add("admin");
-  }
-
-  const visibleModules = MODULES.filter((module) => enabled.has(module.key));
+  const shellModules: TenantShellModule[] = visibleModules.map((module) => ({
+    key: module.key,
+    title: module.shortTitle,
+    description: module.description,
+    href: module.href,
+    badge: module.badge,
+  }));
 
   const planLabel = billingResult?.plan?.label ?? "Trial";
   const billing = billingResult?.billing ?? null;
 
-  let trialText: string | null = null;
-
-  if (billing?.billing_status === "trial" && billing?.trial_ends_at) {
-    const end = new Date(billing.trial_ends_at);
-    const days = Math.max(
-      0,
-      Math.ceil((end.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-    );
-    trialText = `Trial active • ${days} day${days === 1 ? "" : "s"} remaining`;
-  } else if (tenant?.status === "trial" && tenant?.trial_ends_at) {
-    const end = new Date(tenant.trial_ends_at);
-    const days = Math.max(
-      0,
-      Math.ceil((end.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-    );
-    trialText = `Trial active • ${days} day${days === 1 ? "" : "s"} remaining`;
-  }
-
   return (
-    <div className="hi5-page">
-      <div className="mx-auto w-full max-w-[1500px] px-4 py-5 sm:px-6 sm:py-8 lg:px-8 xl:px-10">
-        <div className="grid grid-cols-1 gap-5 lg:gap-7 2xl:grid-cols-[360px_1fr]">
-          <div className="space-y-5">
-            <div className="hi5-panel p-5 sm:p-6">
-              <div
-                className="pointer-events-none absolute inset-0 opacity-70"
-                style={{
-                  background:
-                    "radial-gradient(900px 260px at 20% 0%, rgba(var(--hi5-accent),0.18), transparent 60%)," +
-                    "radial-gradient(900px 260px at 80% 100%, rgba(var(--hi5-accent-2),0.14), transparent 60%)",
-                }}
-              />
+    <TenantShell
+      tenant={{
+        id: tenant.id,
+        name: tenantName,
+        subdomain: tenant.subdomain,
+        environmentKey: resolved.environmentKey,
+        planLabel,
+      }}
+      user={{
+        name: profile?.full_name || user.email,
+        email: profile?.email || user.email,
+        avatarUrl: profile?.avatar_url,
+        role,
+      }}
+      modules={shellModules}
+      activeModule="apps"
+    >
+      <div className="space-y-5 pb-24 lg:pb-0">
+        <section className="hi5-panel overflow-hidden p-5 sm:p-7">
+          <div
+            className="pointer-events-none absolute inset-0 opacity-80"
+            style={{
+              background:
+                "radial-gradient(980px 360px at 10% 0%, rgb(var(--hi5-accent) / 0.18), transparent 62%)," +
+                "radial-gradient(980px 360px at 88% 100%, rgb(var(--hi5-accent-2) / 0.15), transparent 62%)",
+            }}
+          />
 
-              <div className="relative z-10">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between 2xl:flex-col 2xl:justify-start">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border hi5-border bg-white/50 font-bold backdrop-blur-md dark:bg-black/30">
-                      {profile?.avatar_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={profile.avatar_url}
-                          alt="Profile"
-                          className="h-12 w-12 rounded-2xl object-cover"
-                        />
-                      ) : (
-                        <span>{initials(fullName, email)}</span>
-                      )}
-                    </div>
-
-                    <div className="min-w-0">
-                      <h1 className="text-xl font-extrabold leading-tight sm:text-2xl">
-                        Hi5Tech
-                      </h1>
-                      <p className="break-words text-sm opacity-80">
-                        {fullName ? (
-                          <>
-                            {fullName} <span className="opacity-60">•</span>{" "}
-                            <span className="opacity-80">{email}</span>
-                          </>
-                        ) : (
-                          email
-                        )}
-                      </p>
-                    </div>
-                  </div>
-
-                  <form action="/auth/signout" method="post" className="shrink-0">
-                    <button type="submit" className="hi5-btn-ghost text-sm">
-                      Logout
-                    </button>
-                  </form>
-                </div>
-
-                <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
-                  <span className="rounded-full border hi5-border bg-white/40 px-2 py-1 dark:bg-black/25">
-                    Tenant:{" "}
-                    <span className="font-medium">{tenant.subdomain}</span>
-                  </span>
-
-                  <span className="rounded-full border hi5-border bg-white/40 px-2 py-1 dark:bg-black/25">
-                    Environment:{" "}
-                    <span className="font-medium capitalize">
-                      {resolved.environmentKey}
-                    </span>
-                  </span>
-
-                  <span className="rounded-full border hi5-border bg-white/40 px-2 py-1 dark:bg-black/25">
-                    Role: <span className="font-medium">{myRole}</span>
-                  </span>
-
-                  <span className="rounded-full border hi5-border bg-white/40 px-2 py-1 dark:bg-black/25">
-                    Plan: <span className="font-medium">{planLabel}</span>
-                  </span>
-
-                  {trialText ? (
-                    <span className="rounded-full border hi5-border bg-white/40 px-2 py-1 dark:bg-black/25">
-                      {trialText}
-                    </span>
-                  ) : null}
-                </div>
-
-                <div className="mt-5">
-                  <h2 className="text-sm uppercase tracking-wide opacity-70">
-                    Choose a module
-                  </h2>
-                  <p className="mt-1 max-w-2xl text-sm leading-relaxed opacity-75 2xl:max-w-none">
-                    Production shows live modules only. Test and staging use
-                    their own environment feature states.
-                  </p>
-                </div>
-
-                <div className="mt-5 text-xs opacity-70">
-                  Need access changes? Contact your tenant admin.
-                </div>
+          <div className="relative z-10 grid gap-6 lg:grid-cols-[1fr_auto] lg:items-end">
+            <div>
+              <div className="text-xs font-black uppercase tracking-[0.18em] hi5-accent">
+                {formatEnvironment(resolved.environmentKey)} workspace
               </div>
+
+              <h1 className="mt-3 max-w-3xl text-4xl font-black tracking-tight sm:text-5xl">
+                Choose your app.
+              </h1>
+
+              <p className="mt-3 max-w-2xl text-sm leading-6 opacity-75 sm:text-base">
+                Access the tools available to <b>{tenantName}</b>. Production shows live modules;
+                test and staging can preview selected changes before promotion.
+              </p>
             </div>
 
-            {canViewBilling && billing && resolved.environmentKey === "production" ? (
-              <TrialBanner
-                planLabel={billingResult.plan.label}
-                planKey={billingResult.plan.key}
-                daysRemaining={billingResult.daysRemaining}
-                trialEndsAt={billing.trial_ends_at}
-                baseMonthly={Number(billing.base_monthly_amount)}
-                perTechnician={Number(billing.per_technician_amount)}
-                perDevice={Number(billing.per_device_amount)}
-              />
-            ) : null}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:min-w-[420px]">
+              <div className="rounded-2xl border hi5-border bg-white/40 p-3 dark:bg-black/20">
+                <div className="text-xs opacity-60">Environment</div>
+                <div className="mt-1 text-sm font-black">{formatEnvironment(resolved.environmentKey)}</div>
+              </div>
+
+              <div className="rounded-2xl border hi5-border bg-white/40 p-3 dark:bg-black/20">
+                <div className="text-xs opacity-60">Plan</div>
+                <div className="mt-1 text-sm font-black">{planLabel}</div>
+              </div>
+
+              <div className="rounded-2xl border hi5-border bg-white/40 p-3 dark:bg-black/20">
+                <div className="text-xs opacity-60">Role</div>
+                <div className="mt-1 text-sm font-black capitalize">{role}</div>
+              </div>
+
+              <div className="rounded-2xl border hi5-border bg-white/40 p-3 dark:bg-black/20">
+                <div className="text-xs opacity-60">Apps</div>
+                <div className="mt-1 text-sm font-black">{visibleModules.length}</div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {canViewBilling && billing && resolved.environmentKey === "production" ? (
+          <TrialBanner
+            planLabel={billingResult.plan.label}
+            planKey={billingResult.plan.key}
+            daysRemaining={billingResult.daysRemaining}
+            trialEndsAt={billing.trial_ends_at}
+            baseMonthly={Number(billing.base_monthly_amount)}
+            perTechnician={Number(billing.per_technician_amount)}
+            perDevice={Number(billing.per_device_amount)}
+          />
+        ) : null}
+
+        {visibleModules.length ? (
+          <section className="grid grid-cols-1 gap-4 xl:grid-cols-2 2xl:grid-cols-3">
+            {visibleModules.map((module) => (
+              <ModuleCard key={module.key} module={module} role={role} />
+            ))}
+          </section>
+        ) : (
+          <section className="hi5-panel p-6">
+            <h2 className="text-2xl font-black tracking-tight">No apps available</h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 opacity-75">
+              Your account is active, but no application modules are currently enabled for this
+              workspace, environment or your role.
+            </p>
 
             {canViewBilling && resolved.environmentKey === "production" ? (
-              <UpgradeHint hasItsm={hasItsm} hasControl={hasControl} />
+              <div className="mt-5">
+                <Link href="/admin/billing" className="hi5-btn-primary w-auto text-sm">
+                  View billing and upgrades
+                </Link>
+              </div>
             ) : null}
-          </div>
+          </section>
+        )}
 
-          <div className="min-w-0">
-            {visibleModules.length ? (
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-                {visibleModules.map((module) => (
-                  <ModuleTile key={module.key} module={module} myRole={myRole} />
-                ))}
-              </div>
-            ) : (
-              <div className="hi5-panel p-5">
-                <div className="text-lg font-extrabold">
-                  No modules available
-                </div>
-                <p className="mt-2 text-sm opacity-75">
-                  Your account is active, but no application modules are
-                  currently enabled for this workspace, environment or your role.
-                </p>
-
-                {canViewBilling && resolved.environmentKey === "production" ? (
-                  <div className="mt-4">
-                    <Link
-                      href="/admin/billing"
-                      className="hi5-btn-primary w-auto text-sm"
-                    >
-                      View billing and upgrades
-                    </Link>
-                  </div>
-                ) : null}
-              </div>
-            )}
-          </div>
-        </div>
+        {resolved.environmentKey === "production" ? (
+          <UpgradeHint hasItsm={hasItsm} hasControl={hasControl} canViewBilling={canViewBilling} />
+        ) : null}
       </div>
-    </div>
+    </TenantShell>
   );
 }
