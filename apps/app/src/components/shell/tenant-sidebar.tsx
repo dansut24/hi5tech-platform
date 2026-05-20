@@ -10,6 +10,14 @@ export type TenantShellModule = {
   badge?: string | null;
 };
 
+export type TenantShellNavItem = {
+  key: string;
+  title: string;
+  href: string;
+  description?: string | null;
+  badge?: string | null;
+};
+
 function environmentLabel(value?: string | null) {
   if (value === "test") return "Test environment";
   if (value === "staging") return "Staging environment";
@@ -20,10 +28,14 @@ export default function TenantSidebar({
   tenant,
   modules,
   activeModule,
+  navigationTitle,
+  navigation = [],
 }: {
   tenant: TenantShellTenant;
   modules: TenantShellModule[];
   activeModule?: string;
+  navigationTitle?: string;
+  navigation?: TenantShellNavItem[];
 }) {
   const tenantName = tenant.name || tenant.subdomain || "Workspace";
 
@@ -34,7 +46,9 @@ export default function TenantSidebar({
           Workspace
         </div>
 
-        <h2 className="mt-2 truncate text-xl font-black tracking-tight">{tenantName}</h2>
+        <h2 className="mt-2 truncate text-xl font-black tracking-tight">
+          {tenantName}
+        </h2>
 
         <div className="mt-3 rounded-2xl border hi5-border bg-black/5 p-3 text-sm dark:bg-white/5">
           <div className="text-xs opacity-60">Environment</div>
@@ -89,6 +103,40 @@ export default function TenantSidebar({
           })}
         </div>
       </nav>
+
+      {navigation.length ? (
+        <nav className="hi5-panel p-3">
+          <div className="px-2 pb-2 text-xs font-black uppercase tracking-[0.18em] opacity-55">
+            {navigationTitle || "Navigation"}
+          </div>
+
+          <div className="grid gap-1">
+            {navigation.map((item) => (
+              <Link
+                key={item.key}
+                href={item.href}
+                className="rounded-2xl border border-transparent px-3 py-3 text-sm transition hover:border-[rgb(var(--hi5-border)/var(--hi5-border-alpha))] hover:bg-black/5 dark:hover:bg-white/5"
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-black">{item.title}</span>
+
+                  {item.badge ? (
+                    <span className="rounded-full border hi5-border bg-black/5 px-2 py-0.5 text-[10px] font-black dark:bg-white/5">
+                      {item.badge}
+                    </span>
+                  ) : null}
+                </div>
+
+                {item.description ? (
+                  <p className="mt-1 line-clamp-2 text-xs leading-5 opacity-65">
+                    {item.description}
+                  </p>
+                ) : null}
+              </Link>
+            ))}
+          </div>
+        </nav>
+      ) : null}
     </div>
   );
 }
