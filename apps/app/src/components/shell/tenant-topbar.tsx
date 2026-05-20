@@ -3,8 +3,14 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import type { TenantShellModule } from "@/components/shell/tenant-sidebar";
-import type { TenantShellTenant, TenantShellUser } from "@/components/shell/tenant-shell";
+import type {
+  TenantShellModule,
+  TenantShellNavItem,
+} from "@/components/shell/tenant-sidebar";
+import type {
+  TenantShellTenant,
+  TenantShellUser,
+} from "@/components/shell/tenant-shell";
 
 function initials(name?: string | null, email?: string | null) {
   const cleanName = String(name || "").trim();
@@ -44,11 +50,15 @@ export default function TenantTopbar({
   user,
   modules,
   activeModule,
+  navigationTitle,
+  navigation = [],
 }: {
   tenant: TenantShellTenant;
   user: TenantShellUser;
   modules: TenantShellModule[];
   activeModule?: string;
+  navigationTitle?: string;
+  navigation?: TenantShellNavItem[];
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -126,7 +136,11 @@ export default function TenantTopbar({
           <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-2xl border hi5-border bg-black/5 text-sm font-black dark:bg-white/5">
             {user.avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={user.avatarUrl} alt="Profile" className="h-full w-full object-cover" />
+              <img
+                src={user.avatarUrl}
+                alt="Profile"
+                className="h-full w-full object-cover"
+              />
             ) : (
               initials(user.name, user.email)
             )}
@@ -136,7 +150,11 @@ export default function TenantTopbar({
 
       {menuOpen ? (
         <div className="border-t hi5-border bg-[rgb(var(--hi5-card)/0.96)] p-4 backdrop-blur-2xl lg:hidden">
-          <div className="grid gap-2">
+          <div className="text-xs font-black uppercase tracking-[0.18em] opacity-55">
+            Apps
+          </div>
+
+          <div className="mt-2 grid gap-2">
             {modules.map((module) => {
               const active = module.key === activeModule;
 
@@ -158,6 +176,28 @@ export default function TenantTopbar({
               );
             })}
           </div>
+
+          {navigation.length ? (
+            <>
+              <div className="mt-5 text-xs font-black uppercase tracking-[0.18em] opacity-55">
+                {navigationTitle || "Navigation"}
+              </div>
+
+              <div className="mt-2 grid gap-2">
+                {navigation.map((item) => (
+                  <Link
+                    key={item.key}
+                    href={item.href}
+                    onClick={() => setMenuOpen(false)}
+                    className="flex items-center justify-between rounded-2xl border hi5-border bg-black/5 px-4 py-3 text-sm font-black dark:bg-white/5"
+                  >
+                    <span>{item.title}</span>
+                    <span>→</span>
+                  </Link>
+                ))}
+              </div>
+            </>
+          ) : null}
 
           <div className="mt-3 grid grid-cols-2 gap-2">
             <Link
