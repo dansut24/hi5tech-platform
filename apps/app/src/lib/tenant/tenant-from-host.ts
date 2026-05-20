@@ -5,35 +5,23 @@ export type TenantEnvironmentKey = "production" | "test" | "staging";
 export type TenantHost = {
   host: string;
   rootDomain: string;
-
-  /**
-   * The real tenant subdomain used for DB lookups.
-   * Example:
-   *   test123-stg.hi5tech.co.uk -> test123
-   */
   subdomain: string | null;
-
-  /**
-   * The actual subdomain requested in the browser.
-   * Example:
-   *   test123-stg.hi5tech.co.uk -> test123-stg
-   */
   requestedSubdomain: string | null;
-
-  /**
-   * Environment resolved from the requested subdomain.
-   */
   environmentKey: TenantEnvironmentKey;
-
   isRootHost: boolean;
   isAppHost: boolean;
   isPlatformAdminHost: boolean;
   isTenantHost: boolean;
+  isPreviewHost: boolean;
+  isLocalHost: boolean;
+  isCustomDomainHost: boolean;
 };
 
-const ROOT_DOMAIN = (process.env.NEXT_PUBLIC_ROOT_DOMAIN || "hi5tech.co.uk").toLowerCase();
+const ROOT_DOMAIN = (process.env.NEXT_PUBLIC_ROOT_DOMAIN || "hi5tech.co.uk")
+  .trim()
+  .toLowerCase();
 
-function cleanHost(inputHost: string | null | undefined) {
+export function cleanHost(inputHost: string | null | undefined) {
   return String(inputHost || "")
     .trim()
     .toLowerCase()
@@ -41,12 +29,23 @@ function cleanHost(inputHost: string | null | undefined) {
     .split(":")[0];
 }
 
+export function getEffectiveHost(headers: Headers) {
+  return (
+    headers.get("x-forwarded-host") ||
+    headers.get("host") ||
+    headers.get("x-vercel-deployment-url") ||
+    ""
+  );
+}
+
 export function normalizeTenantEnvironmentSubdomain(rawSubdomain: string | null | undefined): {
   subdomain: string | null;
   requestedSubdomain: string | null;
   environmentKey: TenantEnvironmentKey;
 } {
-  const requestedSubdomain = String(rawSubdomain || "").trim().toLowerCase();
+  const requestedSubdomain = String(rawSubdomain || "")
+    .trim()
+    .toLowerCase();
 
   if (!requestedSubdomain) {
     return {
@@ -84,12 +83,11 @@ export function normalizeTenantEnvironmentSubdomain(rawSubdomain: string | null 
 }
 
 export function parseTenantHost(inputHost: string | null | undefined): TenantHost {
-  const rootDomain = ROOT_DOMAIN;
   const host = cleanHost(inputHost);
 
   const empty: TenantHost = {
     host,
-    rootDomain,
+    rootDomain: ROOT_DOMAIN,
     subdomain: null,
     requestedSubdomain: null,
     environmentKey: "production",
@@ -97,15 +95,32 @@ export function parseTenantHost(inputHost: string | null | undefined): TenantHos
     isAppHost: false,
     isPlatformAdminHost: false,
     isTenantHost: false,
+    isPreviewHost: false,
+    isLocalHost: false,
+    isCustomDomainHost: false,
   };
 
-  if (!host || host === "localhost" || host.endsWith(".localhost") || host.endsWith(".vercel.app")) {
-    return empty;
+  if (!host) return empty;
+
+  const isLocalHost =
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host === "127.0.0.1" ||
+    host === "0.0.0.0";
+
+  const isPreviewHost = host.endsWith(".vercel.app");
+
+  if (isLocalHost || isPreviewHost) {
+    return {
+      ...empty,
+      isLocalHost,
+      isPreviewHost,
+    };
   }
 
-  const isRootHost = host === rootDomain || host === `www.${rootDomain}`;
-  const isAppHost = host === `app.${rootDomain}`;
-  const isPlatformAdminHost = host === `admin.${rootDomain}`;
+  const isRootHost = host === ROOT_DOMAIN || host === `www.${ROOT_DOMAIN}`;
+  const isAppHost = host === `app.${ROOT_DOMAIN}`;
+  const isPlatformAdminHost = host === `admin.${ROOT_DOMAIN}`;
 
   if (isRootHost || isAppHost || isPlatformAdminHost) {
     return {
@@ -116,36 +131,22 @@ export function parseTenantHost(inputHost: string | null | undefined): TenantHos
     };
   }
 
-  if (!host.endsWith(`.${rootDomain}`)) {
-    return empty;
+  if (host.endsWith(`.${ROOT_DOMAIN}`)) {
+    const rawSubdomain = host.slice(0, -`.${ROOT_DOMAIN}`.length).trim();
+    const parsed = normalizeTenantEnvironmentSubdomain(rawSubdomain);
+
+    return {
+      ...empty,
+      subdomain: parsed.subdomain,
+      requestedSubdomain: parsed.requestedSubdomain,
+      environmentKey: parsed.environmentKey,
+      isTenantHost: Boolean(parsed.subdomain),
+    };
   }
-
-  const rawSubdomain = host.slice(0, -`.${rootDomain}`.length).trim();
-
-  if (!rawSubdomain) {
-    return empty;
-  }
-
-  const parsed = normalizeTenantEnvironmentSubdomain(rawSubdomain);
 
   return {
-    host,
-    rootDomain,
-    subdomain: parsed.subdomain,
-    requestedSubdomain: parsed.requestedSubdomain,
-    environmentKey: parsed.environmentKey,
-    isRootHost: false,
-    isAppHost: false,
-    isPlatformAdminHost: false,
-    isTenantHost: Boolean(parsed.subdomain),
+    ...empty,
+    isCustomDomainHost: host.includes("."),
+    isTenantHost: host.includes("."),
   };
-}
-
-export function getEffectiveHost(headers: Headers) {
-  return (
-    headers.get("x-forwarded-host") ||
-    headers.get("host") ||
-    headers.get("x-vercel-deployment-url") ||
-    ""
-  );
 }
