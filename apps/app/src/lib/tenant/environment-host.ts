@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { supabaseServer } from "@/lib/supabase/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import {
+  cleanHost,
   getEffectiveHost,
   normalizeTenantEnvironmentSubdomain,
   parseTenantHost,
@@ -10,6 +11,30 @@ import {
 } from "@/lib/tenant/tenant-from-host";
 
 export type { TenantEnvironmentKey };
+
+const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "hi5tech.co.uk";
+
+export const RESERVED_TENANT_SUBDOMAINS = new Set([
+  "admin",
+  "app",
+  "www",
+  "api",
+  "auth",
+  "billing",
+  "support",
+  "status",
+  "rmm",
+  "control",
+  "mail",
+  "cdn",
+  "assets",
+  "test",
+  "stg",
+  "stage",
+  "staging",
+  "prod",
+  "production",
+]);
 
 export type TenantEnvironmentHost = {
   rootDomain: string;
@@ -55,64 +80,17 @@ export type ResolvedTenantEnvironment = TenantEnvironmentHost & {
   } | null;
 };
 
-const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "hi5tech.co.uk";
-
-export const RESERVED_TENANT_SUBDOMAINS = new Set([
-  "admin",
-  "app",
-  "www",
-  "api",
-  "auth",
-  "billing",
-  "support",
-  "status",
-  "rmm",
-  "control",
-  "mail",
-  "cdn",
-  "assets",
-  "test",
-  "stg",
-  "stage",
-  "staging",
-  "prod",
-  "production",
-]);
-
-function cleanHost(value: string) {
-  return String(value || "")
-    .split(",")[0]
-    .split(":")[0]
-    .trim()
-    .toLowerCase();
-}
-
-function getSubdomainFromHost(host: string, rootDomain = ROOT_DOMAIN) {
+function getSubdomainFromRootHost(host: string, rootDomain = ROOT_DOMAIN) {
   const h = cleanHost(host);
   const root = cleanHost(rootDomain);
 
   if (!h || !root) return null;
   if (h === root) return null;
 
-  if (h.endsWith(`.${root}`)) {
-    const sub = h.slice(0, -`.${root}`.length).trim();
-    return sub || null;
-  }
+  if (!h.endsWith(`.${root}`)) return null;
 
-  return null;
-}
-
-function isExternalCustomDomain(host: string) {
-  const h = cleanHost(host);
-
-  if (!h) return false;
-  if (h === "localhost") return false;
-  if (h.endsWith(".localhost")) return false;
-  if (h.endsWith(".vercel.app")) return false;
-  if (h === ROOT_DOMAIN) return false;
-  if (h.endsWith(`.${ROOT_DOMAIN}`)) return false;
-
-  return h.includes(".");
+  const sub = h.slice(0, -`.${root}`.length).trim();
+  return sub || null;
 }
 
 export function parseEnvironmentSubdomain(subdomain?: string | null): {
@@ -151,10 +129,6 @@ export function isReservedTenantSubdomain(value: string) {
   if (!clean) return true;
   if (RESERVED_TENANT_SUBDOMAINS.has(clean)) return true;
 
-  /*
-    Prevent customers creating literal environment-looking tenant names.
-    Environment hosts are generated from the base tenant.
-  */
   if (clean.endsWith("-test")) return true;
   if (clean.endsWith("-stg")) return true;
   if (clean.startsWith("test-")) return true;
@@ -163,130 +137,72 @@ export function isReservedTenantSubdomain(value: string) {
   return false;
 }
 
+function normalizeEnvironmentKey(value: unknown): TenantEnvironmentKey {
+  const raw = String(value || "").toLowerCase();
+
+  if (raw === "test") return "test";
+  if (raw === "staging") return "staging";
+  if (raw === "stg") return "staging";
+
+  return "production";
+}
+
 export async function getTenantEnvironmentHost(): Promise<TenantEnvironmentHost> {
-  const host = cleanHost(getEffectiveHost(await headers()));
+  const h = await headers();
+  const host = cleanHost(getEffectiveHost(h));
 
   const parsed = parseTenantHost(host);
-  const rawSubdomain = getSubdomainFromHost(host, ROOT_DOMAIN);
-  const rootDomain = parsed.rootDomain || ROOT_DOMAIN;
+  const hostSubdomain = getSubdomainFromRootHost(host, ROOT_DOMAIN);
 
-  const isRootMarketingHost = host === ROOT_DOMAIN || host === `www.${ROOT_DOMAIN}`;
-  const isPlatformAdminHost = host === `admin.${ROOT_DOMAIN}`;
-  const isAppHost = host === `app.${ROOT_DOMAIN}`;
-  const isCustomDomainHost = isExternalCustomDomain(host);
+  const isRootMarketingHost =
+    parsed.isRootHost ||
+    host === ROOT_DOMAIN ||
+    host === `www.${ROOT_DOMAIN}`;
 
-  const env = parseEnvironmentSubdomain(rawSubdomain);
-
-  const reservedBaseSubdomain = rawSubdomain
-    ? RESERVED_TENANT_SUBDOMAINS.has(rawSubdomain)
-    : false;
+  const isPlatformAdminHost = parsed.isPlatformAdminHost;
+  const isAppHost = parsed.isAppHost;
+  const isCustomDomainHost = parsed.isCustomDomainHost;
 
   const isReservedHost =
-    Boolean(rawSubdomain) &&
-    reservedBaseSubdomain &&
+    Boolean(hostSubdomain) &&
+    RESERVED_TENANT_SUBDOMAINS.has(String(hostSubdomain)) &&
     !isPlatformAdminHost &&
     !isAppHost;
 
-  if (isPlatformAdminHost) {
-    return {
-      rootDomain,
-      host,
-      hostSubdomain: rawSubdomain,
-      tenantSubdomain: null,
-      requestedSubdomain: rawSubdomain,
-      environmentKey: "production",
-      isPlatformAdminHost: true,
-      isAppHost: false,
-      isRootMarketingHost,
-      isReservedHost: false,
-      isCustomDomainHost: false,
-      isTenantHost: false,
-    };
-  }
-
-  if (isAppHost) {
-    return {
-      rootDomain,
-      host,
-      hostSubdomain: rawSubdomain,
-      tenantSubdomain: null,
-      requestedSubdomain: rawSubdomain,
-      environmentKey: "production",
-      isPlatformAdminHost: false,
-      isAppHost: true,
-      isRootMarketingHost,
-      isReservedHost: false,
-      isCustomDomainHost: false,
-      isTenantHost: false,
-    };
-  }
-
-  if (isCustomDomainHost) {
-    return {
-      rootDomain,
-      host,
-      hostSubdomain: null,
-      tenantSubdomain: null,
-      requestedSubdomain: null,
-      environmentKey: "production",
-      isPlatformAdminHost: false,
-      isAppHost: false,
-      isRootMarketingHost: false,
-      isReservedHost: false,
-      isCustomDomainHost: true,
-      isTenantHost: true,
-    };
-  }
-
-  if (isRootMarketingHost || isReservedHost) {
-    return {
-      rootDomain,
-      host,
-      hostSubdomain: rawSubdomain,
-      tenantSubdomain: null,
-      requestedSubdomain: rawSubdomain,
-      environmentKey: "production",
-      isPlatformAdminHost: false,
-      isAppHost: false,
-      isRootMarketingHost,
-      isReservedHost,
-      isCustomDomainHost: false,
-      isTenantHost: false,
-    };
-  }
-
   return {
-    rootDomain,
+    rootDomain: ROOT_DOMAIN,
     host,
-    hostSubdomain: rawSubdomain,
-    tenantSubdomain: env.tenantSubdomain,
-    requestedSubdomain: env.requestedSubdomain,
-    environmentKey: env.environmentKey,
-    isPlatformAdminHost: false,
-    isAppHost: false,
+    hostSubdomain,
+    tenantSubdomain: parsed.subdomain,
+    requestedSubdomain: parsed.requestedSubdomain,
+    environmentKey: parsed.environmentKey,
+    isPlatformAdminHost,
+    isAppHost,
     isRootMarketingHost,
-    isReservedHost: false,
-    isCustomDomainHost: false,
-    isTenantHost: Boolean(env.tenantSubdomain),
+    isReservedHost,
+    isCustomDomainHost,
+    isTenantHost: parsed.isTenantHost && !isReservedHost,
   };
 }
 
 export async function resolveTenantEnvironment(): Promise<ResolvedTenantEnvironment | null> {
-  const parsed = await getTenantEnvironmentHost();
+  const hostInfo = await getTenantEnvironmentHost();
 
-  if (!parsed.isTenantHost) {
+  if (!hostInfo.isTenantHost) {
     return null;
   }
 
-  const supabase = await supabaseServer();
+  if (hostInfo.isReservedHost) {
+    return null;
+  }
 
-  if (parsed.isCustomDomainHost) {
+  if (hostInfo.isCustomDomainHost) {
     const admin = supabaseAdmin();
 
     const { data: domainRow } = await admin
       .from("tenant_custom_domains")
       .select("id, tenant_id, domain, environment_key, status")
-      .eq("domain", parsed.host)
+      .eq("domain", hostInfo.host)
       .in("status", ["verified", "active"])
       .maybeSingle();
 
@@ -294,11 +210,7 @@ export async function resolveTenantEnvironment(): Promise<ResolvedTenantEnvironm
       return null;
     }
 
-    const environmentKey = (
-      ["production", "test", "staging"].includes(String(domainRow.environment_key))
-        ? domainRow.environment_key
-        : "production"
-    ) as TenantEnvironmentKey;
+    const environmentKey = normalizeEnvironmentKey(domainRow.environment_key);
 
     const { data: tenant } = await admin
       .from("tenants")
@@ -318,7 +230,7 @@ export async function resolveTenantEnvironment(): Promise<ResolvedTenantEnvironm
       .maybeSingle();
 
     return {
-      ...parsed,
+      ...hostInfo,
       tenantId: tenant.id,
       tenantSubdomain: tenant.subdomain ?? null,
       requestedSubdomain: tenant.subdomain ?? null,
@@ -340,15 +252,17 @@ export async function resolveTenantEnvironment(): Promise<ResolvedTenantEnvironm
     };
   }
 
-  if (!parsed.tenantSubdomain) {
+  if (!hostInfo.tenantSubdomain) {
     return null;
   }
+
+  const supabase = await supabaseServer();
 
   const { data: tenant } = await supabase
     .from("tenants")
     .select("id, name, company_name, domain, subdomain, status, plan, trial_ends_at")
-    .eq("domain", parsed.rootDomain)
-    .eq("subdomain", parsed.tenantSubdomain)
+    .eq("domain", hostInfo.rootDomain)
+    .eq("subdomain", hostInfo.tenantSubdomain)
     .maybeSingle();
 
   if (!tenant?.id) {
@@ -359,11 +273,11 @@ export async function resolveTenantEnvironment(): Promise<ResolvedTenantEnvironm
     .from("tenant_environments")
     .select("id, key, name, type, can_reset, all_features_visible, is_live")
     .eq("tenant_id", tenant.id)
-    .eq("key", parsed.environmentKey)
+    .eq("key", hostInfo.environmentKey)
     .maybeSingle();
 
   return {
-    ...parsed,
+    ...hostInfo,
     tenantId: tenant.id,
     tenant,
     environment:
