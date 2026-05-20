@@ -1,42 +1,93 @@
-import type { ReactNode } from "react";
+// apps/app/src/app/(modules)/itsm/layout.tsx
 import { redirect } from "next/navigation";
-import { supabaseServer } from "@/lib/supabase/server";
-import ItsmShell from "./_components/ItsmShell";
+import TenantShell from "@/components/shell/tenant-shell";
+import { requireTenantShellContext } from "@/lib/shell/tenant-shell-context";
 
-export default async function ItsmLayout({ children }: { children: ReactNode }) {
-  const supabase = await supabaseServer();
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-  const { data: userRes } = await supabase.auth.getUser();
-  const user = userRes.user;
-  if (!user) redirect("/login");
+const ITSM_NAVIGATION = [
+  {
+    key: "dashboard",
+    title: "Dashboard",
+    href: "/itsm",
+    description: "Live ITSM overview and workload.",
+  },
+  {
+    key: "incidents",
+    title: "Incidents",
+    href: "/itsm/incidents",
+    description: "Faults, issues and service interruptions.",
+  },
+  {
+    key: "new-incident",
+    title: "New ticket",
+    href: "/itsm/incidents/new",
+    description: "Create a new incident or request.",
+  },
+  {
+    key: "requests",
+    title: "Requests",
+    href: "/itsm/requests",
+    description: "Service requests and fulfilment.",
+    badge: "Soon",
+  },
+  {
+    key: "changes",
+    title: "Changes",
+    href: "/itsm/changes",
+    description: "Change records, approvals and releases.",
+    badge: "Soon",
+  },
+  {
+    key: "problems",
+    title: "Problems",
+    href: "/itsm/problems",
+    description: "Root cause investigations and known errors.",
+    badge: "Soon",
+  },
+  {
+    key: "assets",
+    title: "Assets",
+    href: "/itsm/assets",
+    description: "Linked devices, users and configuration items.",
+  },
+  {
+    key: "knowledge",
+    title: "Knowledge",
+    href: "/itsm/knowledge",
+    description: "Articles, fixes and reusable guidance.",
+    badge: "Soon",
+  },
+  {
+    key: "settings",
+    title: "Settings",
+    href: "/itsm/settings",
+    description: "Teams, defaults and ITSM configuration.",
+  },
+];
 
-  // Fetch name and current tenant label for the account dropdown
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("full_name")
-    .eq("id", user.id)
-    .maybeSingle();
+export default async function ItsmLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const context = await requireTenantShellContext();
 
-  // Get first tenant membership for label
-  const { data: membership } = await supabase
-    .from("memberships")
-    .select("tenants(name)")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  const tenantLabel = (membership?.tenants as any)?.name ?? null;
-  const fullName = profile?.full_name ?? null;
+  if (!context.enabledModules.has("itsm")) {
+    redirect("/apps");
+  }
 
   return (
-    <ItsmShell
-      user={{
-        name: fullName,
-        email: user.email,
-        role: null,
-      }}
-      tenantLabel={tenantLabel}
+    <TenantShell
+      tenant={context.shellTenant}
+      user={context.shellUser}
+      modules={context.shellModules}
+      activeModule="itsm"
+      navigationTitle="ITSM"
+      navigation={ITSM_NAVIGATION}
     >
-      {children}
-    </ItsmShell>
+      <div className="pb-24 lg:pb-0">{children}</div>
+    </TenantShell>
   );
 }
