@@ -5,6 +5,11 @@ import { headers } from "next/headers";
 import { supabaseServer } from "@/lib/supabase/server";
 import SystemTheme from "@/components/theme/SystemTheme";
 import { ToastProvider } from "@/components/ui/toast";
+import {
+  cleanHost,
+  getEffectiveHost,
+  parseTenantHost,
+} from "@/lib/tenant/tenant-from-host";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -15,8 +20,6 @@ export const metadata: Metadata = {
 };
 
 type ThemeMode = "system" | "light" | "dark";
-
-const ROOT_DOMAIN = process.env.NEXT_PUBLIC_ROOT_DOMAIN || "hi5tech.co.uk";
 
 type ThemePreset =
   | "neutral"
@@ -32,13 +35,11 @@ type CustomThemeJson = {
   dark?: Record<string, any>;
 };
 
-/** HEX (#RRGGBB or #RGB) -> "r g b" */
 function hexToRgbTriplet(hex?: string | null, fallback = "0 0 0") {
   if (!hex) return fallback;
 
   let h = String(hex).trim();
 
-  // Already looks like "r g b"
   if (/^\d+\s+\d+\s+\d+$/.test(h)) return h;
 
   if (h.startsWith("#")) h = h.slice(1);
@@ -57,55 +58,6 @@ function clamp01(n: any, fallback: number) {
   const v = Number(n);
   if (!Number.isFinite(v)) return fallback;
   return Math.max(0, Math.min(1, v));
-}
-
-function normalizeHost(rawHost: string) {
-  return (rawHost || "").split(":")[0].trim().toLowerCase();
-}
-
-function baseTenantSubdomainFromEnvironmentSubdomain(subdomain: string) {
-  const clean = String(subdomain || "").trim().toLowerCase();
-
-  if (clean.endsWith("-test")) {
-    return clean.slice(0, -"-test".length);
-  }
-
-  if (clean.endsWith("-stg")) {
-    return clean.slice(0, -"-stg".length);
-  }
-
-  return clean;
-}
-
-/**
- * Resolve tenant lookup keys from host.
- * - tenant subdomain: dansworld.hi5tech.co.uk      -> { domain: hi5tech.co.uk, subdomain: dansworld }
- * - test env:         dansworld-test.hi5tech.co.uk -> { domain: hi5tech.co.uk, subdomain: dansworld }
- * - staging env:      dansworld-stg.hi5tech.co.uk  -> { domain: hi5tech.co.uk, subdomain: dansworld }
- * - root / non-tenant: hi5tech.co.uk or app.hi5tech.co.uk -> null
- */
-function tenantKeyFromHost(host: string): { domain: string; subdomain: string | null } | null {
-  const h = normalizeHost(host);
-
-  if (!h) return null;
-  if (h === "localhost" || h.endsWith(".vercel.app")) return null;
-
-  if (h.endsWith(ROOT_DOMAIN)) {
-    if (h === ROOT_DOMAIN) return null;
-
-    const rawSub = h.slice(0, -ROOT_DOMAIN.length - 1);
-    if (!rawSub) return null;
-
-    if (rawSub === "www" || rawSub === "app" || rawSub === "admin") return null;
-
-    const sub = baseTenantSubdomainFromEnvironmentSubdomain(rawSub);
-    if (!sub) return null;
-
-    return { domain: ROOT_DOMAIN, subdomain: sub };
-  }
-
-  // Custom-domain theming can be wired to tenant_custom_domains later.
-  return null;
 }
 
 function normalizeThemeMode(value: any): ThemeMode {
@@ -211,7 +163,12 @@ const ACCENT_PRESETS: Record<
   },
 };
 
-function customRgb(custom: CustomThemeJson, mode: "light" | "dark", key: string, fallback: string) {
+function customRgb(
+  custom: CustomThemeJson,
+  mode: "light" | "dark",
+  key: string,
+  fallback: string
+) {
   const value = custom?.[mode]?.[key];
 
   if (typeof value !== "string") return fallback;
@@ -223,30 +180,27 @@ function customRgb(custom: CustomThemeJson, mode: "light" | "dark", key: string,
   return hexToRgbTriplet(value, fallback);
 }
 
-function customAlpha(custom: CustomThemeJson, mode: "light" | "dark", key: string, fallback: number) {
+function customAlpha(
+  custom: CustomThemeJson,
+  mode: "light" | "dark",
+  key: string,
+  fallback: number
+) {
   return clamp01(custom?.[mode]?.[key], fallback);
 }
 
 function buildThemeCss({
   themeMode,
   accentColor,
-  themePreset,
   customTheme,
   legacyTheme,
 }: {
   themeMode: ThemeMode;
   accentColor: ThemePreset;
-  themePreset: string;
   customTheme: CustomThemeJson;
   legacyTheme: any;
 }) {
-  const presetFromThemePreset = normalizePreset(themePreset);
-  const preset = accentColor === "custom"
-    ? presetFromThemePreset === "custom"
-      ? "neutral"
-      : presetFromThemePreset
-    : accentColor;
-
+  const preset = accentColor === "custom" ? "neutral" : accentColor;
   const presetValues = ACCENT_PRESETS[preset] ?? ACCENT_PRESETS.neutral;
 
   const isCustom = accentColor === "custom";
@@ -492,6 +446,90 @@ function themeBootScript(mode: ThemeMode) {
 `;
 }
 
+async function resolveTenantTheme(host: string) {
+  const parsed = parseTenantHost(host);
+
+  if (!parsed.isTenantHost) {
+    return null;
+  }
+
+  const supabase = await supabaseServer();
+
+  try {
+    if (parsed.isCustomDomainHost) {
+      const { data: domainRow } = await supabase
+        .from("tenant_custom_domains")
+        .select("tenant_id")
+        .eq("domain", parsed.host)
+        .in("status", ["verified", "active"])
+        .maybeSingle();
+
+      if (!domainRow?.tenant_id) return null;
+
+      const { data } = await supabase
+        .from("tenant_settings")
+        .select(
+          [
+            "default_appearance",
+            "accent_color",
+            "theme_preset",
+            "custom_theme_json",
+            "accent_hex",
+            "accent_2_hex",
+            "accent_3_hex",
+            "bg_hex",
+            "card_hex",
+            "topbar_hex",
+            "glow_1",
+            "glow_2",
+            "glow_3",
+          ].join(",")
+        )
+        .eq("tenant_id", domainRow.tenant_id)
+        .maybeSingle();
+
+      return data ?? null;
+    }
+
+    if (!parsed.subdomain) return null;
+
+    const { data: tenant } = await supabase
+      .from("tenants")
+      .select("id")
+      .eq("domain", parsed.rootDomain)
+      .eq("subdomain", parsed.subdomain)
+      .maybeSingle();
+
+    if (!tenant?.id) return null;
+
+    const { data } = await supabase
+      .from("tenant_settings")
+      .select(
+        [
+          "default_appearance",
+          "accent_color",
+          "theme_preset",
+          "custom_theme_json",
+          "accent_hex",
+          "accent_2_hex",
+          "accent_3_hex",
+          "bg_hex",
+          "card_hex",
+          "topbar_hex",
+          "glow_1",
+          "glow_2",
+          "glow_3",
+        ].join(",")
+      )
+      .eq("tenant_id", tenant.id)
+      .maybeSingle();
+
+    return data ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export default async function RootLayout({
   children,
 }: Readonly<{
@@ -500,66 +538,11 @@ export default async function RootLayout({
   const supabase = await supabaseServer();
 
   const h = await headers();
-  const host = normalizeHost(h.get("host") || "");
-  const tenantKey = tenantKeyFromHost(host);
+  const host = cleanHost(getEffectiveHost(h));
 
-  let tenantId: string | null = null;
-  let tenantTheme: any = null;
+  const tenantTheme = await resolveTenantTheme(host);
 
-  if (tenantKey) {
-    try {
-      if (tenantKey.subdomain) {
-        const { data: tenant } = await supabase
-          .from("tenants")
-          .select("id")
-          .eq("domain", tenantKey.domain)
-          .eq("subdomain", tenantKey.subdomain)
-          .maybeSingle();
-
-        tenantId = tenant?.id ?? null;
-      } else {
-        const { data: tenant } = await supabase
-          .from("tenants")
-          .select("id")
-          .eq("domain", tenantKey.domain)
-          .is("subdomain", null)
-          .maybeSingle();
-
-        tenantId = tenant?.id ?? null;
-      }
-
-      if (tenantId) {
-        const { data } = await supabase
-          .from("tenant_settings")
-          .select(
-            [
-              "default_appearance",
-              "accent_color",
-              "theme_preset",
-              "custom_theme_json",
-              "accent_hex",
-              "accent_2_hex",
-              "accent_3_hex",
-              "bg_hex",
-              "card_hex",
-              "topbar_hex",
-              "glow_1",
-              "glow_2",
-              "glow_3",
-            ].join(",")
-          )
-          .eq("tenant_id", tenantId)
-          .maybeSingle();
-
-        tenantTheme = data ?? null;
-      }
-    } catch {
-      tenantId = null;
-      tenantTheme = null;
-    }
-  }
-
-  let theme_mode: ThemeMode = normalizeThemeMode(tenantTheme?.default_appearance);
+  let themeMode: ThemeMode = normalizeThemeMode(tenantTheme?.default_appearance);
 
   try {
     const { data: userRes } = await supabase.auth.getUser();
@@ -573,38 +556,42 @@ export default async function RootLayout({
         .maybeSingle();
 
       if (s?.theme_mode) {
-        theme_mode = normalizeThemeMode(s.theme_mode);
+        themeMode = normalizeThemeMode(s.theme_mode);
       }
     }
   } catch {
-    // keep default
+    // Keep default.
   }
 
   const accentColor = normalizePreset(tenantTheme?.accent_color);
-  const themePreset = String(tenantTheme?.theme_preset || accentColor || "neutral");
   const customTheme =
     tenantTheme?.custom_theme_json && typeof tenantTheme.custom_theme_json === "object"
       ? (tenantTheme.custom_theme_json as CustomThemeJson)
       : {};
 
   const cssVars = buildThemeCss({
-    themeMode: theme_mode,
+    themeMode,
     accentColor,
-    themePreset,
     customTheme,
     legacyTheme: tenantTheme,
   });
 
-  const htmlClass = theme_mode === "dark" ? "dark" : "";
+  const htmlClass = themeMode === "dark" ? "dark" : "";
 
   return (
-    <html lang="en" suppressHydrationWarning className={htmlClass} data-theme-preference={theme_mode}>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      className={htmlClass}
+      data-theme-preference={themeMode}
+    >
       <head>
         <style id="hi5-tenant-theme" dangerouslySetInnerHTML={{ __html: cssVars }} />
-        <script id="hi5-theme-boot" dangerouslySetInnerHTML={{ __html: themeBootScript(theme_mode) }} />
+        <script id="hi5-theme-boot" dangerouslySetInnerHTML={{ __html: themeBootScript(themeMode) }} />
       </head>
+
       <body suppressHydrationWarning>
-        {theme_mode === "system" ? <SystemTheme /> : null}
+        {themeMode === "system" ? <SystemTheme /> : null}
         <ToastProvider>{children}</ToastProvider>
       </body>
     </html>
