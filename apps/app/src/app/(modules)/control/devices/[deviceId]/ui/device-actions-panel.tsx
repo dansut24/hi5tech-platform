@@ -38,12 +38,160 @@ function statusTone(status: string) {
   }
 }
 
+function asArray(value: any): any[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function resultOf(action: DeviceAction) {
+  const r = action.result_json ?? {};
+  return r.parsed && typeof r.parsed === "object" ? { ...r.parsed, ...r } : r;
+}
+
+function WindowsUpdateResult({ action }: { action: DeviceAction }) {
+  const r = resultOf(action);
+  const updates = asArray(r.updates);
+  const results = asArray(r.results);
+  const history = asArray(r.history);
+  const hotfixes = asArray(r.hotfixes);
+  const events = asArray(r.windows_update_events);
+
+  if (!["scan_windows_updates", "install_windows_updates", "get_update_history"].includes(action.action_type)) {
+    return null;
+  }
+
+  return (
+    <div className="mt-3 space-y-3">
+      <div className="grid gap-2 md:grid-cols-4 text-xs">
+        {typeof r.count === "number" ? <Metric label="Pending" value={String(r.count)} /> : null}
+        {typeof r.selected_count === "number" ? <Metric label="Selected" value={String(r.selected_count)} /> : null}
+        {r.install_result ? <Metric label="Install result" value={String(r.install_result)} /> : null}
+        {typeof r.reboot_required === "boolean" ? <Metric label="Reboot required" value={r.reboot_required ? "Yes" : "No"} /> : null}
+      </div>
+
+      {updates.length > 0 ? (
+        <div>
+          <div className="text-xs font-semibold opacity-80">Pending updates</div>
+          <div className="mt-2 overflow-auto rounded-xl border border-white/10">
+            <table className="min-w-full text-xs">
+              <thead className="bg-white/5 text-white/70">
+                <tr>
+                  <th className="text-left p-2">Title</th>
+                  <th className="text-left p-2">KB</th>
+                  <th className="text-left p-2">Type</th>
+                  <th className="text-left p-2">Downloaded</th>
+                </tr>
+              </thead>
+              <tbody>
+                {updates.slice(0, 25).map((u, idx) => (
+                  <tr key={idx} className="border-t border-white/10">
+                    <td className="p-2 min-w-[260px]">{u.title || "—"}</td>
+                    <td className="p-2 whitespace-nowrap">{asArray(u.kb_articles).join(", ") || "—"}</td>
+                    <td className="p-2 whitespace-nowrap">{u.is_driver ? "Driver" : "Update"}</td>
+                    <td className="p-2 whitespace-nowrap">{u.is_downloaded ? "Yes" : "No"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {updates.length > 25 ? <div className="mt-1 text-xs opacity-60">Showing first 25 of {updates.length} updates.</div> : null}
+        </div>
+      ) : null}
+
+      {results.length > 0 ? (
+        <div>
+          <div className="text-xs font-semibold opacity-80">Install results</div>
+          <div className="mt-2 overflow-auto rounded-xl border border-white/10">
+            <table className="min-w-full text-xs">
+              <thead className="bg-white/5 text-white/70">
+                <tr>
+                  <th className="text-left p-2">Title</th>
+                  <th className="text-left p-2">KB</th>
+                  <th className="text-left p-2">Result</th>
+                  <th className="text-left p-2">HResult</th>
+                </tr>
+              </thead>
+              <tbody>
+                {results.map((u, idx) => (
+                  <tr key={idx} className="border-t border-white/10">
+                    <td className="p-2 min-w-[260px]">{u.title || "—"}</td>
+                    <td className="p-2 whitespace-nowrap">{asArray(u.kb_articles).join(", ") || "—"}</td>
+                    <td className="p-2 whitespace-nowrap">{u.result || u.result_code || "—"}</td>
+                    <td className="p-2 whitespace-nowrap">{u.hresult || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+
+      {history.length > 0 ? (
+        <div>
+          <div className="text-xs font-semibold opacity-80">Recent Windows Update Agent history</div>
+          <div className="mt-2 overflow-auto rounded-xl border border-white/10">
+            <table className="min-w-full text-xs">
+              <thead className="bg-white/5 text-white/70">
+                <tr>
+                  <th className="text-left p-2">Date</th>
+                  <th className="text-left p-2">Title</th>
+                  <th className="text-left p-2">Operation</th>
+                  <th className="text-left p-2">Result</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.slice(0, 20).map((h, idx) => (
+                  <tr key={idx} className="border-t border-white/10">
+                    <td className="p-2 whitespace-nowrap">{fmtTime(h.date)}</td>
+                    <td className="p-2 min-w-[260px]">{h.title || "—"}</td>
+                    <td className="p-2 whitespace-nowrap">{h.operation || "—"}</td>
+                    <td className="p-2 whitespace-nowrap">{h.result || h.result_code || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+
+      {hotfixes.length > 0 || events.length > 0 ? (
+        <details className="rounded-xl border border-white/10 p-3">
+          <summary className="cursor-pointer text-xs font-semibold opacity-80">Hotfixes and Windows Update events</summary>
+          {hotfixes.length > 0 ? (
+            <div className="mt-3 text-xs space-y-1">
+              {hotfixes.slice(0, 15).map((h, idx) => (
+                <div key={idx} className="opacity-80">{h.hotfix_id} — {h.description} — {fmtTime(h.installed_on)}</div>
+              ))}
+            </div>
+          ) : null}
+          {events.length > 0 ? (
+            <div className="mt-3 text-xs space-y-1">
+              {events.slice(0, 10).map((e, idx) => (
+                <div key={idx} className="opacity-80">{fmtTime(e.time_created)} — Event {e.id}: {String(e.message || "").slice(0, 220)}</div>
+              ))}
+            </div>
+          ) : null}
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+      <div className="opacity-60">{label}</div>
+      <div className="mt-1 font-semibold">{value}</div>
+    </div>
+  );
+}
+
 export default function DeviceActionsPanel({ deviceId, online }: { deviceId: string; online?: boolean | null }) {
   const [actions, setActions] = useState<DeviceAction[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [command, setCommand] = useState("whoami");
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [includeDrivers, setIncludeDrivers] = useState(true);
 
   const hasRunning = useMemo(() => actions.some((a) => ["queued", "sent", "running"].includes(a.status)), [actions]);
 
@@ -103,14 +251,8 @@ export default function DeviceActionsPanel({ deviceId, online }: { deviceId: str
             <div className="mt-2 text-xs opacity-70">Device is currently {online ? "online" : "offline"}.</div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button className="hi5-btn-ghost text-sm" type="button" onClick={load} disabled={loading}>
-              Refresh
-            </button>
-            <button
-              className="hi5-btn-ghost text-sm"
-              type="button"
-              onClick={() => setAutoRefresh((v) => !v)}
-            >
+            <button className="hi5-btn-ghost text-sm" type="button" onClick={load} disabled={loading}>Refresh</button>
+            <button className="hi5-btn-ghost text-sm" type="button" onClick={() => setAutoRefresh((v) => !v)}>
               Auto-refresh: {autoRefresh ? "On" : "Off"}
             </button>
           </div>
@@ -122,33 +264,34 @@ export default function DeviceActionsPanel({ deviceId, online }: { deviceId: str
           <div className="hi5-panel p-4">
             <div className="text-sm font-semibold">Quick actions</div>
             <div className="mt-3 flex flex-wrap gap-2">
-              <button
-                className="hi5-btn-primary text-sm"
-                type="button"
-                onClick={() => createAction("refresh_inventory")}
-                disabled={loading}
-              >
+              <button className="hi5-btn-primary text-sm" type="button" onClick={() => createAction("refresh_inventory")} disabled={loading}>
                 Refresh inventory
               </button>
-              <button
-                className="hi5-btn-ghost text-sm"
-                type="button"
-                onClick={() => createAction("scan_windows_updates")}
-                disabled={loading}
-              >
+              <button className="hi5-btn-ghost text-sm" type="button" onClick={() => createAction("scan_windows_updates", { timeout_seconds: 1800 })} disabled={loading}>
                 Scan Windows Updates
               </button>
-              <button
-                className="hi5-btn-ghost text-sm"
-                type="button"
-                onClick={() => createAction("get_update_history")}
-                disabled={loading}
-              >
+              <button className="hi5-btn-ghost text-sm" type="button" onClick={() => createAction("get_update_history", { limit: 75 })} disabled={loading}>
                 Update history
               </button>
+              <button
+                className="hi5-btn-ghost text-sm border-orange-400/30 text-orange-200"
+                type="button"
+                onClick={() => {
+                  if (window.confirm("Install all pending Windows Updates on this device? Reboots are suppressed, but a reboot may be required afterwards.")) {
+                    createAction("install_windows_updates", { install_all: true, include_drivers: includeDrivers, timeout_seconds: 7200 });
+                  }
+                }}
+                disabled={loading}
+              >
+                Install all updates
+              </button>
             </div>
+            <label className="mt-3 flex items-center gap-2 text-xs opacity-75">
+              <input type="checkbox" checked={includeDrivers} onChange={(e) => setIncludeDrivers(e.target.checked)} />
+              Include driver updates during install
+            </label>
             <div className="mt-3 text-xs opacity-70">
-              Pass 1 agent executes inventory refresh and PowerShell. Windows Update actions are queued now and will be wired in the next pass.
+              Windows Update jobs run through the persistent action queue. They continue even if this page refreshes or you close the browser.
             </div>
           </div>
 
@@ -161,17 +304,10 @@ export default function DeviceActionsPanel({ deviceId, online }: { deviceId: str
               placeholder="Get-ComputerInfo | Select-Object CsName, OsName"
             />
             <div className="mt-3 flex gap-2">
-              <button
-                className="hi5-btn-primary text-sm"
-                type="button"
-                onClick={() => createAction("run_powershell", { command, timeout_seconds: 120 })}
-                disabled={loading || !command.trim()}
-              >
+              <button className="hi5-btn-primary text-sm" type="button" onClick={() => createAction("run_powershell", { command, timeout_seconds: 120 })} disabled={loading || !command.trim()}>
                 Queue command
               </button>
-              <button className="hi5-btn-ghost text-sm" type="button" onClick={() => setCommand("whoami")}>
-                Reset
-              </button>
+              <button className="hi5-btn-ghost text-sm" type="button" onClick={() => setCommand("whoami")}>Reset</button>
             </div>
           </div>
         </div>
@@ -197,9 +333,7 @@ export default function DeviceActionsPanel({ deviceId, online }: { deviceId: str
                       </div>
                       {a.message ? <div className="mt-1 text-sm opacity-80">{a.message}</div> : null}
                       {a.error_message ? <div className="mt-1 text-sm text-red-300">{a.error_message}</div> : null}
-                      {a.payload_json?.command ? (
-                        <pre className="mt-2 text-xs opacity-75 font-mono whitespace-pre-wrap break-words">{a.payload_json.command}</pre>
-                      ) : null}
+                      {a.payload_json?.command ? <pre className="mt-2 text-xs opacity-75 font-mono whitespace-pre-wrap break-words">{a.payload_json.command}</pre> : null}
                     </div>
                     <div className="text-xs opacity-70 whitespace-nowrap">Updated {fmtTime(a.updated_at)}</div>
                   </div>
@@ -208,10 +342,10 @@ export default function DeviceActionsPanel({ deviceId, online }: { deviceId: str
                     <div className="h-full bg-white/50" style={{ width: `${Math.max(0, Math.min(100, a.progress ?? 0))}%` }} />
                   </div>
 
-                  {typeof output === "string" && output.length > 0 ? (
-                    <pre className="mt-3 max-h-[240px] overflow-auto rounded-xl bg-black/40 p-3 text-xs font-mono whitespace-pre-wrap">
-                      {output}
-                    </pre>
+                  <WindowsUpdateResult action={a} />
+
+                  {typeof output === "string" && output.length > 0 && !["scan_windows_updates", "install_windows_updates", "get_update_history"].includes(a.action_type) ? (
+                    <pre className="mt-3 max-h-[240px] overflow-auto rounded-xl bg-black/40 p-3 text-xs font-mono whitespace-pre-wrap">{output}</pre>
                   ) : null}
                 </div>
               );
