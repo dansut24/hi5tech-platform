@@ -11,13 +11,16 @@ type ApiDevice = {
   last_seen_at?: string;
 };
 
-type JobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
+type JobStatus = "queued" | "sent" | "running" | "completed" | "succeeded" | "failed" | "cancelled";
 
 type JobRow = {
   id: string;
   created_at: string;
   status: JobStatus;
-  kind: "command";
+  progress?: number;
+  message?: string;
+  error_message?: string;
+  kind: string;
   command: string;
   targets: { device_id: string; hostname?: string }[];
 };
@@ -241,9 +244,11 @@ export default function JobsClient() {
                   <div className="min-w-0">
                     <div className="text-xs opacity-70">{fmtTime(j.created_at)}</div>
                     <div className="mt-1 font-semibold">
-                      {j.kind.toUpperCase()} · <span className="font-mono text-sm">{j.status}</span>
+                      {String(j.kind).toUpperCase()} · <span className="font-mono text-sm">{j.status}</span> · <span className="font-mono text-sm">{j.progress ?? 0}%</span>
                     </div>
                     <div className="mt-1 text-xs opacity-70 font-mono whitespace-pre-wrap break-words">{j.command}</div>
+                    {j.message ? <div className="mt-1 text-xs opacity-70">{j.message}</div> : null}
+                    {j.error_message ? <div className="mt-1 text-xs text-red-300">{j.error_message}</div> : null}
                     <div className="mt-2 text-xs opacity-70">
                       Targets: <span className="font-semibold">{j.targets?.length ?? 0}</span>
                     </div>
