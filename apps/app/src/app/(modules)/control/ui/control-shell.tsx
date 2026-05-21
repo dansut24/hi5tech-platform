@@ -8,10 +8,10 @@ import {
   FolderOpen,
   Settings,
   Activity,
-  CalendarClock,
   Bell,
   Search,
   PlusCircle,
+  PackageSearch,
 } from "lucide-react";
 import { AppShell, type ShellNavItem } from "@/components/shell";
 import AccountDropdown from "@/components/ui/account-dropdown";
@@ -33,7 +33,6 @@ const NAV: ShellNavItem[] = [
   { href: "/control/add-device", label: "Add Device", icon: <PlusCircle size={16} /> },
   { href: "/control/downloads", label: "Downloads", icon: <FolderOpen size={16} /> },
   { href: "/control/performance", label: "Performance", icon: <Activity size={16} /> },
-  { href: "/control/policies", label: "Policies", icon: <CalendarClock size={16} /> },
   { href: "/control/terminal", label: "Terminal", icon: <TerminalSquare size={16} /> },
   { href: "/control/files", label: "Files", icon: <FolderOpen size={16} /> },
   { href: "/control/settings", label: "Settings", icon: <Settings size={16} /> },
