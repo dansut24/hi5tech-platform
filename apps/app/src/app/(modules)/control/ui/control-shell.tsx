@@ -19,6 +19,11 @@ type Props = {
   children: ReactNode;
   user?: { name?: string | null; email?: string | null; role?: string | null } | null;
   tenantLabel?: string | null;
+
+  // Passed by the current control layout in newer platform builds.
+  // The shell does not need to inspect it yet, but accepting it keeps
+  // the layout contract compatible with feature-gated navigation later.
+  features?: unknown;
 };
 
 const NAV: ShellNavItem[] = [
