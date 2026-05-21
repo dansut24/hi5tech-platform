@@ -92,14 +92,14 @@ function actionFinished(action: ActionRecord) {
 
 function base64ToBlob(base64: string, mime = "application/octet-stream") {
   const binary = atob(base64);
-  const chunks: Uint8Array[] = [];
-  for (let offset = 0; offset < binary.length; offset += 8192) {
-    const slice = binary.slice(offset, offset + 8192);
-    const bytes = new Uint8Array(slice.length);
-    for (let i = 0; i < slice.length; i++) bytes[i] = slice.charCodeAt(i);
-    chunks.push(bytes);
+  const buffer = new ArrayBuffer(binary.length);
+  const bytes = new Uint8Array(buffer);
+
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
   }
-  return new Blob(chunks, { type: mime });
+
+  return new Blob([buffer], { type: mime });
 }
 
 async function fileToBase64(file: File) {
