@@ -176,6 +176,94 @@ function WindowsUpdateResult({ action }: { action: DeviceAction }) {
   );
 }
 
+
+function SoftwareUpdateResult({ action }: { action: DeviceAction }) {
+  const r = resultOf(action);
+  const updates = asArray(r.updates);
+  const results = asArray(r.results);
+
+  if (!["scan_software_updates", "install_software_updates"].includes(action.action_type)) {
+    return null;
+  }
+
+  return (
+    <div className="mt-3 space-y-3">
+      <div className="grid gap-2 md:grid-cols-4 text-xs">
+        {typeof r.count === "number" ? <Metric label="Available" value={String(r.count)} /> : null}
+        {typeof r.attempted_count === "number" ? <Metric label="Attempted" value={String(r.attempted_count)} /> : null}
+        {typeof r.failed_count === "number" ? <Metric label="Failed" value={String(r.failed_count)} /> : null}
+        {r.winget_version ? <Metric label="WinGet" value={String(r.winget_version)} /> : null}
+      </div>
+
+      {updates.length > 0 ? (
+        <div>
+          <div className="text-xs font-semibold opacity-80">Available third-party updates</div>
+          <div className="mt-2 overflow-auto rounded-xl border border-white/10">
+            <table className="min-w-full text-xs">
+              <thead className="bg-white/5 text-white/70">
+                <tr>
+                  <th className="text-left p-2">Name</th>
+                  <th className="text-left p-2">Package ID</th>
+                  <th className="text-left p-2">Current</th>
+                  <th className="text-left p-2">Available</th>
+                  <th className="text-left p-2">Source</th>
+                </tr>
+              </thead>
+              <tbody>
+                {updates.slice(0, 50).map((u, idx) => (
+                  <tr key={idx} className="border-t border-white/10">
+                    <td className="p-2 min-w-[220px]">{u.name || "—"}</td>
+                    <td className="p-2 whitespace-nowrap font-mono">{u.package_id || u.id || "—"}</td>
+                    <td className="p-2 whitespace-nowrap">{u.current_version || "—"}</td>
+                    <td className="p-2 whitespace-nowrap">{u.available_version || "—"}</td>
+                    <td className="p-2 whitespace-nowrap">{u.source || "winget"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {updates.length > 50 ? <div className="mt-1 text-xs opacity-60">Showing first 50 of {updates.length} software updates.</div> : null}
+        </div>
+      ) : null}
+
+      {results.length > 0 ? (
+        <div>
+          <div className="text-xs font-semibold opacity-80">Install results</div>
+          <div className="mt-2 overflow-auto rounded-xl border border-white/10">
+            <table className="min-w-full text-xs">
+              <thead className="bg-white/5 text-white/70">
+                <tr>
+                  <th className="text-left p-2">Package ID</th>
+                  <th className="text-left p-2">Status</th>
+                  <th className="text-left p-2">Exit</th>
+                  <th className="text-left p-2">Duration</th>
+                </tr>
+              </thead>
+              <tbody>
+                {results.map((u, idx) => (
+                  <tr key={idx} className="border-t border-white/10">
+                    <td className="p-2 whitespace-nowrap font-mono">{u.package_id || u.id || "—"}</td>
+                    <td className="p-2 whitespace-nowrap">{u.status || "—"}</td>
+                    <td className="p-2 whitespace-nowrap">{typeof u.exit_code === "number" ? u.exit_code : "—"}</td>
+                    <td className="p-2 whitespace-nowrap">{typeof u.duration_seconds === "number" ? `${u.duration_seconds}s` : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+
+      {typeof r.raw_output === "string" && r.raw_output.trim() ? (
+        <details className="rounded-xl border border-white/10 p-3">
+          <summary className="cursor-pointer text-xs font-semibold opacity-80">Raw WinGet output</summary>
+          <pre className="mt-3 max-h-[220px] overflow-auto rounded-xl bg-black/40 p-3 text-xs font-mono whitespace-pre-wrap">{r.raw_output}</pre>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
@@ -192,6 +280,7 @@ export default function DeviceActionsPanel({ deviceId, online }: { deviceId: str
   const [command, setCommand] = useState("whoami");
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [includeDrivers, setIncludeDrivers] = useState(true);
+  const [includeUnknownSoftware, setIncludeUnknownSoftware] = useState(true);
 
   const hasRunning = useMemo(() => actions.some((a) => ["queued", "sent", "running"].includes(a.status)), [actions]);
 
@@ -290,8 +379,34 @@ export default function DeviceActionsPanel({ deviceId, online }: { deviceId: str
               <input type="checkbox" checked={includeDrivers} onChange={(e) => setIncludeDrivers(e.target.checked)} />
               Include driver updates during install
             </label>
+
+            <div className="mt-4 border-t border-white/10 pt-3">
+              <div className="text-xs font-semibold opacity-80">Third-party software updates</div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button className="hi5-btn-ghost text-sm" type="button" onClick={() => createAction("scan_software_updates", { source: "winget", include_unknown: includeUnknownSoftware, timeout_seconds: 1800 })} disabled={loading}>
+                  Scan software updates
+                </button>
+                <button
+                  className="hi5-btn-ghost text-sm border-orange-400/30 text-orange-200"
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm("Install all available WinGet third-party software updates on this device? Some installers may not support fully silent upgrades.")) {
+                      createAction("install_software_updates", { install_all: true, source: "winget", include_unknown: includeUnknownSoftware, timeout_seconds: 7200 });
+                    }
+                  }}
+                  disabled={loading}
+                >
+                  Install software updates
+                </button>
+              </div>
+              <label className="mt-3 flex items-center gap-2 text-xs opacity-75">
+                <input type="checkbox" checked={includeUnknownSoftware} onChange={(e) => setIncludeUnknownSoftware(e.target.checked)} />
+                Include packages with unknown installed version
+              </label>
+            </div>
+
             <div className="mt-3 text-xs opacity-70">
-              Windows Update jobs run through the persistent action queue. They continue even if this page refreshes or you close the browser.
+              Windows Update and third-party software jobs run through the persistent action queue. They continue even if this page refreshes or you close the browser.
             </div>
           </div>
 
@@ -343,8 +458,9 @@ export default function DeviceActionsPanel({ deviceId, online }: { deviceId: str
                   </div>
 
                   <WindowsUpdateResult action={a} />
+                  <SoftwareUpdateResult action={a} />
 
-                  {typeof output === "string" && output.length > 0 && !["scan_windows_updates", "install_windows_updates", "get_update_history"].includes(a.action_type) ? (
+                  {typeof output === "string" && output.length > 0 && !["scan_windows_updates", "install_windows_updates", "get_update_history", "scan_software_updates", "install_software_updates"].includes(a.action_type) ? (
                     <pre className="mt-3 max-h-[240px] overflow-auto rounded-xl bg-black/40 p-3 text-xs font-mono whitespace-pre-wrap">{output}</pre>
                   ) : null}
                 </div>
