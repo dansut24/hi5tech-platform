@@ -11,8 +11,10 @@ function passthroughHeaders(): HeadersInit {
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const qs = url.searchParams.toString();
-  const target = `${RMM_API_BASE}/api/actions${qs ? `?${qs}` : ""}`;
+  const actionId = url.searchParams.get("action_id")?.trim();
+  const target = actionId
+    ? `${RMM_API_BASE}/api/actions/${encodeURIComponent(actionId)}`
+    : `${RMM_API_BASE}/api/actions${url.searchParams.toString() ? `?${url.searchParams.toString()}` : ""}`;
 
   const res = await fetch(target, {
     method: "GET",
