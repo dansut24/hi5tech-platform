@@ -32,6 +32,10 @@ type FormState = {
   include_drivers: boolean;
   software_mode: "scan" | "install_all";
   software_source: "winget" | "all";
+  software_selection_mode: "explicit" | "catalogue" | "critical";
+  software_auto_install_critical: boolean;
+  software_auto_install_approved: boolean;
+  software_auto_install_security: boolean;
   software_include_unknown: boolean;
   software_include_pinned: boolean;
   software_package_ids_text: string;
@@ -49,6 +53,10 @@ const DEFAULT_FORM: FormState = {
   include_drivers: false,
   software_mode: "scan",
   software_source: "winget",
+  software_selection_mode: "critical",
+  software_auto_install_critical: true,
+  software_auto_install_approved: true,
+  software_auto_install_security: true,
   software_include_unknown: true,
   software_include_pinned: false,
   software_package_ids_text: "",
@@ -116,6 +124,10 @@ function policyToForm(policy: Policy): FormState {
     include_drivers: settings.include_drivers === true,
     software_mode: (settings.mode as FormState["software_mode"]) || "scan",
     software_source: (settings.source as FormState["software_source"]) || "winget",
+    software_selection_mode: (settings.selection_mode as FormState["software_selection_mode"]) || "critical",
+    software_auto_install_critical: settings.auto_install_critical !== false,
+    software_auto_install_approved: settings.auto_install_approved !== false,
+    software_auto_install_security: settings.auto_install_security !== false,
     software_include_unknown: settings.include_unknown !== false,
     software_include_pinned: settings.include_pinned === true,
     software_package_ids_text: joinUnknownArray(settings.package_ids),
@@ -171,6 +183,10 @@ export default function PoliciesClient() {
       if (form.policy_type === "software_update") {
         settings.mode = form.software_mode;
         settings.source = form.software_source;
+        settings.selection_mode = form.software_selection_mode;
+        settings.auto_install_critical = form.software_auto_install_critical;
+        settings.auto_install_approved = form.software_auto_install_approved;
+        settings.auto_install_security = form.software_auto_install_security;
         settings.include_unknown = form.software_include_unknown;
         settings.include_pinned = form.software_include_pinned;
         settings.package_ids = parseTextList(form.software_package_ids_text);
@@ -314,6 +330,28 @@ export default function PoliciesClient() {
                     <option value="all">All configured WinGet sources</option>
                   </select>
                 </label>
+                <label className="block text-sm font-medium">
+                  Install selection
+                  <select value={form.software_selection_mode} onChange={(e) => setForm((f) => ({ ...f, software_selection_mode: e.target.value as FormState["software_selection_mode"] }))} className="mt-1 w-full rounded-xl border hi5-border bg-white px-3 py-2 dark:bg-neutral-900">
+                    <option value="critical">Critical/security + approved catalogue items</option>
+                    <option value="catalogue">Approved catalogue items only</option>
+                    <option value="explicit">Only explicit package IDs below</option>
+                  </select>
+                </label>
+                <div className="grid gap-2 rounded-xl border hi5-border bg-white p-3 text-sm dark:bg-neutral-950">
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={form.software_auto_install_critical} onChange={(e) => setForm((f) => ({ ...f, software_auto_install_critical: e.target.checked }))} />
+                    Auto-install critical catalogue packages
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={form.software_auto_install_security} onChange={(e) => setForm((f) => ({ ...f, software_auto_install_security: e.target.checked }))} />
+                    Auto-install packages flagged by CVE/security metadata
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={form.software_auto_install_approved} onChange={(e) => setForm((f) => ({ ...f, software_auto_install_approved: e.target.checked }))} />
+                    Auto-install packages marked “Auto update” in the catalogue
+                  </label>
+                </div>
                 <label className="flex items-center gap-2 text-sm">
                   <input type="checkbox" checked={form.software_include_unknown} onChange={(e) => setForm((f) => ({ ...f, software_include_unknown: e.target.checked }))} />
                   Include packages with unknown installed version
