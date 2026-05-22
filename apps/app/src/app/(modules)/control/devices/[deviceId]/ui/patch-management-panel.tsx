@@ -144,7 +144,7 @@ export default function PatchManagementPanel({ deviceId }: Props) {
                   {item.reason}
                 </p>
 
-                {item.matchedWingetId && (
+                {item.matchedWingetId && item.updateAvailable && (
                   <div className="mt-4 flex flex-wrap gap-2">
                     <PolicyButton
                       label="Allow"
