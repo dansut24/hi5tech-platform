@@ -7,6 +7,29 @@ function headers() {
   };
 }
 
+export async function syncDeviceSoftwareInventory(payload: {
+  externalDeviceId: string;
+  hostname?: string;
+  tenantId?: string;
+  osName?: string;
+  osVersion?: string;
+  software: Array<{
+    name: string;
+    vendor?: string;
+    version?: string;
+    installLocation?: string;
+    uninstallString?: string;
+  }>;
+}) {
+  const res = await fetch(`${BASE_URL}/api/device/software-inventory`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(payload)
+  });
+
+  return res.json();
+}
+
 export async function getPatchPlan(externalDeviceId: string) {
   const res = await fetch(
     `${BASE_URL}/api/device/patch-plan?externalDeviceId=${encodeURIComponent(
