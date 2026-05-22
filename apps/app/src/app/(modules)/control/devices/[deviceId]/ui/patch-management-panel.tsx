@@ -1,4 +1,138 @@
 "use client";
+
+import { useEffect, useState } from "react";
+
+type Props = {
+  deviceId: string;
+};
+
+export default function PatchManagementPanel({ deviceId }: Props) {
+  const [plan, setPlan] = useState<any>(null);
+  const [tasks, setTasks] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+
+  async function load() {
+    setLoading(true);
+
+    try {
+      const [planRes, tasksRes] = await Promise.all([
+        fetch(`/api/admin/devices/${deviceId}/patch-plan`, { cache: "no-store" }),
+        fetch(`/api/admin/devices/${deviceId}/patch-tasks`, { cache: "no-store" })
+      ]);
+
+      setPlan(await planRes.json());
+      setTasks(await tasksRes.json());
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function createTasks() {
+    setCreating(true);
+
+    try {
+      await fetch(`/api/admin/devices/${deviceId}/patch-tasks/create`, {
+        method: "POST"
+      });
+
+      await load();
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  useEffect(() => {
+    load();
+  }, [deviceId]);
+
+  if (loading) {
+    return (
+      <section className="hi5-card hi5-border rounded-3xl border p-6">
+        <p className="text-sm text-neutral-500 dark:text-neutral-400">
+          Loading patch management...
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="hi5-card hi5-border rounded-3xl border p-6">
+      <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">Patch Management</h2>
+          <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
+            Policy: {plan?.policyName || "No policy assigned"}
+          </p>
+        </div>
+
+        <button
+          onClick={createTasks}
+          disabled={creating || !plan?.approvedCount}
+          className="rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black"
+        >
+          {creating ? "Creating tasks..." : "Create patch tasks"}
+        </button>
+      </div>
+
+      <div className="mb-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <StatCard label="Updates" value={plan?.updateCount || 0} />
+        <StatCard label="Approved" value={plan?.approvedCount || 0} />
+        <StatCard label="Needs approval" value={plan?.requiresApprovalCount || 0} />
+        <StatCard label="Critical" value={plan?.criticalCount || 0} />
+      </div>
+
+      <div className="space-y-3">
+        {(plan?.items || []).map((item: any) => (
+          <div
+            key={`${item.matchedWingetId}-${item.installedVersion}`}
+            className="rounded-2xl border border-black/10 bg-black/[0.03] p-4 dark:border-white/10 dark:bg-white/[0.03]"
+          >
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="font-semibold">{item.name}</h3>
+                  <DecisionBadge value={item.policyDecision || "unknown"} />
+                </div>
+
+                <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                  {item.vendor}
+                </p>
+
+                <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">
+                  {item.installedVersion} → {item.latestVersion}
+                </p>
+
+                <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                  {item.matchedWingetId}
+                </p>
+
+                <p className="mt-3 text-xs text-neutral-500 dark:text-neutral-400">
+                  {item.reason}
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-black/10 bg-white px-3 py-2 text-xs dark:border-white/10 dark:bg-black/20">
+                <p className="font-semibold">
+                  Source: {item.source?.sourceName || "Unknown"}
+                </p>
+                <p className="mt-1 text-neutral-500 dark:text-neutral-400">
+                  {item.source?.sourceType || "unknown"}
+                </p>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-8">
+        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+          Patch Tasks
+        </h3>
+
+        {(tasks?.tasks || []).length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-black/15 p-5 text-sm text-neutral-500 dark:border-white/10 dark:text-neutral-400">
+            No patch tasks found.
           </div>
         ) : (
           <div className="space-y-2">
@@ -9,15 +143,12 @@
               >
                 <div>
                   <p className="font-semibold">{task.software_name}</p>
-
                   <p className="text-xs text-neutral-500 dark:text-neutral-400">
                     {task.installed_version} → {task.target_version}
                   </p>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <DecisionBadge value={task.status} />
-                </div>
+                <DecisionBadge value={task.status || "unknown"} />
               </div>
             ))}
           </div>
@@ -27,17 +158,10 @@
   );
 }
 
-function StatCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: number;
-}) {
+function StatCard({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-4 dark:border-white/10 dark:bg-white/[0.03]">
       <p className="text-2xl font-bold">{value}</p>
-
       <p className="mt-1 text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
         {label}
       </p>
