@@ -8,6 +8,7 @@ import ActivityPanel from "./ui/activity-panel";
 import InventoryRefreshPanel from "./ui/inventory-refresh-panel";
 import RemotePanel from "./ui/remote-panel";
 import DeviceActionsPanel from "./ui/device-actions-panel";
+import PatchManagementPanel from "./ui/patch-management-panel";
 import AssetLinkPanel from "../../ui/asset-link-panel";
 import CreateIncidentFromDeviceButton from "../../ui/create-incident-from-device-button";
 import DeviceTicketsPanel from "../../ui/device-tickets-panel";
@@ -1555,7 +1556,12 @@ export default async function DevicePage({
         />
       ) : null}
 
-      {tab === "patching" ? <UpdatesTab inventory={inventory} /> : null}
+      {tab === "patching" ? (
+        <div className="space-y-4">
+          <PatchManagementPanel deviceId={device.device_id} />
+          <UpdatesTab inventory={inventory} />
+        </div>
+      ) : null}
 
       {tab === "events" ? <EventHealthTab inventory={inventory} /> : null}
 
