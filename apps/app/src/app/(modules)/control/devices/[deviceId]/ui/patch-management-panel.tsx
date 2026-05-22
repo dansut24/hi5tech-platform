@@ -6,11 +6,14 @@ type Props = {
   deviceId: string;
 };
 
+type PolicyDecision = "allow" | "manual" | "block" | "unlisted";
+
 export default function PatchManagementPanel({ deviceId }: Props) {
   const [plan, setPlan] = useState<any>(null);
   const [tasks, setTasks] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [updatingDecision, setUpdatingDecision] = useState("");
 
   async function load() {
     setLoading(true);
@@ -42,6 +45,33 @@ export default function PatchManagementPanel({ deviceId }: Props) {
     }
   }
 
+  async function updatePolicyDecision(
+    wingetId: string,
+    decision: PolicyDecision
+  ) {
+    if (!plan?.policyId || !wingetId) return;
+
+    setUpdatingDecision(`${wingetId}-${decision}`);
+
+    try {
+      await fetch("/api/admin/patch-policies/apps", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          policyId: plan.policyId,
+          wingetId,
+          decision
+        })
+      });
+
+      await load();
+    } finally {
+      setUpdatingDecision("");
+    }
+  }
+
   useEffect(() => {
     load();
   }, [deviceId]);
@@ -60,7 +90,10 @@ export default function PatchManagementPanel({ deviceId }: Props) {
     <section className="hi5-card hi5-border rounded-3xl border p-6">
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h2 className="text-xl font-semibold tracking-tight">Patch Management</h2>
+          <h2 className="text-xl font-semibold tracking-tight">
+            Patch Management
+          </h2>
+
           <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
             Policy: {plan?.policyName || "No policy assigned"}
           </p>
@@ -110,12 +143,57 @@ export default function PatchManagementPanel({ deviceId }: Props) {
                 <p className="mt-3 text-xs text-neutral-500 dark:text-neutral-400">
                   {item.reason}
                 </p>
+
+                {item.matchedWingetId && (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <PolicyButton
+                      label="Allow"
+                      colour="emerald"
+                      disabled={Boolean(updatingDecision)}
+                      loading={updatingDecision === `${item.matchedWingetId}-allow`}
+                      onClick={() =>
+                        updatePolicyDecision(item.matchedWingetId, "allow")
+                      }
+                    />
+
+                    <PolicyButton
+                      label="Manual"
+                      colour="amber"
+                      disabled={Boolean(updatingDecision)}
+                      loading={updatingDecision === `${item.matchedWingetId}-manual`}
+                      onClick={() =>
+                        updatePolicyDecision(item.matchedWingetId, "manual")
+                      }
+                    />
+
+                    <PolicyButton
+                      label="Block"
+                      colour="rose"
+                      disabled={Boolean(updatingDecision)}
+                      loading={updatingDecision === `${item.matchedWingetId}-block`}
+                      onClick={() =>
+                        updatePolicyDecision(item.matchedWingetId, "block")
+                      }
+                    />
+
+                    <PolicyButton
+                      label="Unlisted"
+                      colour="neutral"
+                      disabled={Boolean(updatingDecision)}
+                      loading={updatingDecision === `${item.matchedWingetId}-unlisted`}
+                      onClick={() =>
+                        updatePolicyDecision(item.matchedWingetId, "unlisted")
+                      }
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="rounded-xl border border-black/10 bg-white px-3 py-2 text-xs dark:border-white/10 dark:bg-black/20">
                 <p className="font-semibold">
                   Source: {item.source?.sourceName || "Unknown"}
                 </p>
+
                 <p className="mt-1 text-neutral-500 dark:text-neutral-400">
                   {item.source?.sourceType || "unknown"}
                 </p>
@@ -143,6 +221,7 @@ export default function PatchManagementPanel({ deviceId }: Props) {
               >
                 <div>
                   <p className="font-semibold">{task.software_name}</p>
+
                   <p className="text-xs text-neutral-500 dark:text-neutral-400">
                     {task.installed_version} → {task.target_version}
                   </p>
@@ -162,10 +241,42 @@ function StatCard({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-4 dark:border-white/10 dark:bg-white/[0.03]">
       <p className="text-2xl font-bold">{value}</p>
+
       <p className="mt-1 text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
         {label}
       </p>
     </div>
+  );
+}
+
+function PolicyButton({
+  label,
+  colour,
+  disabled,
+  loading,
+  onClick
+}: {
+  label: string;
+  colour: "emerald" | "amber" | "rose" | "neutral";
+  disabled: boolean;
+  loading: boolean;
+  onClick: () => void;
+}) {
+  const classes = {
+    emerald: "bg-emerald-600 text-white",
+    amber: "bg-amber-500 text-white",
+    rose: "bg-rose-600 text-white",
+    neutral: "bg-neutral-200 text-neutral-900 dark:bg-neutral-700 dark:text-white"
+  };
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${classes[colour]}`}
+    >
+      {loading ? "Saving..." : label}
+    </button>
   );
 }
 
