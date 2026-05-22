@@ -10,7 +10,7 @@ export async function POST(
     return NextResponse.json(data);
   } catch (error: any) {
     return NextResponse.json(
-      { ok: false, error: error.message },
+      { ok: false, error: error.message || "Failed to create patch tasks" },
       { status: 500 }
     );
   }
