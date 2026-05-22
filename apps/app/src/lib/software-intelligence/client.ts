@@ -44,3 +44,17 @@ export async function getPatchTasks(externalDeviceId: string) {
 
   return res.json();
 }
+
+export async function updatePatchPolicyAppDecision(input: {
+  policyId: string;
+  wingetId: string;
+  decision: "allow" | "manual" | "block" | "unlisted";
+}) {
+  const res = await fetch(`${BASE_URL}/api/policies/apps`, {
+    method: "POST",
+    headers: headers(),
+    body: JSON.stringify(input)
+  });
+
+  return res.json();
+}
