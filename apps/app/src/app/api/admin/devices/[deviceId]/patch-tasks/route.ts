@@ -1,12 +1,14 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getPatchTasks } from "@/lib/software-intelligence/client";
 
 export async function GET(
-  request: Request,
-  { params }: { params: { deviceId: string } }
+  request: NextRequest,
+  context: { params: Promise<{ deviceId: string }> }
 ) {
   try {
-    const data = await getPatchTasks(params.deviceId);
+    const { deviceId } = await context.params;
+    const data = await getPatchTasks(deviceId);
+
     return NextResponse.json(data);
   } catch (error: any) {
     return NextResponse.json(
