@@ -1,6 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
+export async function GET(
+  request: NextRequest,
+  context: { params: Promise<{ deviceId: string }> }
+) {
+  const { deviceId } = await context.params;
+
+  return NextResponse.json({
+    ok: true,
+    message: "Patch jobs endpoint is online. Use POST with approved patch-plan items.",
+    deviceId,
+    exampleBody: {
+      tenantId: "demo",
+      items: [
+        {
+          name: "Google Chrome",
+          vendor: "Google LLC",
+          installedVersion: "148.0.7778.179",
+          latestVersion: "149.0.7827.22",
+          matchedWingetId: "Google.Chrome",
+          updateAvailable: true,
+          approved: true,
+          source: {
+            execution: {
+              executionType: "winget",
+              command:
+                "winget upgrade --id Google.Chrome --silent --accept-package-agreements --accept-source-agreements",
+              installCommand:
+                "winget upgrade --id Google.Chrome --silent --accept-package-agreements --accept-source-agreements",
+              requiresDownload: false
+            }
+          }
+        }
+      ]
+    }
+  });
+}
+
 export async function POST(
   request: NextRequest,
   context: { params: Promise<{ deviceId: string }> }
