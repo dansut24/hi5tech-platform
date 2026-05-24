@@ -5,6 +5,7 @@ import {
   getPatchPlanRiskKey,
   syncDeviceSoftwareInventory
 } from "@/lib/software-intelligence/client";
+import { lookupPatchPackages } from "@/lib/software-intelligence-client";
 import { getPatchRiskPriority } from "@/lib/patch-risk-policy";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -63,6 +64,97 @@ function extractOsName(inventory: any) {
 
 function extractOsVersion(inventory: any) {
   return firstValue(inventory?.os, ["version", "display_version", "build"], "");
+}
+
+function uniqueStrings(values: any[]) {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+function buildSourceFromPatchPackage(patchPackage: any, fallbackSource: any) {
+  if (!patchPackage) {
+    return fallbackSource;
+  }
+
+  const command =
+    patchPackage.command ||
+    patchPackage.upgradeCommand ||
+    patchPackage.installCommand ||
+    "";
+
+  return {
+    sourceType: patchPackage.packageSource || "software_intelligence",
+    sourceName:
+      patchPackage.packageName ||
+      patchPackage.packageSource ||
+      "Software Intelligence",
+    trusted: Boolean(patchPackage.trusted),
+    verified: Boolean(patchPackage.verified),
+    priority: patchPackage.verified ? 1 : 10,
+    packageId: patchPackage.wingetId || "",
+    version: patchPackage.version || "",
+    installerType: patchPackage.installerType || "",
+    architecture: patchPackage.architecture || "",
+    downloadUrl: patchPackage.downloadUrl || "",
+    packageUrl: patchPackage.packageUrl || "",
+    installerSha256: patchPackage.installerSha256 || "",
+    signatureSubject: patchPackage.signatureSubject || "",
+    command,
+    execution: {
+      executionType: patchPackage.executionType || "winget",
+      command,
+      downloadUrl: patchPackage.downloadUrl || "",
+      localFileName: "",
+      installCommand:
+        patchPackage.upgradeCommand ||
+        patchPackage.installCommand ||
+        command,
+      verifySha256: patchPackage.installerSha256 || "",
+      requiresDownload: Boolean(patchPackage.downloadUrl)
+    },
+    fallbackSource
+  };
+}
+
+async function enrichPatchPlanWithPatchPackages(items: any[]) {
+  const wingetIds = uniqueStrings(items.map((item: any) => item.matchedWingetId));
+
+  if (wingetIds.length === 0) {
+    return items;
+  }
+
+  const patchPackages = await lookupPatchPackages(wingetIds);
+
+  return items.map((item: any) => {
+    const patchPackage = patchPackages.get(item.matchedWingetId);
+
+    if (!patchPackage) {
+      return item;
+    }
+
+    const source = buildSourceFromPatchPackage(patchPackage, item.source);
+
+    return {
+      ...item,
+      latestVersion: source.version || item.latestVersion,
+      source,
+      command: source.command || item.command || "",
+      patchPackage: {
+        packageSource: patchPackage.packageSource,
+        packageName: patchPackage.packageName,
+        wingetId: patchPackage.wingetId,
+        version: patchPackage.version,
+        executionType: patchPackage.executionType,
+        trusted: patchPackage.trusted,
+        verified: patchPackage.verified
+      }
+    };
+  });
 }
 
 async function enrichPatchPlanWithCveRisk(items: any[]) {
@@ -139,7 +231,9 @@ export async function GET(
 
     const data = await getPatchPlan(deviceId);
     const items = asArray(data?.items);
-    const enrichedItems = await enrichPatchPlanWithCveRisk(items);
+
+    const packageEnrichedItems = await enrichPatchPlanWithPatchPackages(items);
+    const enrichedItems = await enrichPatchPlanWithCveRisk(packageEnrichedItems);
 
     const criticalCount = enrichedItems.filter((item: any) =>
       ["urgent", "critical"].includes(item.riskPriority)
