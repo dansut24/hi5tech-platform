@@ -3,7 +3,8 @@ const BASE_URL = process.env.SOFTWARE_INTELLIGENCE_API_URL;
 function headers() {
   return {
     "Content-Type": "application/json",
-    "x-api-key": process.env.SOFTWARE_INTELLIGENCE_API_KEY || ""
+    "x-api-key": process.env.SOFTWARE_INTELLIGENCE_API_KEY || "",
+    "x-hi5-shared-secret": process.env.SOFTWARE_INTELLIGENCE_SHARED_SECRET || ""
   };
 }
 
@@ -42,6 +43,56 @@ export async function getPatchPlan(externalDeviceId: string) {
   );
 
   return res.json();
+}
+
+export async function getPatchPlanCveRisks(
+  items: Array<{
+    name: string;
+    vendor?: string;
+    installedVersion?: string;
+    matchedSoftwareId?: string | null;
+    matchedWingetId?: string | null;
+  }>
+) {
+  if (!BASE_URL || items.length === 0) {
+    return {};
+  }
+
+  try {
+    const res = await fetch(`${BASE_URL}/api/rmm/cve-risk`, {
+      method: "POST",
+      headers: headers(),
+      cache: "no-store",
+      body: JSON.stringify({ items })
+    });
+
+    if (!res.ok) {
+      return {};
+    }
+
+    const json = await res.json();
+
+    if (!json.ok) {
+      return {};
+    }
+
+    return json.risks || {};
+  } catch {
+    return {};
+  }
+}
+
+export function getPatchPlanRiskKey(item: {
+  name: string;
+  vendor?: string;
+  matchedSoftwareId?: string | null;
+  matchedWingetId?: string | null;
+}) {
+  return (
+    item.matchedSoftwareId ||
+    item.matchedWingetId ||
+    `${item.vendor || ""}:${item.name || ""}`
+  );
 }
 
 export async function createPatchTasks(externalDeviceId: string) {
