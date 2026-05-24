@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getPatchPlan, syncDeviceSoftwareInventory } from "@/lib/software-intelligence/client";
+import {
+  getPatchPlan,
+  getPatchPlanCveRisks,
+  getPatchPlanRiskKey,
+  syncDeviceSoftwareInventory
+} from "@/lib/software-intelligence/client";
+import { getPatchRiskPriority } from "@/lib/patch-risk-policy";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 function asArray(value: any): any[] {
@@ -59,6 +65,46 @@ function extractOsVersion(inventory: any) {
   return firstValue(inventory?.os, ["version", "display_version", "build"], "");
 }
 
+async function enrichPatchPlanWithCveRisk(items: any[]) {
+  const cveRisks = await getPatchPlanCveRisks(
+    items.map((item: any) => ({
+      name: item.name,
+      vendor: item.vendor,
+      installedVersion: item.installedVersion,
+      matchedSoftwareId: item.matchedSoftwareId,
+      matchedWingetId: item.matchedWingetId
+    }))
+  );
+
+  return items.map((item: any) => {
+    const risk = cveRisks[getPatchPlanRiskKey(item)];
+
+    const enrichedItem = risk
+      ? {
+          ...item,
+          riskSeverity: risk.riskSeverity || item.riskSeverity || "None",
+          cvssScore: Number(risk.cvssScore || item.cvssScore || 0),
+          knownExploited: Boolean(risk.knownExploited || item.knownExploited),
+          cveCount: Number(risk.cveCount || 0),
+          affectedCves: risk.affectedCves || []
+        }
+      : {
+          ...item,
+          cveCount: Number(item.cveCount || 0),
+          affectedCves: item.affectedCves || []
+        };
+
+    const priority = getPatchRiskPriority(enrichedItem);
+
+    return {
+      ...enrichedItem,
+      riskPriority: priority.priority,
+      riskLabel: priority.label,
+      riskReason: priority.reason
+    };
+  });
+}
+
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ deviceId: string }> }
@@ -92,9 +138,17 @@ export async function GET(
     }
 
     const data = await getPatchPlan(deviceId);
+    const items = asArray(data?.items);
+    const enrichedItems = await enrichPatchPlanWithCveRisk(items);
+
+    const criticalCount = enrichedItems.filter((item: any) =>
+      ["urgent", "critical"].includes(item.riskPriority)
+    ).length;
 
     return NextResponse.json({
       ...data,
+      items: enrichedItems,
+      criticalCount,
       rmmInventorySynced: software.length,
       rmmDeviceId: deviceId
     });
