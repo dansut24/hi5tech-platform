@@ -45,10 +45,7 @@ export default function PatchManagementPanel({ deviceId }: Props) {
     }
   }
 
-  async function updatePolicyDecision(
-    wingetId: string,
-    decision: PolicyDecision
-  ) {
+  async function updatePolicyDecision(wingetId: string, decision: PolicyDecision) {
     if (!plan?.policyId || !wingetId) return;
 
     setUpdatingDecision(`${wingetId}-${decision}`);
@@ -90,10 +87,7 @@ export default function PatchManagementPanel({ deviceId }: Props) {
     <section className="hi5-card hi5-border rounded-3xl border p-6">
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <h2 className="text-xl font-semibold tracking-tight">
-            Patch Management
-          </h2>
-
+          <h2 className="text-xl font-semibold tracking-tight">Patch Management</h2>
           <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
             Policy: {plan?.policyName || "No policy assigned"}
           </p>
@@ -108,17 +102,23 @@ export default function PatchManagementPanel({ deviceId }: Props) {
         </button>
       </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 xl:grid-cols-5">
         <StatCard label="Updates" value={plan?.updateCount || 0} />
         <StatCard label="Approved" value={plan?.approvedCount || 0} />
         <StatCard label="Needs approval" value={plan?.requiresApprovalCount || 0} />
         <StatCard label="Critical" value={plan?.criticalCount || 0} />
+        <StatCard
+          label="Security risk"
+          value={(plan?.items || []).filter((item: any) =>
+            ["urgent", "critical", "high", "unsupported-risk"].includes(item.riskPriority)
+          ).length}
+        />
       </div>
 
       <div className="space-y-3">
         {(plan?.items || []).map((item: any) => (
           <div
-            key={`${item.matchedWingetId}-${item.installedVersion}`}
+            key={`${item.name}-${item.matchedWingetId}-${item.installedVersion}`}
             className="rounded-2xl border border-black/10 bg-black/[0.03] p-4 dark:border-white/10 dark:bg-white/[0.03]"
           >
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -126,23 +126,57 @@ export default function PatchManagementPanel({ deviceId }: Props) {
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="font-semibold">{item.name}</h3>
                   <DecisionBadge value={item.policyDecision || "unknown"} />
+                  <RiskBadge priority={item.riskPriority} label={item.riskLabel} />
+                  {item.knownExploited && <KevBadge />}
                 </div>
 
                 <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-                  {item.vendor}
+                  {item.vendor || "Unknown vendor"}
                 </p>
 
                 <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">
-                  {item.installedVersion} → {item.latestVersion}
+                  {item.installedVersion || "unknown"} → {item.latestVersion || "No update available"}
                 </p>
 
                 <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-                  {item.matchedWingetId}
+                  {item.matchedWingetId || "No package match"}
                 </p>
 
+                <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                  <InfoPill label="CVEs" value={item.cveCount || 0} />
+                  <InfoPill label="CVSS" value={item.cvssScore || 0} />
+                  <InfoPill label="Risk" value={item.riskSeverity || "None"} />
+                </div>
+
                 <p className="mt-3 text-xs text-neutral-500 dark:text-neutral-400">
-                  {item.reason}
+                  {item.riskReason || item.reason}
                 </p>
+
+                {(item.affectedCves || []).length > 0 && (
+                  <div className="mt-3 rounded-2xl border border-rose-500/20 bg-rose-500/5 p-3">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-rose-700 dark:text-rose-300">
+                      Affected CVEs
+                    </p>
+
+                    <div className="space-y-2">
+                      {item.affectedCves.slice(0, 5).map((cve: any) => (
+                        <div
+                          key={cve.cveId}
+                          className="flex flex-wrap items-center gap-2 text-xs text-neutral-700 dark:text-neutral-300"
+                        >
+                          <span className="font-semibold">{cve.cveId}</span>
+                          <span>{cve.severity || "Unknown"}</span>
+                          <span>CVSS {cve.cvssScore || 0}</span>
+                          {cve.knownExploited && (
+                            <span className="rounded-full bg-rose-600 px-2 py-0.5 font-semibold text-white">
+                              KEV
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {item.matchedWingetId && item.updateAvailable && (
                   <div className="mt-4 flex flex-wrap gap-2">
@@ -151,9 +185,7 @@ export default function PatchManagementPanel({ deviceId }: Props) {
                       colour="emerald"
                       disabled={Boolean(updatingDecision)}
                       loading={updatingDecision === `${item.matchedWingetId}-allow`}
-                      onClick={() =>
-                        updatePolicyDecision(item.matchedWingetId, "allow")
-                      }
+                      onClick={() => updatePolicyDecision(item.matchedWingetId, "allow")}
                     />
 
                     <PolicyButton
@@ -161,9 +193,7 @@ export default function PatchManagementPanel({ deviceId }: Props) {
                       colour="amber"
                       disabled={Boolean(updatingDecision)}
                       loading={updatingDecision === `${item.matchedWingetId}-manual`}
-                      onClick={() =>
-                        updatePolicyDecision(item.matchedWingetId, "manual")
-                      }
+                      onClick={() => updatePolicyDecision(item.matchedWingetId, "manual")}
                     />
 
                     <PolicyButton
@@ -171,9 +201,7 @@ export default function PatchManagementPanel({ deviceId }: Props) {
                       colour="rose"
                       disabled={Boolean(updatingDecision)}
                       loading={updatingDecision === `${item.matchedWingetId}-block`}
-                      onClick={() =>
-                        updatePolicyDecision(item.matchedWingetId, "block")
-                      }
+                      onClick={() => updatePolicyDecision(item.matchedWingetId, "block")}
                     />
 
                     <PolicyButton
@@ -181,9 +209,7 @@ export default function PatchManagementPanel({ deviceId }: Props) {
                       colour="neutral"
                       disabled={Boolean(updatingDecision)}
                       loading={updatingDecision === `${item.matchedWingetId}-unlisted`}
-                      onClick={() =>
-                        updatePolicyDecision(item.matchedWingetId, "unlisted")
-                      }
+                      onClick={() => updatePolicyDecision(item.matchedWingetId, "unlisted")}
                     />
                   </div>
                 )}
@@ -197,6 +223,12 @@ export default function PatchManagementPanel({ deviceId }: Props) {
                 <p className="mt-1 text-neutral-500 dark:text-neutral-400">
                   {item.source?.sourceType || "unknown"}
                 </p>
+
+                {item.source?.execution?.executionType && (
+                  <p className="mt-1 text-neutral-500 dark:text-neutral-400">
+                    Execution: {item.source.execution.executionType}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -241,11 +273,67 @@ function StatCard({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-2xl border border-black/10 bg-black/[0.03] p-4 dark:border-white/10 dark:bg-white/[0.03]">
       <p className="text-2xl font-bold">{value}</p>
-
       <p className="mt-1 text-xs uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
         {label}
       </p>
     </div>
+  );
+}
+
+function InfoPill({ label, value }: { label: string; value: string | number }) {
+  return (
+    <span className="rounded-full border border-black/10 bg-white px-2.5 py-1 text-neutral-600 dark:border-white/10 dark:bg-black/20 dark:text-neutral-300">
+      {label}: <strong>{value}</strong>
+    </span>
+  );
+}
+
+function KevBadge() {
+  return (
+    <span className="inline-flex items-center rounded-full border border-rose-500/20 bg-rose-500/10 px-2.5 py-1 text-xs font-semibold text-rose-700 dark:text-rose-300">
+      Known exploited
+    </span>
+  );
+}
+
+function RiskBadge({
+  priority,
+  label
+}: {
+  priority?: string;
+  label?: string;
+}) {
+  const normalised = String(priority || "none").toLowerCase();
+
+  let classes =
+    "border-neutral-500/20 bg-neutral-500/10 text-neutral-700 dark:text-neutral-300";
+
+  if (normalised === "routine") {
+    classes =
+      "border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-300";
+  }
+
+  if (normalised === "high") {
+    classes =
+      "border-orange-500/20 bg-orange-500/10 text-orange-700 dark:text-orange-300";
+  }
+
+  if (normalised === "critical" || normalised === "urgent") {
+    classes =
+      "border-rose-500/20 bg-rose-500/10 text-rose-700 dark:text-rose-300";
+  }
+
+  if (normalised === "unsupported-risk") {
+    classes =
+      "border-purple-500/20 bg-purple-500/10 text-purple-700 dark:text-purple-300";
+  }
+
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-semibold ${classes}`}
+    >
+      {label || "No action required"}
+    </span>
   );
 }
 
