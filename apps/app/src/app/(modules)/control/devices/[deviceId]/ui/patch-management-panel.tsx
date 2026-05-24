@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 type Props = {
   deviceId: string;
@@ -8,12 +8,31 @@ type Props = {
 
 type PolicyDecision = "allow" | "manual" | "block" | "unlisted";
 
+const filters = [
+  { key: "all", label: "All" },
+  { key: "security", label: "Security risk" },
+  { key: "routine", label: "Routine updates" },
+  { key: "approved", label: "Approved" },
+  { key: "blocked", label: "Blocked" },
+  { key: "none", label: "No action" }
+];
+
+const priorityRank: Record<string, number> = {
+  urgent: 1,
+  critical: 2,
+  high: 3,
+  "unsupported-risk": 4,
+  routine: 5,
+  none: 6
+};
+
 export default function PatchManagementPanel({ deviceId }: Props) {
   const [plan, setPlan] = useState<any>(null);
   const [tasks, setTasks] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [updatingDecision, setUpdatingDecision] = useState("");
+  const [activeFilter, setActiveFilter] = useState("all");
 
   async function load() {
     setLoading(true);
@@ -73,6 +92,56 @@ export default function PatchManagementPanel({ deviceId }: Props) {
     load();
   }, [deviceId]);
 
+  const sortedItems = useMemo(() => {
+    const items = Array.isArray(plan?.items) ? [...plan.items] : [];
+
+    return items.sort((a: any, b: any) => {
+      const ar = priorityRank[String(a.riskPriority || "none")] || 99;
+      const br = priorityRank[String(b.riskPriority || "none")] || 99;
+
+      if (ar !== br) return ar - br;
+
+      if (Number(b.cvssScore || 0) !== Number(a.cvssScore || 0)) {
+        return Number(b.cvssScore || 0) - Number(a.cvssScore || 0);
+      }
+
+      if (Number(b.updateAvailable || 0) !== Number(a.updateAvailable || 0)) {
+        return Number(b.updateAvailable || 0) - Number(a.updateAvailable || 0);
+      }
+
+      return String(a.name || "").localeCompare(String(b.name || ""));
+    });
+  }, [plan]);
+
+  const filteredItems = useMemo(() => {
+    return sortedItems.filter((item: any) => {
+      const riskPriority = String(item.riskPriority || "none");
+      const policyDecision = String(item.policyDecision || "").toLowerCase();
+
+      if (activeFilter === "security") {
+        return ["urgent", "critical", "high", "unsupported-risk"].includes(riskPriority);
+      }
+
+      if (activeFilter === "routine") {
+        return riskPriority === "routine";
+      }
+
+      if (activeFilter === "approved") {
+        return policyDecision.includes("approved") || item.approved;
+      }
+
+      if (activeFilter === "blocked") {
+        return policyDecision.includes("block");
+      }
+
+      if (activeFilter === "none") {
+        return riskPriority === "none" && !item.updateAvailable;
+      }
+
+      return true;
+    });
+  }, [sortedItems, activeFilter]);
+
   if (loading) {
     return (
       <section className="hi5-card hi5-border rounded-3xl border p-6">
@@ -115,8 +184,28 @@ export default function PatchManagementPanel({ deviceId }: Props) {
         />
       </div>
 
+      <div className="mb-5 flex flex-wrap gap-2">
+        {filters.map((filter) => (
+          <button
+            key={filter.key}
+            onClick={() => setActiveFilter(filter.key)}
+            className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+              activeFilter === filter.key
+                ? "border-black bg-black text-white dark:border-white dark:bg-white dark:text-black"
+                : "border-black/10 bg-black/[0.03] text-neutral-600 hover:bg-black/[0.06] dark:border-white/10 dark:bg-white/[0.04] dark:text-neutral-300"
+            }`}
+          >
+            {filter.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="mb-4 text-xs text-neutral-500 dark:text-neutral-400">
+        Showing {filteredItems.length} of {sortedItems.length} software items. Sorted by security priority.
+      </div>
+
       <div className="space-y-3">
-        {(plan?.items || []).map((item: any) => (
+        {filteredItems.map((item: any) => (
           <div
             key={`${item.name}-${item.matchedWingetId}-${item.installedVersion}`}
             className="rounded-2xl border border-black/10 bg-black/[0.03] p-4 dark:border-white/10 dark:bg-white/[0.03]"
@@ -146,6 +235,7 @@ export default function PatchManagementPanel({ deviceId }: Props) {
                   <InfoPill label="CVEs" value={item.cveCount || 0} />
                   <InfoPill label="CVSS" value={item.cvssScore || 0} />
                   <InfoPill label="Risk" value={item.riskSeverity || "None"} />
+                  <InfoPill label="Priority" value={item.riskPriority || "none"} />
                 </div>
 
                 <p className="mt-3 text-xs text-neutral-500 dark:text-neutral-400">
