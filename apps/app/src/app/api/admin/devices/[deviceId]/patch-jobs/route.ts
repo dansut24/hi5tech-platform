@@ -12,7 +12,7 @@ export async function GET(
     message: "Patch jobs endpoint is online. Use POST with approved patch-plan items.",
     deviceId,
     exampleBody: {
-      tenantId: "demo",
+      tenantId: "bff625ff-230d-4362-8963-3709d1a785b9",
       items: [
         {
           name: "Google Chrome",
@@ -46,7 +46,7 @@ export async function POST(
     const { deviceId } = await context.params;
     const body = await request.json();
 
-    const tenantId = body.tenantId || "demo";
+    const tenantId = body.tenantId || "bff625ff-230d-4362-8963-3709d1a785b9";
     const items = Array.isArray(body.items) ? body.items : [];
 
     const approvedItems = items.filter(
@@ -70,7 +70,7 @@ export async function POST(
       .insert({
         tenant_id: tenantId,
         device_id: deviceId,
-        status: "queued",
+        status: "pending",
         approved_count: approvedItems.length,
         total_count: approvedItems.length
       })
@@ -89,7 +89,7 @@ export async function POST(
       winget_id: item.matchedWingetId || "",
       command: item.source.execution.command,
       execution: item.source.execution,
-      status: "queued"
+      status: "pending"
     }));
 
     const { error: itemsError } = await admin
@@ -103,7 +103,7 @@ export async function POST(
       jobId: job.id,
       deviceId,
       queued: rows.length,
-      status: "queued"
+      status: "pending"
     });
   } catch (error: any) {
     return NextResponse.json(
