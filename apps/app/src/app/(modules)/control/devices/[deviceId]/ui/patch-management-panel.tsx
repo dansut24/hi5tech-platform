@@ -29,6 +29,7 @@ const priorityRank: Record<string, number> = {
 export default function PatchManagementPanel({ deviceId }: Props) {
   const [plan, setPlan] = useState<any>(null);
   const [tasks, setTasks] = useState<any>(null);
+  const [history, setHistory] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [updatingDecision, setUpdatingDecision] = useState("");
@@ -38,13 +39,15 @@ export default function PatchManagementPanel({ deviceId }: Props) {
     setLoading(true);
 
     try {
-      const [planRes, tasksRes] = await Promise.all([
+      const [planRes, tasksRes, historyRes] = await Promise.all([
         fetch(`/api/admin/devices/${deviceId}/patch-plan`, { cache: "no-store" }),
-        fetch(`/api/admin/devices/${deviceId}/patch-tasks`, { cache: "no-store" })
+        fetch(`/api/admin/devices/${deviceId}/patch-tasks`, { cache: "no-store" }),
+        fetch(`/api/admin/devices/${deviceId}/patch-jobs/history`, { cache: "no-store" })
       ]);
 
       setPlan(await planRes.json());
       setTasks(await tasksRes.json());
+      setHistory(await historyRes.json());
     } finally {
       setLoading(false);
     }
@@ -54,9 +57,29 @@ export default function PatchManagementPanel({ deviceId }: Props) {
     setCreating(true);
 
     try {
-      await fetch(`/api/admin/devices/${deviceId}/patch-tasks/create`, {
-        method: "POST"
+      const approvedItems = (plan?.items || []).filter(
+        (item: any) =>
+          item.approved &&
+          item.updateAvailable &&
+          item.source?.execution?.command
+      );
+
+      const res = await fetch(`/api/admin/devices/${deviceId}/patch-jobs`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          tenantId: plan?.tenantId || "bff625ff-230d-4362-8963-3709d1a785b9",
+          items: approvedItems
+        })
       });
+
+      const json = await res.json();
+
+      if (!json.ok) {
+        throw new Error(json.error || "Failed to create patch job");
+      }
 
       await load();
     } finally {
@@ -167,7 +190,7 @@ export default function PatchManagementPanel({ deviceId }: Props) {
           disabled={creating || !plan?.approvedCount}
           className="rounded-2xl bg-black px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-white dark:text-black"
         >
-          {creating ? "Creating tasks..." : "Create patch tasks"}
+          {creating ? "Creating patch job..." : "Patch now"}
         </button>
       </div>
 
@@ -355,6 +378,72 @@ export default function PatchManagementPanel({ deviceId }: Props) {
           </div>
         )}
       </div>
+
+      <div className="mt-8">
+        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+          Patch Job History
+        </h3>
+
+        {(history?.jobs || []).length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-black/15 p-5 text-sm text-neutral-500 dark:border-white/10 dark:text-neutral-400">
+            No patch jobs found.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {history.jobs.map((job: any) => (
+              <div
+                key={job.id}
+                className="rounded-2xl border border-black/10 p-4 dark:border-white/10"
+              >
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="font-semibold">Patch Job {job.id.slice(0, 8)}</p>
+
+                    <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                      {job.approved_count} approved · {job.total_count} total
+                    </p>
+                  </div>
+
+                  <DecisionBadge value={job.status || "unknown"} />
+                </div>
+
+                <div className="space-y-2">
+                  {(job.patch_job_items || []).map((item: any) => (
+                    <div
+                      key={item.id}
+                      className="rounded-xl border border-black/10 bg-black/[0.03] p-3 dark:border-white/10 dark:bg-white/[0.03]"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <p className="font-medium">{item.software_name}</p>
+
+                          <p className="text-xs text-neutral-500 dark:text-neutral-400">
+                            {item.installed_version} → {item.target_version}
+                          </p>
+                        </div>
+
+                        <DecisionBadge value={item.status || "unknown"} />
+                      </div>
+
+                      {item.output && (
+                        <pre className="mt-3 overflow-auto rounded-xl bg-black p-3 text-xs text-green-400">
+                          {item.output}
+                        </pre>
+                      )}
+
+                      {item.error && (
+                        <pre className="mt-3 overflow-auto rounded-xl bg-rose-950 p-3 text-xs text-rose-200">
+                          {item.error}
+                        </pre>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </section>
   );
 }
@@ -464,7 +553,11 @@ function DecisionBadge({ value }: { value: string }) {
   let classes =
     "border-black/10 bg-black/5 text-black dark:border-white/10 dark:bg-white/10 dark:text-white";
 
-  if (normalised.includes("approved") || normalised.includes("completed")) {
+  if (
+    normalised.includes("approved") ||
+    normalised.includes("completed") ||
+    normalised.includes("success")
+  ) {
     classes =
       "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
   }
@@ -477,7 +570,8 @@ function DecisionBadge({ value }: { value: string }) {
   if (
     normalised.includes("approval") ||
     normalised.includes("pending") ||
-    normalised.includes("queued")
+    normalised.includes("queued") ||
+    normalised.includes("running")
   ) {
     classes =
       "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300";
