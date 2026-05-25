@@ -58,6 +58,29 @@ function ruleMatches(rule: any, row: any) {
   return false;
 }
 
+const defaultInventoryRules = [
+  ["ignore", "contains", "Microsoft .NET Framework 4.8.1 SDK", "Microsoft Corporation", "", "", "", "Developer/runtime component managed by Visual Studio or Windows"],
+  ["ignore", "contains", "Microsoft .NET Framework 4.8.1 Targeting Pack", "Microsoft Corporation", "", "", "", "Developer targeting pack, not a normal patchable app"],
+  ["ignore", "exact", "Python Launcher", "Python Software Foundation", "", "", "", "Python launcher helper component, not independently patched"],
+  ["ignore", "exact", "vs_CoreEditorFonts", "Microsoft Corporation", "", "", "", "Visual Studio component"],
+  ["ignore", "exact", "Windows SDK AddOn", "Microsoft Corporation", "", "", "", "Windows SDK component"],
+  ["ignore", "contains", "Windows Software Development Kit", "Microsoft Corporation", "", "", "", "Windows SDK component"],
+  ["alias", "exact", "QEMU", "QEMU Community", "QEMU", "QEMU Community", "SoftwareFreedomConservancy.QEMU", "Map installed QEMU display name to WinGet package"],
+  ["alias", "contains", "VMware Workstation", "VMware, Inc.", "VMware Workstation Pro", "VMware, Inc.", "VMware.WorkstationPro", "Map VMware Workstation display name to WinGet package"],
+  ["ignore", "exact", "Microsoft Visual Studio Installer", "Microsoft Corporation", "", "", "", "Managed by Visual Studio Installer rather than normal app patching"]
+].map((rule, index) => ({
+  id: `default-${index}`,
+  rule_type: rule[0],
+  match_type: rule[1],
+  match_value: rule[2],
+  vendor_match: rule[3],
+  target_name: rule[4],
+  target_vendor: rule[5],
+  target_winget_id: rule[6],
+  reason: rule[7],
+  enabled: true
+}));
+
 async function loadInventoryRules(admin: any) {
   const { data, error } = await admin
     .from("software_inventory_rules")
@@ -66,10 +89,10 @@ async function loadInventoryRules(admin: any) {
     .order("created_at", { ascending: true });
 
   if (error) {
-  throw error;
-}
+    throw error;
+  }
 
-  return data || [];
+  return data && data.length > 0 ? data : defaultInventoryRules;
 }
 
 function applyInventoryRules(rows: any[], rules: any[]) {
