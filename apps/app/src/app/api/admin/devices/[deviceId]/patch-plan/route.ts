@@ -311,7 +311,10 @@ function uniqueStrings(values: any[]) {
   );
 }
 
-function buildSourceFromPatchPackage(patchPackage: any, fallbackSource: any) {
+function buildSourceFromPatchPackage(
+  patchPackage: any,
+  fallbackSource: any
+): any {
   if (!patchPackage) {
     return fallbackSource;
   }
