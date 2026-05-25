@@ -1,6 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
+function buildExecutionPayload(item: any) {
+  const source = item.source || {};
+  const execution = source.execution || {};
+
+  return {
+    ...execution,
+    sourceType: source.sourceType || "",
+    sourceName: source.sourceName || "",
+    packageSource: item.patchPackage?.packageSource || source.sourceType || "",
+    packageName: item.patchPackage?.packageName || source.sourceName || "",
+    packageVersion: item.patchPackage?.version || source.version || "",
+    wingetId: item.matchedWingetId || source.packageId || "",
+    sourcePriority: source.sourcePriority ?? execution.sourcePriority ?? 100,
+    reliabilityScore: source.reliabilityScore ?? execution.reliabilityScore ?? 50,
+    fallbackOrder: source.fallbackOrder ?? execution.fallbackOrder ?? 100,
+    requiresPackageManager: Boolean(
+      source.requiresPackageManager ?? execution.requiresPackageManager
+    ),
+    packageManager: source.packageManager || execution.packageManager || null,
+    fallbackSource: source.fallbackSource || null
+  };
+}
+
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ deviceId: string }> }
@@ -23,14 +46,28 @@ export async function GET(
           updateAvailable: true,
           approved: true,
           source: {
+            sourceType: "vendor",
+            sourceName: "Google Chrome Enterprise MSI",
+            sourcePriority: 1,
+            reliabilityScore: 95,
+            fallbackOrder: 1,
+            requiresPackageManager: false,
+            packageManager: null,
             execution: {
-              executionType: "winget",
+              executionType: "download_and_install",
               command:
-                "winget upgrade --id Google.Chrome --silent --accept-package-agreements --accept-source-agreements",
+                "msiexec /i \"googlechromestandaloneenterprise64.msi\" /qn /norestart",
+              downloadUrl:
+                "https://dl.google.com/chrome/install/googlechromestandaloneenterprise64.msi",
               installCommand:
-                "winget upgrade --id Google.Chrome --silent --accept-package-agreements --accept-source-agreements",
-              requiresDownload: false
+                "msiexec /i \"googlechromestandaloneenterprise64.msi\" /qn /norestart",
+              requiresDownload: true
             }
+          },
+          patchPackage: {
+            packageSource: "vendor",
+            packageName: "Google Chrome Enterprise MSI",
+            version: "149.0.7827.22"
           }
         }
       ]
@@ -79,18 +116,22 @@ export async function POST(
 
     if (jobError) throw jobError;
 
-    const rows = approvedItems.map((item: any) => ({
-      job_id: job.id,
-      device_id: deviceId,
-      software_name: item.name,
-      vendor: item.vendor || "",
-      installed_version: item.installedVersion || "",
-      target_version: item.latestVersion || "",
-      winget_id: item.matchedWingetId || "",
-      command: item.source.execution.command,
-      execution: item.source.execution,
-      status: "pending"
-    }));
+    const rows = approvedItems.map((item: any) => {
+      const execution = buildExecutionPayload(item);
+
+      return {
+        job_id: job.id,
+        device_id: deviceId,
+        software_name: item.name,
+        vendor: item.vendor || "",
+        installed_version: item.installedVersion || "",
+        target_version: item.latestVersion || "",
+        winget_id: item.matchedWingetId || execution.wingetId || "",
+        command: execution.command || "",
+        execution,
+        status: "pending"
+      };
+    });
 
     const { error: itemsError } = await admin
       .from("patch_job_items")
