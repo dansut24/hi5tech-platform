@@ -17,6 +17,13 @@ export type PatchPackage = {
   executionType: string;
   trusted: boolean;
   verified: boolean;
+
+  sourcePriority: number;
+  reliabilityScore: number;
+  fallbackOrder: number;
+  requiresPackageManager: boolean;
+  packageManager: string | null;
+
   metadata: Record<string, unknown>;
 };
 
@@ -43,7 +50,36 @@ export async function lookupPatchPackages(wingetIds: string[]) {
   const map = new Map<string, PatchPackage>();
 
   for (const item of json.packages || []) {
-    if (item.wingetId) map.set(item.wingetId, item);
+    if (!item.wingetId) continue;
+
+    map.set(item.wingetId, {
+      softwareId: item.softwareId,
+      wingetId: item.wingetId,
+      packageSource: item.packageSource,
+      packageName: item.packageName,
+      version: item.version,
+      installerType: item.installerType,
+      architecture: item.architecture,
+      downloadUrl: item.downloadUrl,
+      packageUrl: item.packageUrl,
+      installerSha256: item.installerSha256,
+      signatureSubject: item.signatureSubject,
+      command: item.command,
+      installCommand: item.installCommand,
+      upgradeCommand: item.upgradeCommand,
+      uninstallCommand: item.uninstallCommand,
+      executionType: item.executionType,
+      trusted: Boolean(item.trusted),
+      verified: Boolean(item.verified),
+
+      sourcePriority: item.sourcePriority ?? 100,
+      reliabilityScore: item.reliabilityScore ?? 50,
+      fallbackOrder: item.fallbackOrder ?? 100,
+      requiresPackageManager: Boolean(item.requiresPackageManager),
+      packageManager: item.packageManager || null,
+
+      metadata: item.metadata || {}
+    });
   }
 
   return map;
