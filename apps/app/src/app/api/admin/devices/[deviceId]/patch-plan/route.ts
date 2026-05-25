@@ -35,17 +35,9 @@ function ruleMatches(rule: any, row: any) {
   const matchValue = normalise(rule.match_value);
   const vendorMatch = normalise(rule.vendor_match);
 
-  if (vendorMatch && !vendor.includes(vendorMatch)) {
-    return false;
-  }
-
-  if (rule.match_type === "exact") {
-    return name === matchValue;
-  }
-
-  if (rule.match_type === "contains") {
-    return name.includes(matchValue);
-  }
+  if (vendorMatch && !vendor.includes(vendorMatch)) return false;
+  if (rule.match_type === "exact") return name === matchValue;
+  if (rule.match_type === "contains") return name.includes(matchValue);
 
   if (rule.match_type === "regex") {
     try {
@@ -169,9 +161,7 @@ async function loadInventoryRules(admin: any) {
     .eq("enabled", true)
     .order("created_at", { ascending: true });
 
-  if (error) {
-    throw error;
-  }
+  if (error) throw error;
 
   return data && data.length > 0 ? data : defaultInventoryRules;
 }
@@ -214,6 +204,7 @@ function applyInventoryRules(rows: any[], rules: any[]) {
           command: "",
           downloadUrl: "",
           packageUrl: "",
+          fallbackPackages: [],
           execution: {
             executionType: "none",
             command: "",
@@ -316,11 +307,7 @@ function extractOsVersion(inventory: any) {
 
 function uniqueStrings(values: any[]) {
   return Array.from(
-    new Set(
-      values
-        .map((value) => String(value || "").trim())
-        .filter(Boolean)
-    )
+    new Set(values.map((value) => String(value || "").trim()).filter(Boolean))
   );
 }
 
@@ -340,6 +327,10 @@ function buildSourceFromPatchPackage(patchPackage: any, fallbackSource: any) {
   const fallbackOrder = patchPackage.fallbackOrder ?? 100;
   const requiresPackageManager = Boolean(patchPackage.requiresPackageManager);
   const packageManager = patchPackage.packageManager || null;
+
+  const fallbackPackages = asArray(patchPackage.fallbackPackages).map(
+    (fallback: any) => buildSourceFromPatchPackage(fallback, null)
+  );
 
   return {
     sourceType: patchPackage.packageSource || "software_intelligence",
@@ -381,7 +372,8 @@ function buildSourceFromPatchPackage(patchPackage: any, fallbackSource: any) {
       requiresPackageManager,
       packageManager
     },
-    fallbackSource
+    fallbackSource,
+    fallbackPackages
   };
 }
 
@@ -420,7 +412,8 @@ async function enrichPatchPlanWithPatchPackages(items: any[]) {
         reliabilityScore: patchPackage.reliabilityScore ?? 50,
         fallbackOrder: patchPackage.fallbackOrder ?? 100,
         requiresPackageManager: Boolean(patchPackage.requiresPackageManager),
-        packageManager: patchPackage.packageManager || null
+        packageManager: patchPackage.packageManager || null,
+        fallbackPackages: patchPackage.fallbackPackages || []
       }
     };
   });
