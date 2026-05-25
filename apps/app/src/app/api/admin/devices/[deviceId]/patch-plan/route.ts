@@ -25,6 +25,139 @@ function firstValue(source: any, keys: string[], fallback: any = "") {
   return fallback;
 }
 
+function normalise(value: any) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function ruleMatches(rule: any, row: any) {
+  const name = normalise(row.name);
+  const vendor = normalise(row.vendor);
+  const matchValue = normalise(rule.match_value);
+  const vendorMatch = normalise(rule.vendor_match);
+
+  if (vendorMatch && !vendor.includes(vendorMatch)) {
+    return false;
+  }
+
+  if (rule.match_type === "exact") {
+    return name === matchValue;
+  }
+
+  if (rule.match_type === "contains") {
+    return name.includes(matchValue);
+  }
+
+  if (rule.match_type === "regex") {
+    try {
+      return new RegExp(rule.match_value, "i").test(row.name || "");
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
+}
+
+async function loadInventoryRules(admin: any) {
+  const { data, error } = await admin
+    .from("software_inventory_rules")
+    .select("*")
+    .eq("enabled", true)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    return [];
+  }
+
+  return data || [];
+}
+
+function applyInventoryRules(rows: any[], rules: any[]) {
+  const patchableRows: any[] = [];
+  const ignoredRows: any[] = [];
+
+  for (const row of rows) {
+    const matchingRule = rules.find((rule) => ruleMatches(rule, row));
+
+    if (!matchingRule) {
+      patchableRows.push(row);
+      continue;
+    }
+
+    if (matchingRule.rule_type === "ignore") {
+      ignoredRows.push({
+        name: row.name,
+        vendor: row.vendor,
+        installedVersion: row.version,
+        matchedSoftwareId: null,
+        matchedWingetId: "",
+        matchConfidence: 0,
+        latestVersion: "",
+        updateAvailable: false,
+        riskSeverity: "None",
+        cvssScore: 0,
+        knownExploited: false,
+        source: {
+          sourceType: "inventory_rule",
+          sourceName: "Inventory rule",
+          trusted: true,
+          verified: true,
+          command: "",
+          downloadUrl: "",
+          packageUrl: "",
+          execution: {
+            executionType: "none",
+            command: "",
+            downloadUrl: "",
+            localFileName: "",
+            installCommand: "",
+            verifySha256: "",
+            requiresDownload: false
+          }
+        },
+        command: "",
+        policyDecision: "not_applicable",
+        recommendedAction: "none",
+        approved: false,
+        reason: matchingRule.reason || "Ignored by software inventory rule",
+        cveCount: 0,
+        affectedCves: [],
+        riskPriority: "none",
+        riskLabel: "Managed component",
+        riskReason: matchingRule.reason || "Ignored by software inventory rule",
+        inventoryRule: {
+          id: matchingRule.id,
+          ruleType: matchingRule.rule_type,
+          reason: matchingRule.reason || ""
+        }
+      });
+
+      continue;
+    }
+
+    if (matchingRule.rule_type === "alias") {
+      patchableRows.push({
+        ...row,
+        name: matchingRule.target_name || row.name,
+        vendor: matchingRule.target_vendor || row.vendor,
+        wingetId: matchingRule.target_winget_id || row.wingetId || "",
+        inventoryAlias: {
+          originalName: row.name,
+          originalVendor: row.vendor,
+          targetWingetId: matchingRule.target_winget_id || "",
+          reason: matchingRule.reason || ""
+        }
+      });
+
+      continue;
+    }
+
+    patchableRows.push(row);
+  }
+
+  return { patchableRows, ignoredRows };
+}
+
 function extractSoftwareRows(inventory: any) {
   const software = inventory?.software ?? inventory?.software_summary ?? {};
 
@@ -40,6 +173,7 @@ function extractSoftwareRows(inventory: any) {
       name: firstValue(row, ["name", "display_name", "displayName"]),
       vendor: firstValue(row, ["vendor", "publisher", "manufacturer"]),
       version: firstValue(row, ["version", "display_version", "displayVersion"]),
+      wingetId: firstValue(row, ["winget_id", "wingetId", "package_id", "packageId"]),
       installLocation: firstValue(row, ["install_location", "installLocation", "path"]),
       uninstallString: firstValue(row, [
         "quiet_uninstall_string",
@@ -191,8 +325,53 @@ async function enrichPatchPlanWithCveRisk(items: any[]) {
     return {
       ...enrichedItem,
       riskPriority: priority.priority,
-      riskLabel: priority.label,
-      riskReason: priority.reason
+      riskLabel: item.riskLabel || priority.label,
+      riskReason: item.riskReason || priority.reason
+    };
+  });
+}
+
+function mergeIgnoredRows(items: any[], ignoredRows: any[]) {
+  if (ignoredRows.length === 0) {
+    return items;
+  }
+
+  const existingKeys = new Set(
+    items.map((item: any) =>
+      `${normalise(item.name)}|${normalise(item.vendor)}|${normalise(item.installedVersion)}`
+    )
+  );
+
+  const uniqueIgnored = ignoredRows.filter((item: any) => {
+    const key = `${normalise(item.name)}|${normalise(item.vendor)}|${normalise(item.installedVersion)}`;
+    return !existingKeys.has(key);
+  });
+
+  return [...items, ...uniqueIgnored];
+}
+
+function applyAliasMetadataToPlanItems(items: any[], patchableRows: any[]) {
+  const aliasByWinget = new Map(
+    patchableRows
+      .filter((row: any) => row.inventoryAlias?.targetWingetId)
+      .map((row: any) => [row.inventoryAlias.targetWingetId, row.inventoryAlias])
+  );
+
+  if (aliasByWinget.size === 0) {
+    return items;
+  }
+
+  return items.map((item: any) => {
+    const alias = aliasByWinget.get(item.matchedWingetId);
+
+    if (!alias) {
+      return item;
+    }
+
+    return {
+      ...item,
+      inventoryAlias: alias,
+      reason: item.reason || alias.reason
     };
   });
 }
@@ -216,34 +395,60 @@ export async function GET(
       .limit(1)
       .maybeSingle();
 
-    const software = extractSoftwareRows(inventory);
+    const rawSoftware = extractSoftwareRows(inventory);
+    const inventoryRules = await loadInventoryRules(admin);
+    const { patchableRows, ignoredRows } = applyInventoryRules(
+      rawSoftware,
+      inventoryRules
+    );
 
-    if (software.length > 0) {
+    if (patchableRows.length > 0) {
       await syncDeviceSoftwareInventory({
         externalDeviceId: deviceId,
         hostname: extractHostname(inventory, deviceId),
         tenantId,
         osName: extractOsName(inventory),
         osVersion: extractOsVersion(inventory),
-        software
+        software: patchableRows
       });
     }
 
     const data = await getPatchPlan(deviceId);
     const items = asArray(data?.items);
 
-    const packageEnrichedItems = await enrichPatchPlanWithPatchPackages(items);
+    const aliasedItems = applyAliasMetadataToPlanItems(items, patchableRows);
+    const withIgnoredRows = mergeIgnoredRows(aliasedItems, ignoredRows);
+    const packageEnrichedItems =
+      await enrichPatchPlanWithPatchPackages(withIgnoredRows);
     const enrichedItems = await enrichPatchPlanWithCveRisk(packageEnrichedItems);
 
     const criticalCount = enrichedItems.filter((item: any) =>
       ["urgent", "critical"].includes(item.riskPriority)
     ).length;
 
+    const updateCount = enrichedItems.filter((item: any) => item.updateAvailable).length;
+    const approvedCount = enrichedItems.filter(
+      (item: any) => item.approved && item.updateAvailable
+    ).length;
+    const requiresApprovalCount = enrichedItems.filter(
+      (item: any) =>
+        item.updateAvailable &&
+        !item.approved &&
+        String(item.policyDecision || "").toLowerCase().includes("approval")
+    ).length;
+
     return NextResponse.json({
       ...data,
       items: enrichedItems,
+      itemCount: enrichedItems.length,
+      updateCount,
+      approvedCount,
+      requiresApprovalCount,
       criticalCount,
-      rmmInventorySynced: software.length,
+      inventoryRulesApplied: inventoryRules.length,
+      ignoredInventoryCount: ignoredRows.length,
+      rmmInventorySynced: patchableRows.length,
+      rmmRawInventoryCount: rawSoftware.length,
       rmmDeviceId: deviceId
     });
   } catch (error: any) {
