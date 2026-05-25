@@ -53,6 +53,42 @@ export default function PatchManagementPanel({ deviceId }: Props) {
     }
   }
 
+  async function bulkDecision(filter: "routine" | "security", decision: PolicyDecision) {
+    if (!plan?.policyId) return;
+
+    const targets = (plan?.items || []).filter((item: any) => {
+      if (!item.matchedWingetId || !item.updateAvailable) return false;
+
+      if (filter === "routine") {
+        return item.riskPriority === "routine";
+      }
+
+      return ["urgent", "critical", "high", "unsupported-risk"].includes(
+        item.riskPriority
+      );
+    });
+
+    setUpdatingDecision(`bulk-${filter}-${decision}`);
+
+    try {
+      for (const item of targets) {
+        await fetch("/api/admin/patch-policies/apps", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            policyId: plan.policyId,
+            wingetId: item.matchedWingetId,
+            decision
+          })
+        });
+      }
+
+      await load();
+    } finally {
+      setUpdatingDecision("");
+    }
+  }
+
   async function createTasks() {
     setCreating(true);
 
@@ -221,6 +257,32 @@ export default function PatchManagementPanel({ deviceId }: Props) {
             {filter.label}
           </button>
         ))}
+      </div>
+
+      <div className="mb-6 flex flex-wrap gap-2">
+        <button
+          onClick={() => bulkDecision("routine", "allow")}
+          disabled={Boolean(updatingDecision)}
+          className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {updatingDecision === "bulk-routine-allow" ? "Approving..." : "Approve all routine"}
+        </button>
+
+        <button
+          onClick={() => bulkDecision("security", "allow")}
+          disabled={Boolean(updatingDecision)}
+          className="rounded-xl bg-rose-600 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {updatingDecision === "bulk-security-allow" ? "Approving..." : "Approve all security"}
+        </button>
+
+        <button
+          onClick={() => bulkDecision("routine", "manual")}
+          disabled={Boolean(updatingDecision)}
+          className="rounded-xl bg-amber-500 px-3 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {updatingDecision === "bulk-routine-manual" ? "Saving..." : "Set routine to manual"}
+        </button>
       </div>
 
       <div className="mb-4 text-xs text-neutral-500 dark:text-neutral-400">
