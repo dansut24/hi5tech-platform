@@ -59,15 +59,96 @@ function ruleMatches(rule: any, row: any) {
 }
 
 const defaultInventoryRules = [
-  ["ignore", "contains", "Microsoft .NET Framework 4.8.1 SDK", "Microsoft Corporation", "", "", "", "Developer/runtime component managed by Visual Studio or Windows"],
-  ["ignore", "contains", "Microsoft .NET Framework 4.8.1 Targeting Pack", "Microsoft Corporation", "", "", "", "Developer targeting pack, not a normal patchable app"],
-  ["ignore", "exact", "Python Launcher", "Python Software Foundation", "", "", "", "Python launcher helper component, not independently patched"],
-  ["ignore", "exact", "vs_CoreEditorFonts", "Microsoft Corporation", "", "", "", "Visual Studio component"],
-  ["ignore", "exact", "Windows SDK AddOn", "Microsoft Corporation", "", "", "", "Windows SDK component"],
-  ["ignore", "contains", "Windows Software Development Kit", "Microsoft Corporation", "", "", "", "Windows SDK component"],
-  ["alias", "exact", "QEMU", "QEMU Community", "QEMU", "QEMU Community", "SoftwareFreedomConservancy.QEMU", "Map installed QEMU display name to WinGet package"],
-  ["alias", "contains", "VMware Workstation", "VMware, Inc.", "VMware Workstation Pro", "VMware, Inc.", "VMware.WorkstationPro", "Map VMware Workstation display name to WinGet package"],
-  ["ignore", "exact", "Microsoft Visual Studio Installer", "Microsoft Corporation", "", "", "", "Managed by Visual Studio Installer rather than normal app patching"]
+  [
+    "ignore",
+    "contains",
+    "Microsoft .NET Framework 4.8.1 SDK",
+    "Microsoft Corporation",
+    "",
+    "",
+    "",
+    "Developer/runtime component managed by Visual Studio or Windows"
+  ],
+  [
+    "ignore",
+    "contains",
+    "Microsoft .NET Framework 4.8.1 Targeting Pack",
+    "Microsoft Corporation",
+    "",
+    "",
+    "",
+    "Developer targeting pack, not a normal patchable app"
+  ],
+  [
+    "ignore",
+    "exact",
+    "Python Launcher",
+    "Python Software Foundation",
+    "",
+    "",
+    "",
+    "Python launcher helper component, not independently patched"
+  ],
+  [
+    "ignore",
+    "exact",
+    "vs_CoreEditorFonts",
+    "Microsoft Corporation",
+    "",
+    "",
+    "",
+    "Visual Studio component"
+  ],
+  [
+    "ignore",
+    "exact",
+    "Windows SDK AddOn",
+    "Microsoft Corporation",
+    "",
+    "",
+    "",
+    "Windows SDK component"
+  ],
+  [
+    "ignore",
+    "contains",
+    "Windows Software Development Kit",
+    "Microsoft Corporation",
+    "",
+    "",
+    "",
+    "Windows SDK component"
+  ],
+  [
+    "alias",
+    "exact",
+    "QEMU",
+    "QEMU Community",
+    "QEMU",
+    "QEMU Community",
+    "SoftwareFreedomConservancy.QEMU",
+    "Map installed QEMU display name to WinGet package"
+  ],
+  [
+    "alias",
+    "contains",
+    "VMware Workstation",
+    "VMware, Inc.",
+    "VMware Workstation Pro",
+    "VMware, Inc.",
+    "VMware.WorkstationPro",
+    "Map VMware Workstation display name to WinGet package"
+  ],
+  [
+    "ignore",
+    "exact",
+    "Microsoft Visual Studio Installer",
+    "Microsoft Corporation",
+    "",
+    "",
+    "",
+    "Managed by Visual Studio Installer rather than normal app patching"
+  ]
 ].map((rule, index) => ({
   id: `default-${index}`,
   rule_type: rule[0],
@@ -125,6 +206,11 @@ function applyInventoryRules(rows: any[], rules: any[]) {
           sourceName: "Inventory rule",
           trusted: true,
           verified: true,
+          sourcePriority: 100,
+          reliabilityScore: 50,
+          fallbackOrder: 100,
+          requiresPackageManager: false,
+          packageManager: null,
           command: "",
           downloadUrl: "",
           packageUrl: "",
@@ -135,7 +221,12 @@ function applyInventoryRules(rows: any[], rules: any[]) {
             localFileName: "",
             installCommand: "",
             verifySha256: "",
-            requiresDownload: false
+            requiresDownload: false,
+            sourcePriority: 100,
+            reliabilityScore: 50,
+            fallbackOrder: 100,
+            requiresPackageManager: false,
+            packageManager: null
           }
         },
         command: "",
@@ -244,6 +335,12 @@ function buildSourceFromPatchPackage(patchPackage: any, fallbackSource: any) {
     patchPackage.installCommand ||
     "";
 
+  const sourcePriority = patchPackage.sourcePriority ?? 100;
+  const reliabilityScore = patchPackage.reliabilityScore ?? 50;
+  const fallbackOrder = patchPackage.fallbackOrder ?? 100;
+  const requiresPackageManager = Boolean(patchPackage.requiresPackageManager);
+  const packageManager = patchPackage.packageManager || null;
+
   return {
     sourceType: patchPackage.packageSource || "software_intelligence",
     sourceName:
@@ -253,6 +350,11 @@ function buildSourceFromPatchPackage(patchPackage: any, fallbackSource: any) {
     trusted: Boolean(patchPackage.trusted),
     verified: Boolean(patchPackage.verified),
     priority: patchPackage.verified ? 1 : 10,
+    sourcePriority,
+    reliabilityScore,
+    fallbackOrder,
+    requiresPackageManager,
+    packageManager,
     packageId: patchPackage.wingetId || "",
     version: patchPackage.version || "",
     installerType: patchPackage.installerType || "",
@@ -272,7 +374,12 @@ function buildSourceFromPatchPackage(patchPackage: any, fallbackSource: any) {
         patchPackage.installCommand ||
         command,
       verifySha256: patchPackage.installerSha256 || "",
-      requiresDownload: Boolean(patchPackage.downloadUrl)
+      requiresDownload: Boolean(patchPackage.downloadUrl),
+      sourcePriority,
+      reliabilityScore,
+      fallbackOrder,
+      requiresPackageManager,
+      packageManager
     },
     fallbackSource
   };
@@ -308,7 +415,12 @@ async function enrichPatchPlanWithPatchPackages(items: any[]) {
         version: patchPackage.version,
         executionType: patchPackage.executionType,
         trusted: patchPackage.trusted,
-        verified: patchPackage.verified
+        verified: patchPackage.verified,
+        sourcePriority: patchPackage.sourcePriority ?? 100,
+        reliabilityScore: patchPackage.reliabilityScore ?? 50,
+        fallbackOrder: patchPackage.fallbackOrder ?? 100,
+        requiresPackageManager: Boolean(patchPackage.requiresPackageManager),
+        packageManager: patchPackage.packageManager || null
       }
     };
   });
