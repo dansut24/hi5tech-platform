@@ -53,6 +53,14 @@ export default function PatchManagementPanel({ deviceId }: Props) {
     }
   }
 
+  async function refreshHistoryOnly() {
+    const res = await fetch(`/api/admin/devices/${deviceId}/patch-jobs/history`, {
+      cache: "no-store"
+    });
+
+    setHistory(await res.json());
+  }
+
   async function bulkDecision(filter: "routine" | "security", decision: PolicyDecision) {
     if (!plan?.policyId) return;
 
@@ -150,6 +158,22 @@ export default function PatchManagementPanel({ deviceId }: Props) {
   useEffect(() => {
     load();
   }, [deviceId]);
+
+  useEffect(() => {
+    const jobs = history?.jobs || [];
+
+    const hasActiveJob = jobs.some((job: any) =>
+      ["pending", "running"].includes(String(job.status || "").toLowerCase())
+    );
+
+    if (!hasActiveJob) return;
+
+    const timer = window.setInterval(() => {
+      refreshHistoryOnly();
+    }, 10000);
+
+    return () => window.clearInterval(timer);
+  }, [history, deviceId]);
 
   const sortedItems = useMemo(() => {
     const items = Array.isArray(plan?.items) ? [...plan.items] : [];
@@ -442,9 +466,37 @@ export default function PatchManagementPanel({ deviceId }: Props) {
       </div>
 
       <div className="mt-8">
-        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
-          Patch Job History
-        </h3>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold uppercase tracking-wide text-neutral-500 dark:text-neutral-400">
+            Patch Job History
+          </h3>
+
+          <button
+            onClick={refreshHistoryOnly}
+            className="rounded-xl border border-black/10 px-3 py-1.5 text-xs font-semibold text-neutral-600 hover:bg-black/[0.04] dark:border-white/10 dark:text-neutral-300 dark:hover:bg-white/[0.06]"
+          >
+            Refresh history
+          </button>
+        </div>
+
+        <div className="mb-4 grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <StatCard
+            label="Pending jobs"
+            value={(history?.jobs || []).filter((job: any) => job.status === "pending").length}
+          />
+          <StatCard
+            label="Running jobs"
+            value={(history?.jobs || []).filter((job: any) => job.status === "running").length}
+          />
+          <StatCard
+            label="Successful jobs"
+            value={(history?.jobs || []).filter((job: any) => job.status === "success").length}
+          />
+          <StatCard
+            label="Failed jobs"
+            value={(history?.jobs || []).filter((job: any) => job.status === "failed").length}
+          />
+        </div>
 
         {(history?.jobs || []).length === 0 ? (
           <div className="rounded-2xl border border-dashed border-black/15 p-5 text-sm text-neutral-500 dark:border-white/10 dark:text-neutral-400">
@@ -464,6 +516,10 @@ export default function PatchManagementPanel({ deviceId }: Props) {
                     <p className="text-xs text-neutral-500 dark:text-neutral-400">
                       {job.approved_count} approved · {job.total_count} total
                     </p>
+
+                    <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                      Created {formatDateTime(job.created_at)} · Started {formatDateTime(job.started_at)} · Finished {formatDateTime(job.finished_at)}
+                    </p>
                   </div>
 
                   <DecisionBadge value={job.status || "unknown"} />
@@ -481,6 +537,10 @@ export default function PatchManagementPanel({ deviceId }: Props) {
 
                           <p className="text-xs text-neutral-500 dark:text-neutral-400">
                             {item.installed_version} → {item.target_version}
+                          </p>
+
+                          <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
+                            Started {formatDateTime(item.started_at)} · Finished {formatDateTime(item.finished_at)}
                           </p>
                         </div>
 
@@ -646,4 +706,13 @@ function DecisionBadge({ value }: { value: string }) {
       {value}
     </span>
   );
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "Not yet";
+
+  return new Intl.DateTimeFormat("en-GB", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  }).format(new Date(value));
 }
