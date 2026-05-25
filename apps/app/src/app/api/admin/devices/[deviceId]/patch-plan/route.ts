@@ -66,8 +66,8 @@ async function loadInventoryRules(admin: any) {
     .order("created_at", { ascending: true });
 
   if (error) {
-    return [];
-  }
+  throw error;
+}
 
   return data || [];
 }
