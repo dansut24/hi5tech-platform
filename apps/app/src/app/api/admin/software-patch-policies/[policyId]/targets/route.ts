@@ -69,7 +69,10 @@ export async function POST(
 
     const { data, error } = await admin
       .from("software_patch_policy_targets")
-      .insert(rows)
+      .upsert(rows, {
+        onConflict: "policy_id,target_type,target_id",
+        ignoreDuplicates: true
+      })
       .select("*");
 
     if (error) throw error;
@@ -78,6 +81,7 @@ export async function POST(
       ok: true,
       policyId,
       added: data?.length || 0,
+      skippedDuplicates: rows.length - (data?.length || 0),
       targets: data || []
     });
   } catch (error: any) {
