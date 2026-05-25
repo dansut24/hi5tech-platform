@@ -1,9 +1,47 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
+function buildDefaultWingetFallback(item: any) {
+  const wingetId = item.matchedWingetId || item.source?.packageId || "";
+
+  if (!wingetId) return null;
+
+  const command = `winget upgrade --id ${wingetId} --silent --accept-package-agreements --accept-source-agreements`;
+
+  return {
+    sourceType: "winget",
+    sourceName: "WinGet fallback",
+    trusted: true,
+    verified: true,
+    sourcePriority: 10,
+    reliabilityScore: 75,
+    fallbackOrder: 3,
+    requiresPackageManager: true,
+    packageManager: "winget",
+    packageId: wingetId,
+    version: item.latestVersion || "",
+    command,
+    execution: {
+      executionType: "winget",
+      command,
+      installCommand: command,
+      downloadUrl: "",
+      localFileName: "",
+      verifySha256: "",
+      requiresDownload: false,
+      sourcePriority: 10,
+      reliabilityScore: 75,
+      fallbackOrder: 3,
+      requiresPackageManager: true,
+      packageManager: "winget"
+    }
+  };
+}
+
 function buildExecutionPayload(item: any) {
   const source = item.source || {};
   const execution = source.execution || {};
+  const fallbackSource = source.fallbackSource || buildDefaultWingetFallback(item);
 
   return {
     ...execution,
@@ -20,7 +58,7 @@ function buildExecutionPayload(item: any) {
       source.requiresPackageManager ?? execution.requiresPackageManager
     ),
     packageManager: source.packageManager || execution.packageManager || null,
-    fallbackSource: source.fallbackSource || null
+    fallbackSource
   };
 }
 
